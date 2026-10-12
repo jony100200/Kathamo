@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/KathamoFramework.png" alt="Kathamo (কাঠামো) — Native Rust Studio UI Framework" width="100%" />
+</p>
+
 # Kathamo (কাঠামো) — Native Rust Studio UI Framework
 
 **Kathamo (কাঠামো)** is the native, high-performance UI & GUI framework powering the Kalponic Studio ecosystem (**Kolpona, Cholpo, Chobi, Drisho, Rupayon, Jogot, Dolil, Pothik**).

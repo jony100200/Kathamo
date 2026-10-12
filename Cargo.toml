@@ -15,7 +15,9 @@ default-members = ["lab"]
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
+authors = ["Kalponic Studio"]
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/jony100200/Kathamo"
 
 [profile.release]
 opt-level = 3

@@ -71,10 +71,19 @@ impl FontRegistry {
             }
         }
 
-        // 4. Fallback: try relative Shared/fonts path
-        let alt_path = PathBuf::from("Shared/fonts").join(font_path.file_name()?);
+        // 4. Fallback: try relative assets/fonts path or CARGO_MANIFEST_DIR
+        let manifest_dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts"));
+        let alt_path = manifest_dir.join(font_path.file_name()?);
         if alt_path.exists() {
             if let Ok(bytes) = std::fs::read(&alt_path) {
+                let shared = Arc::new(bytes);
+                cache.insert(font_name.to_string(), Arc::clone(&shared));
+                return Some(shared);
+            }
+        }
+        let rel_assets = PathBuf::from("assets/fonts").join(font_path.file_name()?);
+        if rel_assets.exists() {
+            if let Ok(bytes) = std::fs::read(&rel_assets) {
                 let shared = Arc::new(bytes);
                 cache.insert(font_name.to_string(), Arc::clone(&shared));
                 return Some(shared);

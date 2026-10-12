@@ -17,7 +17,7 @@ pub use input::{
     render_checkbox, render_dropdown, render_progress_bar, CheckboxState, DropdownState,
     ProgressState,
 };
-pub use ui::{KolponaUi, Response};
+pub use ui::{KathamoUi, KolponaUi, Response};
 
 pub use ui_text as text;
 pub use ui_text::{FontAssetMeta, FontDefaults, FontManifest, FontRegistry};

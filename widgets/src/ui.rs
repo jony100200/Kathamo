@@ -47,7 +47,7 @@ impl Response {
     }
 }
 
-/// Unified Kolpona Studio UI builder.
+/// Unified studio UI builder (Kathamo / Kolpona).
 pub struct KolponaUi<'a> {
     pub cmd_buf: &'a mut CommandBuffer,
     pub icon_atlas: &'a mut IconAtlas,
@@ -58,6 +58,9 @@ pub struct KolponaUi<'a> {
     pub pointer: PointerState,
     pub item_spacing: f32,
 }
+
+/// Canonical Kathamo UI builder type alias.
+pub type KathamoUi<'a> = KolponaUi<'a>;
 
 impl<'a> KolponaUi<'a> {
     pub fn new(

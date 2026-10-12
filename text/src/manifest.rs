@@ -3,7 +3,7 @@
 //! Replicates ArtCraft (storytold/craft-fonts) manifest architecture:
 //! Decouples font asset binaries, licensing, and checksums from application code.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Individual font asset metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,11 +201,11 @@ impl FontManifest {
 
     /// Resolves the root directory of font assets.
     /// Priority:
-    /// 1. KOLPONA_FONTS_DIR or CRAFT_FONTS_DIR environment variable
-    /// 2. `./Fonts` relative to current directory
-    /// 3. `../../Fonts` relative to crate directory
+    /// 1. KATHAMO_FONTS_DIR or KOLPONA_FONTS_DIR environment variable
+    /// 2. `./assets/fonts` or `../assets/fonts` relative to Kathamo
+    /// 3. Standard fallback roots
     pub fn resolve_font_directory() -> PathBuf {
-        if let Ok(dir) = std::env::var("KOLPONA_FONTS_DIR") {
+        if let Ok(dir) = std::env::var("KATHAMO_FONTS_DIR").or_else(|_| std::env::var("KOLPONA_FONTS_DIR")) {
             let p = PathBuf::from(dir);
             if p.exists() {
                 return p;
@@ -218,19 +218,22 @@ impl FontManifest {
             }
         }
 
-        let candidates = [
-            PathBuf::from("Fonts"),
-            PathBuf::from("../Fonts"),
-            PathBuf::from("../../Fonts"),
-            PathBuf::from("../../../Fonts"),
-        ];
+        let mut roots = Vec::new();
+        roots.push(PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/..")));
+        roots.push(PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")));
+        if let Ok(cwd) = std::env::current_dir() {
+            roots.extend(cwd.ancestors().map(Path::to_path_buf));
+        }
 
-        for cand in candidates {
-            if cand.join("manifest.toml").exists() {
-                return cand;
+        for root in roots {
+            for sub in ["assets/fonts", "Fonts/binaries", "fonts", "Fonts"] {
+                let candidate = root.join(sub);
+                if candidate.exists() && (candidate.join("Inter-Regular.ttf").is_file() || candidate.join("manifest.toml").is_file()) {
+                    return candidate;
+                }
             }
         }
 
-        PathBuf::from("Fonts")
+        PathBuf::from("assets/fonts")
     }
 }

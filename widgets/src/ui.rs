@@ -520,7 +520,7 @@ impl<'a> KolponaUi<'a> {
     pub fn stat_card(&mut self, label: &str, value: &str, subtext: &str) {
         let height = 68.0;
         let width = match self.direction {
-            Direction::Horizontal => (label.len().max(value.len()) as f32 * 9.0 + 42.0).clamp(195.0, 270.0),
+            Direction::Horizontal => (label.len().max(value.len()) as f32 * 10.5 + 32.0).clamp(210.0, 290.0),
             Direction::Vertical => (self.bounds.width() - 16.0).max(120.0),
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));

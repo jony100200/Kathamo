@@ -50,7 +50,22 @@ Kathamo/
 
 ---
 
-## 4. Licenses & Open Source Acknowledgements
+## 4. Platform Support
+
+Kathamo is developed primarily on Windows. **Linux has not yet been tested by the maintainer**, but it is expected to work because the framework uses cross-platform Rust windowing and rendering libraries.
+
+**Linux users:** If you'd like to use Kathamo on Linux, please try it on your machine:
+
+```bash
+cargo check --workspace
+cargo run -p ui-lab
+```
+
+If you encounter any problems, please open a GitHub issue with your Linux distribution, graphics hardware, and the error details. Linux compatibility is **community-testing welcome**, not yet maintainer-verified.
+
+---
+
+## 5. Licenses & Open Source Acknowledgements
 
 - **Kathamo Core**: Licensed under [MIT](LICENSE).
 - **Special Thanks & Third-Party Notices**: Full attribution, gratitude, and complete license texts for all bundled fonts (`Inter`, `Space Grotesk`, `Noto Sans Bengali`, `JetBrains Mono`, `IBM Plex Mono`), vector icons (`Tabler Icons`), and foundation crates (`wgpu`, `winit`, `rustybuzz`, `accesskit`, `resvg`, `softbuffer`) are documented in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).

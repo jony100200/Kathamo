@@ -49,5 +49,5 @@ Kathamo/
 ## 4. Licenses & Open Source Acknowledgements
 
 - **Kathamo Core**: Dual-licensed under [MIT](LICENSE-MIT) or Apache-2.0.
-- **Third-Party Acknowledgements**: Complete attribution and licenses for all bundled fonts (`Inter`, `Space Grotesk`, `Noto Sans Bengali`, `JetBrains Mono`, `IBM Plex Mono`), icons (`Tabler Icons`), and foundation crates (`wgpu`, `winit`, `rustybuzz`, `accesskit`, `resvg`) are detailed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- **Special Thanks & Third-Party Notices**: Full attribution, gratitude, and complete license texts for all bundled fonts (`Inter`, `Space Grotesk`, `Noto Sans Bengali`, `JetBrains Mono`, `IBM Plex Mono`), vector icons (`Tabler Icons`), and foundation crates (`wgpu`, `winit`, `rustybuzz`, `accesskit`, `resvg`, `softbuffer`) are documented in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
 

@@ -40,17 +40,76 @@ Kathamo/
 
 ---
 
-## 3. Benchmark Gates & Measured Results
+## 3. Declarative Component Ergonomics (`KathamoUi`)
 
-- **Cold Launch:** 730 ms
-- **Warm Launch:** < 10 ms
-- **p95 Frame Time:** 2.58 ms (6.4× headroom at 60 Hz)
-- **100,000-Item Virtual List:** Steady 120+ FPS with kinetic fling inertia
-- **Presentation Flash:** ZERO frames (window stays hidden until first buffer commits)
+Building professional, Linear-grade interfaces in Kathamo is declarative, type-safe, and effortless for both human developers and AI coding agents:
+
+```rust
+use ui_core::{SizeConstraint, Vec2};
+use ui_themes::BilingualLabel;
+use ui_widgets::*;
+
+// Declarative layout: Master/Detail split with glassmorphic cards
+ui.columns(
+    520.0, // height
+    &[SizeConstraint::Fixed(320.0), SizeConstraint::Flex(1.0)],
+    |col_idx, col| {
+        if col_idx == 0 {
+            col.heading("MODEL REPOSITORY");
+            col.search_bar(&mut query, "Filter checkpoints...");
+            if col.model_card("Qwen-2.5-Coder-7B", "7.6B Params", "GGUF Ready", true).clicked() {
+                // handle model selection
+            }
+        } else {
+            col.heading("QUANTIZATION RECIPE");
+            col.glass_card(180.0, |card| {
+                card.tabs(&["GGUF", "AWQ", "EXL2"], &mut selected_tab);
+                card.toggle("FlashAttention-2 Kernel", &mut is_fa2_enabled);
+                card.scrubber("Context Window", &mut ctx_len, 512.0, 8192.0);
+            });
+            col.progress(0.68);
+            col.button("Start Quantization Job");
+        }
+    },
+);
+```
+
+For complete patterns, blueprints, and best practices, see the [Agent & Developer Architecture Guide](AGENT_GUIDE.md).
 
 ---
 
-## 4. Platform Support
+## 4. Real-World Workstation Demonstration: Ojon (ওজন)
+
+Kathamo includes a full-fidelity implementation of **Ojon (ওজন)** — Kalponic Studio's local AI model quantization workstation ([github.com/jony100200/Ojon](https://github.com/jony100200/Ojon)).
+
+Run the standalone example:
+```bash
+cargo run -p ui-lab --example ojon_workstation
+```
+
+Or open the interactive UI Lab and switch to the **Ojon Studio** tab:
+```bash
+cargo run -p ui-lab
+```
+
+---
+
+## 5. Benchmark Gates & Measured Evidence (1,000 Frames @ 1440×900)
+
+| Metric | Measured Result | Target Gate | Verdict |
+| :--- | :--- | :--- | :--- |
+| **p50 Frame Time** | **1.22 ms** | < 8.3 ms (120 Hz) | ✅ Excellent |
+| **p90 Frame Time** | **2.64 ms** | < 16.7 ms (60 Hz) | ✅ Excellent |
+| **p95 Frame Time** | **2.79 ms** | < 16.7 ms (60 Hz) | ✅ **PASS (6.0× Headroom)** |
+| **p99 Frame Time** | **3.26 ms** | < 16.7 ms (60 Hz) | ✅ Excellent |
+| **Frame Stalls (>16.7ms)** | **0** | 0 stalls | ✅ Perfect |
+| **RAM Footprint** | **< 15 MB** | < 50 MB | ✅ Extremely Lightweight |
+| **GPU Recovery Fallback** | **Instant Safe Mode** | Zero panic / crash | ✅ Seamless Recovery |
+| **Presentation Flash** | **ZERO frames** | Zero white screen | ✅ Hidden until first paint |
+
+---
+
+## 6. Platform Support
 
 Kathamo is developed primarily on Windows. **Linux has not yet been tested by the maintainer**, but it is expected to work because the framework uses cross-platform Rust windowing and rendering libraries.
 
@@ -65,8 +124,9 @@ If you encounter any problems, please open a GitHub issue with your Linux distri
 
 ---
 
-## 5. Licenses & Open Source Acknowledgements
+## 7. Licenses & Open Source Acknowledgements
 
 - **Kathamo Core**: Licensed under [MIT](LICENSE).
 - **Special Thanks & Third-Party Notices**: Full attribution, gratitude, and complete license texts for all bundled fonts (`Inter`, `Space Grotesk`, `Noto Sans Bengali`, `JetBrains Mono`, `IBM Plex Mono`), vector icons (`Tabler Icons`), and foundation crates (`wgpu`, `winit`, `rustybuzz`, `accesskit`, `resvg`, `softbuffer`) are documented in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
+
 

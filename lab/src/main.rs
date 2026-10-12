@@ -11,10 +11,12 @@ use ui_platform::winit::{
 use ui_platform::*;
 use ui_render::*;
 use ui_testkit::*;
+use ui_themes::BilingualLabel;
 use ui_widgets::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LabTab {
+    OjonWorkstation,
     DockingAndOverview,
     DesignSystemAndIcons,
     GodotAnchorsAndMaterial3,
@@ -54,6 +56,18 @@ pub struct UiLabApp {
     pub scale: f32,
     pub pointer: PointerState,
     pub is_interactive: bool,
+
+    // Ojon Workstation state
+    pub ojon_selected_model: usize,
+    pub ojon_selected_tab: usize,
+    pub ojon_quant_recipe: usize,
+    pub ojon_preserve_head: bool,
+    pub ojon_offload_kv: bool,
+    pub ojon_flash_attn: bool,
+    pub ojon_imatrix: bool,
+    pub ojon_calib_ctx: f32,
+    pub ojon_search_query: String,
+    pub ojon_test_prompt: String,
 }
 
 impl UiLabApp {
@@ -76,7 +90,7 @@ impl UiLabApp {
         // Headless GPU initialization is reserved strictly for benchmarks and offscreen testing via init_headless_gpu().
         Self {
             theme: StudioTheme::default(),
-            current_tab: LabTab::DockingAndOverview,
+            current_tab: LabTab::OjonWorkstation,
             workspace: DockWorkspace::default(),
             canvas: InfiniteCanvas::default(),
             node_editor: NodeEditor::default(),
@@ -102,6 +116,17 @@ impl UiLabApp {
             scale: 1.0,
             pointer: PointerState::default(),
             is_interactive: false,
+
+            ojon_selected_model: 0,
+            ojon_selected_tab: 0,
+            ojon_quant_recipe: 0,
+            ojon_preserve_head: true,
+            ojon_offload_kv: true,
+            ojon_flash_attn: true,
+            ojon_imatrix: false,
+            ojon_calib_ctx: 2048.0,
+            ojon_search_query: String::new(),
+            ojon_test_prompt: "Explain quantum annealing in simple terms.".into(),
         }
     }
 }
@@ -178,9 +203,10 @@ impl UiLabApp {
 
         // Tabs
         let tabs = [
-            (LabTab::DockingAndOverview, "Overview & Dock"),
-            (LabTab::DesignSystemAndIcons, "Design & UI API"),
-            (LabTab::GodotAnchorsAndMaterial3, "Anchors & M3"),
+            (LabTab::OjonWorkstation, "Ojon Studio"),
+            (LabTab::DockingAndOverview, "Overview"),
+            (LabTab::DesignSystemAndIcons, "UI Tokens"),
+            (LabTab::GodotAnchorsAndMaterial3, "Anchors"),
             (LabTab::InfiniteCanvas, "Canvas"),
             (LabTab::NodeEditor, "Node Graph"),
             (LabTab::Timeline, "Timeline"),
@@ -194,7 +220,7 @@ impl UiLabApp {
             let is_active = self.current_tab == tab;
             let tab_rect = Rect::from_min_size(
                 Vec2::new(tab_x, nav_rect.min.y + 8.0),
-                Vec2::new(112.0, 32.0),
+                Vec2::new(100.0, 32.0),
             );
 
             cmd_buf.push(DrawCommand::Rect {
@@ -220,7 +246,7 @@ impl UiLabApp {
                 strong: is_active,
             });
 
-            tab_x += 116.0;
+            tab_x += 105.0;
         }
 
         // Active backend indicator button on right
@@ -257,6 +283,9 @@ impl UiLabApp {
         );
 
         match self.current_tab {
+            LabTab::OjonWorkstation => {
+                self.render_ojon_workstation_tab(&mut cmd_buf, content_rect, &p);
+            }
             LabTab::DockingAndOverview => {
                 let dock = self.workspace.resolve(content_rect);
 
@@ -998,6 +1027,140 @@ impl UiLabApp {
         }
     }
 
+    /// Renders the complete Ojon AI Model Quantization Workstation screen.
+    pub fn render_ojon_workstation_tab(
+        &mut self,
+        cmd_buf: &mut CommandBuffer,
+        content_rect: Rect,
+        p: &ThemePalette,
+    ) {
+        cmd_buf.push(DrawCommand::Rect {
+            rect: content_rect,
+            fill: p.canvas,
+            radius: CornerRadius::ZERO,
+            stroke: Stroke::NONE,
+        });
+
+        let pointer = self.pointer;
+        let mut ui = KathamoUi::new(cmd_buf, &mut self.icon_atlas, p, content_rect, pointer);
+
+        // 1. Top Telemetry & Workstation Header
+        ui.horizontal(72.0, |top| {
+            top.vertical(360.0, |brand| {
+                brand.bilingual_heading(&BilingualLabel::new("Ojon", "ওজন"));
+                brand.horizontal(22.0, |pills| {
+                    pills.status_pill("CUDA 12.4 Active", true);
+                    pills.status_pill("Dual VRAM Pools Online", true);
+                });
+            });
+
+            top.stat_card("PRIMARY VRAM (RTX 4060 Ti)", "11.8 / 16.0 GB", "74% Active (5.2 GB Free)");
+            top.stat_card("SECONDARY POOL (ARC B60)", "24.0 GB", "Dedicated VRAM Pool");
+            top.stat_card("SYSTEM MEMORY", "21.4 / 32.0 GB", "Direct DMA Buffering");
+            top.stat_card("CONVERSION SPEED", "142.8 MB/s", "NVMe Stream Active");
+        });
+
+        ui.separator();
+
+        // 2. Main Two-Column Layout (Sidebar: 320px, Content: Flex 1.0)
+        let main_height = (content_rect.height() - 110.0).max(300.0);
+        ui.columns(
+            main_height,
+            &[SizeConstraint::Fixed(320.0), SizeConstraint::Flex(1.0)],
+            |col_idx, col_ui| {
+                if col_idx == 0 {
+                    col_ui.heading("MODEL REPOSITORY");
+                    col_ui.search_bar(&mut self.ojon_search_query, "Filter local checkpoints...");
+
+                    let models = [
+                        ("Qwen-2.5-Coder-7B-Instruct", "7.6B Params", "GGUF Ready"),
+                        ("Meta-Llama-3.1-8B-Instruct", "8.0B Params", "GGUF Ready"),
+                        ("Gemma-2-9B-IT", "9.2B Params", "AWQ Compatible"),
+                        ("Mistral-7B-Instruct-v0.3", "7.2B Params", "GGUF Ready"),
+                        ("Qwen2-VL-7B-Instruct", "7.6B VLM", "Mixed Precision"),
+                        ("Flux.1-dev", "12.0B DiT", "FP8 Candidate"),
+                    ];
+
+                    for (i, (name, params, quant)) in models.iter().enumerate() {
+                        let is_selected = self.ojon_selected_model == i;
+                        if col_ui.model_card(name, params, quant, is_selected).clicked() {
+                            self.ojon_selected_model = i;
+                        }
+                    }
+
+                    col_ui.button_secondary("+ Import HuggingFace / Local");
+                } else {
+                    let model_names = [
+                        "Qwen-2.5-Coder-7B-Instruct",
+                        "Meta-Llama-3.1-8B-Instruct",
+                        "Gemma-2-9B-IT",
+                        "Mistral-7B-Instruct-v0.3",
+                        "Qwen2-VL-7B-Instruct",
+                        "Flux.1-dev",
+                    ];
+                    let current_name = model_names[self.ojon_selected_model.min(model_names.len() - 1)];
+
+                    col_ui.horizontal(30.0, |hdr| {
+                        hdr.heading(current_name);
+                        hdr.badge("BFloat16 Source", true);
+                        hdr.badge("4 Shards (15.2 GB)", true);
+                        hdr.badge("RoPE 128k", true);
+                    });
+
+                    col_ui.glass_card(180.0, |card| {
+                        card.label("TARGET QUANTIZATION ENGINE & OUTPUT FORMAT");
+                        let formats = ["GGUF (llama.cpp)", "AWQ (AutoAWQ W4A16)", "EXL2 (ExLlamaV2)", "FP8 (TensorRT-LLM)"];
+                        card.tabs(&formats, &mut self.ojon_selected_tab);
+
+                        let recipes = [
+                            "Q5_K_M (Recommended Quality — 5.45 bpw, 5.8 GB output)",
+                            "Q4_K_M (Balanced Compact — 4.50 bpw, 4.9 GB output)",
+                            "Q8_0 (Near Lossless — 8.50 bpw, 8.2 GB output)",
+                            "IQ3_M (High Compression — 3.66 bpw, 3.9 GB output)",
+                        ];
+                        card.dropdown("Quantization Recipe", &mut self.ojon_quant_recipe, &recipes);
+
+                        card.horizontal(24.0, |row| {
+                            row.toggle("Preserve Output Head (FP16)", &mut self.ojon_preserve_head);
+                            row.toggle("Offload KV Cache to GPU", &mut self.ojon_offload_kv);
+                            row.toggle("FlashAttention-2 Kernel", &mut self.ojon_flash_attn);
+                            row.toggle("IMatrix Calibration Matrix", &mut self.ojon_imatrix);
+                        });
+
+                        card.scrubber("Calibration Context Window", &mut self.ojon_calib_ctx, 512.0, 8192.0);
+                    });
+
+                    col_ui.glass_card(130.0, |job| {
+                        job.horizontal(26.0, |hdr| {
+                            hdr.status_pill("Quantizing Shard 3/4", true);
+                            hdr.label("Estimated Output: 5.84 GB (-61.4% reduction)");
+                            hdr.label("Throughput: 142.8 MB/s (Direct NVMe DMA)");
+                            hdr.badge("ETA: 01:24", true);
+                        });
+
+                        job.progress(0.68);
+
+                        job.horizontal(32.0, |actions| {
+                            actions.button("Quantize Model (Active)");
+                            actions.button_secondary("Pause Job");
+                            actions.button_secondary("Inspect Layer Tensors");
+                            actions.button_secondary("View Conversion Log");
+                        });
+                    });
+
+                    col_ui.card(96.0, |test| {
+                        test.label("POST-QUANTIZATION INFERENCE VERIFICATION (Ojon Test Harness)");
+                        test.text_input(&mut self.ojon_test_prompt, "Enter prompt for perplexity check...");
+                        test.horizontal(26.0, |row| {
+                            row.button_secondary("Run Perplexity Benchmark (PPL)");
+                            row.label("Measured PPL: 5.62 (+0.08 delta vs FP16 baseline) | Memory: 6.2 GB VRAM");
+                        });
+                    });
+                }
+            },
+        );
+    }
+
     /// Automated stress benchmark mode: renders 1,000 frames under heavy load and reports statistics.
     pub fn run_benchmark_suite(&mut self, viewport: Rect, num_frames: usize) -> FrameMetrics {
         println!(
@@ -1008,6 +1171,7 @@ impl UiLabApp {
 
         // Cycle through all tabs during benchmark to measure all workloads
         let tabs = [
+            LabTab::OjonWorkstation,
             LabTab::DockingAndOverview,
             LabTab::DesignSystemAndIcons,
             LabTab::GodotAnchorsAndMaterial3,
@@ -1048,9 +1212,10 @@ impl UiLabApp {
         // 1. Check top navigation clicks
         if nav_rect.contains(pos) {
             let tabs = [
-                (LabTab::DockingAndOverview, "Overview & Dock"),
-                (LabTab::DesignSystemAndIcons, "Design & UI API"),
-                (LabTab::GodotAnchorsAndMaterial3, "Anchors & M3"),
+                (LabTab::OjonWorkstation, "Ojon Studio"),
+                (LabTab::DockingAndOverview, "Overview"),
+                (LabTab::DesignSystemAndIcons, "UI Tokens"),
+                (LabTab::GodotAnchorsAndMaterial3, "Anchors"),
                 (LabTab::InfiniteCanvas, "Canvas"),
                 (LabTab::NodeEditor, "Node Graph"),
                 (LabTab::Timeline, "Timeline"),
@@ -1062,13 +1227,13 @@ impl UiLabApp {
             for (tab, _label) in tabs {
                 let tab_rect = Rect::from_min_size(
                     Vec2::new(tab_x, nav_rect.min.y + 8.0),
-                    Vec2::new(112.0, 32.0),
+                    Vec2::new(100.0, 32.0),
                 );
                 if tab_rect.contains(pos) {
                     self.current_tab = tab;
                     return;
                 }
-                tab_x += 116.0;
+                tab_x += 105.0;
             }
 
             let backend_rect = Rect::from_min_size(
@@ -1398,11 +1563,10 @@ fn run_headless_benchmark(mut app: UiLabApp, num_frames: usize) {
         .render_frame(viewport)
         .expect("CPU warm visual QA frame must render successfully");
     println!(
-        "   Rendered Frame #1: {} commands, Backend: {:?}",
+        "   Rendered Frame #1 (Design System): {} commands, Backend: {:?}",
         stats.primitives_count, app.active_backend
     );
 
-    // Save native frame buffer screenshot for visual QA
     let appdata = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".into());
     let screenshot_path = format!(
         "{}/.gemini/antigravity-ide/brain/dae2600e-869f-431f-ad94-20f29860011c/ui_lab_frame.ppm",
@@ -1415,6 +1579,28 @@ fn run_headless_benchmark(mut app: UiLabApp, num_frames: usize) {
         app.cpu.height(),
     );
     println!("   Visual QA Frame Saved: {}", screenshot_path);
+
+    // Render Ojon Workstation tab into CPU rasterizer for visual QA
+    app.current_tab = LabTab::OjonWorkstation;
+    let ojon_stats = app
+        .render_frame(viewport)
+        .expect("CPU warm visual QA frame for Ojon must render successfully");
+    println!(
+        "   Rendered Frame #2 (Ojon Studio): {} commands, Backend: {:?}",
+        ojon_stats.primitives_count, app.active_backend
+    );
+
+    let ojon_screenshot_path = format!(
+        "{}/.gemini/antigravity-ide/brain/dae2600e-869f-431f-ad94-20f29860011c/ojon_workstation_frame.ppm",
+        appdata
+    );
+    let _ = ScreenshotCapture::save_ppm(
+        &ojon_screenshot_path,
+        app.cpu.pixels(),
+        app.cpu.width(),
+        app.cpu.height(),
+    );
+    println!("   Ojon Workstation Visual QA Frame Saved: {}", ojon_screenshot_path);
 
     // Run benchmark suite on Hardware GPU if available, or CPU safe mode
     if app.gpu.is_some() {

@@ -310,6 +310,360 @@ pub fn render_progress_bar(
     }
 }
 
+/// Renders a modern iOS / Fluent style toggle switch (smooth pill switch with round knob).
+pub fn render_toggle(
+    cmd_buf: &mut CommandBuffer,
+    checked: bool,
+    is_hovered: bool,
+    label: &str,
+    bounds: Rect,
+    palette: &ThemePalette,
+) {
+    let track_width = 36.0;
+    let track_height = 20.0;
+    let track_y = bounds.min.y + (bounds.height() - track_height) * 0.5;
+    let track_rect = Rect::from_min_size(
+        Vec2::new(bounds.min.x, track_y),
+        Vec2::new(track_width, track_height),
+    );
+
+    let (bg_color, stroke_color) = if checked {
+        if is_hovered {
+            (palette.accent_hover, Stroke::NONE)
+        } else {
+            (palette.accent, Stroke::NONE)
+        }
+    } else if is_hovered {
+        (palette.elevated, Stroke::new(1.0, palette.border))
+    } else {
+        (palette.surface, Stroke::new(1.0, palette.border))
+    };
+
+    // Track capsule
+    cmd_buf.push(DrawCommand::Rect {
+        rect: track_rect,
+        fill: bg_color,
+        radius: CornerRadius::same(10.0),
+        stroke: stroke_color,
+    });
+
+    // Knob with subtle ambient shadow
+    let knob_diameter = 14.0;
+    let knob_x = if checked {
+        track_rect.min.x + track_width - knob_diameter - 3.0
+    } else {
+        track_rect.min.x + 3.0
+    };
+    let knob_y = track_rect.min.y + 3.0;
+    let knob_rect = Rect::from_min_size(
+        Vec2::new(knob_x, knob_y),
+        Vec2::new(knob_diameter, knob_diameter),
+    );
+
+    // Knob shadow
+    cmd_buf.push(DrawCommand::Rect {
+        rect: Rect::from_min_size(
+            Vec2::new(knob_rect.min.x, knob_rect.min.y + 1.0),
+            Vec2::new(knob_diameter, knob_diameter),
+        ),
+        fill: Color::rgba(0, 0, 0, 50),
+        radius: CornerRadius::same(7.0),
+        stroke: Stroke::NONE,
+    });
+
+    // Knob body
+    cmd_buf.push(DrawCommand::Rect {
+        rect: knob_rect,
+        fill: Color::rgb(255, 255, 255),
+        radius: CornerRadius::same(7.0),
+        stroke: Stroke::NONE,
+    });
+
+    // Label if present
+    if !label.is_empty() {
+        cmd_buf.push(DrawCommand::Text {
+            pos: Vec2::new(track_rect.max.x + 10.0, bounds.min.y + (bounds.height() - 13.0) * 0.5 - 1.0),
+            text: label.to_string(),
+            color: palette.text,
+            size: 13.0,
+            strong: false,
+        });
+    }
+}
+
+/// Renders a modern text input box with placeholder and focus highlight.
+pub fn render_text_input(
+    cmd_buf: &mut CommandBuffer,
+    text: &str,
+    placeholder: &str,
+    bounds: Rect,
+    is_focused: bool,
+    is_hovered: bool,
+    palette: &ThemePalette,
+) {
+    let (bg_color, stroke) = if is_focused {
+        (palette.canvas, Stroke::new(1.5, palette.accent))
+    } else if is_hovered {
+        (palette.canvas, Stroke::new(1.0, palette.accent.with_alpha(140)))
+    } else {
+        (palette.canvas, Stroke::new(1.0, palette.border))
+    };
+
+    cmd_buf.push(DrawCommand::Rect {
+        rect: bounds,
+        fill: bg_color,
+        radius: CornerRadius::same(5.0),
+        stroke,
+    });
+
+    let text_y = bounds.min.y + (bounds.height() - 13.0) * 0.5 - 1.0;
+    if text.is_empty() {
+        cmd_buf.push(DrawCommand::Text {
+            pos: Vec2::new(bounds.min.x + 10.0, text_y),
+            text: placeholder.to_string(),
+            color: palette.text_muted,
+            size: 13.0,
+            strong: false,
+        });
+    } else {
+        cmd_buf.push(DrawCommand::Text {
+            pos: Vec2::new(bounds.min.x + 10.0, text_y),
+            text: text.to_string(),
+            color: palette.text,
+            size: 13.0,
+            strong: false,
+        });
+    }
+
+    // Blinking / focus cursor indicator
+    if is_focused {
+        let char_width = 7.5;
+        let cursor_x = bounds.min.x + 10.0 + text.len() as f32 * char_width;
+        let cursor_top = bounds.min.y + 6.0;
+        let cursor_bottom = bounds.max.y - 6.0;
+        cmd_buf.push(DrawCommand::Line {
+            start: Vec2::new(cursor_x, cursor_top),
+            end: Vec2::new(cursor_x, cursor_bottom),
+            stroke: Stroke::new(1.5, palette.accent),
+        });
+    }
+}
+
+/// Renders a modern segmented pill control (like Linear/Raycast workspace tabs).
+pub fn render_segmented_tabs(
+    cmd_buf: &mut CommandBuffer,
+    tabs: &[&str],
+    active_idx: usize,
+    bounds: Rect,
+    hovered_idx: Option<usize>,
+    palette: &ThemePalette,
+) {
+    if tabs.is_empty() {
+        return;
+    }
+
+    // Outer container pill
+    cmd_buf.push(DrawCommand::Rect {
+        rect: bounds,
+        fill: palette.surface.with_alpha(180),
+        radius: CornerRadius::same(6.0),
+        stroke: Stroke::new(1.0, palette.border),
+    });
+
+    let tab_width = (bounds.width() - 4.0) / tabs.len() as f32;
+    for (i, tab) in tabs.iter().enumerate() {
+        let tab_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x + 2.0 + i as f32 * tab_width, bounds.min.y + 2.0),
+            Vec2::new(tab_width, bounds.height() - 4.0),
+        );
+
+        let is_active = i == active_idx;
+        let is_hovered = hovered_idx == Some(i);
+
+        if is_active {
+            // Elevated active pill with hairline specular top highlight
+            cmd_buf.push(DrawCommand::Rect {
+                rect: tab_rect,
+                fill: palette.elevated,
+                radius: CornerRadius::same(4.0),
+                stroke: Stroke::new(1.0, palette.border.with_alpha(180)),
+            });
+
+            // Specular highlight
+            cmd_buf.push(DrawCommand::Rect {
+                rect: Rect::from_min_size(
+                    Vec2::new(tab_rect.min.x + 2.0, tab_rect.min.y),
+                    Vec2::new((tab_rect.width() - 4.0).max(1.0), 1.0),
+                ),
+                fill: Color::rgba(255, 255, 255, 30),
+                radius: CornerRadius::ZERO,
+                stroke: Stroke::NONE,
+            });
+        } else if is_hovered {
+            cmd_buf.push(DrawCommand::Rect {
+                rect: tab_rect,
+                fill: palette.surface.with_alpha(120),
+                radius: CornerRadius::same(4.0),
+                stroke: Stroke::NONE,
+            });
+        }
+
+        let text_color = if is_active {
+            palette.text
+        } else if is_hovered {
+            palette.text.with_alpha(220)
+        } else {
+            palette.text_muted
+        };
+
+        let text_width = tab.len() as f32 * 7.2;
+        let text_x = tab_rect.min.x + (tab_rect.width() - text_width) * 0.5;
+        let text_y = tab_rect.min.y + (tab_rect.height() - 12.0) * 0.5 - 1.0;
+
+        cmd_buf.push(DrawCommand::Text {
+            pos: Vec2::new(text_x.max(tab_rect.min.x + 4.0), text_y),
+            text: tab.to_string(),
+            color: text_color,
+            size: 12.0,
+            strong: is_active,
+        });
+    }
+}
+
+/// Renders a telemetry stat card (e.g., VRAM usage, RAM, ETA, throughput).
+pub fn render_stat_card(
+    cmd_buf: &mut CommandBuffer,
+    label: &str,
+    value: &str,
+    subtext: &str,
+    bounds: Rect,
+    palette: &ThemePalette,
+) {
+    // Card background
+    cmd_buf.push(DrawCommand::Rect {
+        rect: bounds,
+        fill: palette.surface.with_alpha(230),
+        radius: CornerRadius::same(8.0),
+        stroke: Stroke::new(1.0, palette.border),
+    });
+
+    // 1px hairline top specular highlight
+    if bounds.width() > 16.0 {
+        cmd_buf.push(DrawCommand::Rect {
+            rect: Rect::from_min_size(
+                Vec2::new(bounds.min.x + 6.0, bounds.min.y),
+                Vec2::new(bounds.width() - 12.0, 1.0),
+            ),
+            fill: Color::rgba(255, 255, 255, 25),
+            radius: CornerRadius::ZERO,
+            stroke: Stroke::NONE,
+        });
+    }
+
+    // Label (10.5px uppercase muted)
+    cmd_buf.push(DrawCommand::Text {
+        pos: Vec2::new(bounds.min.x + 12.0, bounds.min.y + 10.0),
+        text: label.to_uppercase(),
+        color: palette.text_muted,
+        size: 10.5,
+        strong: true,
+    });
+
+    // Value (18px bold text / accent)
+    cmd_buf.push(DrawCommand::Text {
+        pos: Vec2::new(bounds.min.x + 12.0, bounds.min.y + 26.0),
+        text: value.to_string(),
+        color: palette.text,
+        size: 18.0,
+        strong: true,
+    });
+
+    // Subtext (11px muted or accent)
+    if !subtext.is_empty() {
+        cmd_buf.push(DrawCommand::Text {
+            pos: Vec2::new(bounds.min.x + 12.0, bounds.min.y + 48.0),
+            text: subtext.to_string(),
+            color: palette.accent,
+            size: 11.0,
+            strong: false,
+        });
+    }
+}
+
+/// Renders a selectable model list item card with hover and selection styling.
+pub fn render_model_card(
+    cmd_buf: &mut CommandBuffer,
+    name: &str,
+    params: &str,
+    quant: &str,
+    bounds: Rect,
+    is_selected: bool,
+    is_hovered: bool,
+    palette: &ThemePalette,
+) {
+    let (fill, stroke) = if is_selected {
+        (palette.accent.with_alpha(32), Stroke::new(1.5, palette.accent))
+    } else if is_hovered {
+        (palette.elevated, Stroke::new(1.0, palette.border))
+    } else {
+        (palette.surface, Stroke::new(1.0, palette.border))
+    };
+
+    cmd_buf.push(DrawCommand::Rect {
+        rect: bounds,
+        fill,
+        radius: CornerRadius::same(6.0),
+        stroke,
+    });
+
+    // Model name (13px bold)
+    cmd_buf.push(DrawCommand::Text {
+        pos: Vec2::new(bounds.min.x + 12.0, bounds.min.y + 8.0),
+        text: name.to_string(),
+        color: palette.text,
+        size: 13.0,
+        strong: true,
+    });
+
+    // Params badge
+    let param_badge_rect = Rect::from_min_size(
+        Vec2::new(bounds.min.x + 12.0, bounds.min.y + 28.0),
+        Vec2::new(params.len() as f32 * 6.5 + 12.0, 18.0),
+    );
+    cmd_buf.push(DrawCommand::Rect {
+        rect: param_badge_rect,
+        fill: palette.surface,
+        radius: CornerRadius::same(4.0),
+        stroke: Stroke::new(1.0, palette.border),
+    });
+    cmd_buf.push(DrawCommand::Text {
+        pos: Vec2::new(param_badge_rect.min.x + 6.0, param_badge_rect.min.y + 3.0),
+        text: params.to_string(),
+        color: palette.text_muted,
+        size: 10.5,
+        strong: false,
+    });
+
+    // Quant badge
+    let quant_badge_rect = Rect::from_min_size(
+        Vec2::new(param_badge_rect.max.x + 6.0, bounds.min.y + 28.0),
+        Vec2::new(quant.len() as f32 * 6.5 + 12.0, 18.0),
+    );
+    cmd_buf.push(DrawCommand::Rect {
+        rect: quant_badge_rect,
+        fill: palette.accent.with_alpha(25),
+        radius: CornerRadius::same(4.0),
+        stroke: Stroke::new(1.0, palette.accent.with_alpha(100)),
+    });
+    cmd_buf.push(DrawCommand::Text {
+        pos: Vec2::new(quant_badge_rect.min.x + 6.0, quant_badge_rect.min.y + 3.0),
+        text: quant.to_string(),
+        color: palette.accent,
+        size: 10.5,
+        strong: true,
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,4 +703,32 @@ mod tests {
         );
         assert!(!cmd_buf.is_empty());
     }
+
+    #[test]
+    fn toggle_and_text_input_render_commands() {
+        let mut cmd_buf = CommandBuffer::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(200.0, 24.0));
+        render_toggle(&mut cmd_buf, true, false, "Enable CUDA", bounds, &palette);
+        assert!(!cmd_buf.is_empty());
+
+        let mut cmd_buf2 = CommandBuffer::new();
+        render_text_input(&mut cmd_buf2, "Qwen-2.5", "Search...", bounds, true, false, &palette);
+        assert!(!cmd_buf2.is_empty());
+    }
+
+    #[test]
+    fn segmented_tabs_and_stat_cards_render_commands() {
+        let mut cmd_buf = CommandBuffer::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(300.0, 32.0));
+        render_segmented_tabs(&mut cmd_buf, &["GGUF", "AWQ", "EXL2"], 0, bounds, None, &palette);
+        assert!(!cmd_buf.is_empty());
+
+        let mut cmd_buf2 = CommandBuffer::new();
+        let card_bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(180.0, 72.0));
+        render_stat_card(&mut cmd_buf2, "VRAM Used", "11.8 / 16.0 GB", "74% Active Pool", card_bounds, &palette);
+        assert!(!cmd_buf2.is_empty());
+    }
 }
+

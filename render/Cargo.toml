@@ -1,0 +1,17 @@
+[package]
+name = "ui-render"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+ui-core = { path = "../core" }
+ui-platform = { path = "../platform" }
+wgpu = { version = "22.1", default-features = false, features = ["wgsl", "dx12", "metal"] }
+bytemuck = { version = "1.18", features = ["derive"] }
+ab_glyph = "0.2"
+rustybuzz = "0.20.1"
+pollster = "1.0.1"
+softbuffer = "0.4"
+resvg = { version = "0.48.1", default-features = false }

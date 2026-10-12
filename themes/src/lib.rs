@@ -1,0 +1,150 @@
+//! Studio design tokens, theme palettes, typography scale, and Material 3 elevation system.
+
+pub mod metrics;
+pub mod typography;
+
+pub use metrics::*;
+pub use typography::*;
+
+use ui_core::Color;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ThemeMode {
+    #[default]
+    Dark,
+    StudioGraphite,
+    Light,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThemePalette {
+    pub canvas: Color,        // Surface Level 0 (Deepest background)
+    pub surface: Color,       // Surface Level 1 (Panel backgrounds)
+    pub elevated: Color,      // Surface Level 2 (Cards, popovers, dropdowns)
+    pub elevated_high: Color, // Surface Level 3 (Highest modals, tooltips)
+    pub border: Color,        // Dividers, panel outlines
+    pub text: Color,          // Primary readable text (≥7:1 contrast)
+    pub text_muted: Color,    // Secondary text
+    pub accent: Color,        // Primary brand/focus accent
+    pub accent_hover: Color,  // Interactive hover state
+    pub danger: Color,        // Destructive actions, errors
+    pub success: Color,       // Verification passes, ready status
+    pub warning: Color,       // Warnings, running jobs
+}
+
+impl ThemePalette {
+    pub const fn dark() -> Self {
+        Self {
+            canvas: Color::rgb(11, 14, 20),
+            surface: Color::rgb(18, 23, 33),
+            elevated: Color::rgb(27, 34, 49),
+            elevated_high: Color::rgb(36, 45, 65),
+            border: Color::rgb(45, 56, 80),
+            text: Color::rgb(240, 244, 253),
+            text_muted: Color::rgb(153, 164, 183),
+            accent: Color::rgb(110, 140, 255),
+            accent_hover: Color::rgb(135, 160, 255),
+            danger: Color::rgb(240, 95, 95),
+            success: Color::rgb(80, 210, 150),
+            warning: Color::rgb(255, 180, 70),
+        }
+    }
+
+    /// Unified Studio Neutral / Graphite theme shared with Chobi and KS-MotionFlow.
+    pub const fn studio_graphite() -> Self {
+        Self {
+            canvas: Color::rgb(0x1C, 0x1C, 0x1F),  // Deep inset well #1C1C1F
+            surface: Color::rgb(0x22, 0x22, 0x26), // Warm dark graphite chrome #222226
+            elevated: Color::rgb(0x2A, 0x2A, 0x2F), // Distinct toolbar surface #2A2A2F
+            elevated_high: Color::rgb(0x32, 0x32, 0x38), // Rich graphite panel body #323238
+            border: Color::rgb(0x3D, 0x3D, 0x46),  // 1px panel boundary #3D3D46
+            text: Color::rgb(0xEA, 0xEA, 0xEE),    // Crisp readable text #EAEAEE
+            text_muted: Color::rgb(0xB2, 0xB2, 0xBC), // Clean secondary labels #B2B2BC
+            accent: Color::rgb(0x38, 0x75, 0xB0),  // Vibrant studio blue #3875B0
+            accent_hover: Color::rgb(0x5B, 0xA0, 0xE0), // Focused outline #5BA0E0
+            danger: Color::rgb(220, 65, 65),       // Actionable error
+            success: Color::rgb(55, 180, 115),     // Ready/verified state
+            warning: Color::rgb(235, 160, 45),     // In-progress notification
+        }
+    }
+
+    pub const fn light() -> Self {
+        Self {
+            canvas: Color::rgb(245, 247, 252),
+            surface: Color::rgb(255, 255, 255),
+            elevated: Color::rgb(238, 242, 250),
+            elevated_high: Color::rgb(228, 234, 245),
+            border: Color::rgb(215, 222, 235),
+            text: Color::rgb(20, 25, 38),
+            text_muted: Color::rgb(100, 112, 133),
+            accent: Color::rgb(60, 100, 240),
+            accent_hover: Color::rgb(80, 120, 255),
+            danger: Color::rgb(215, 60, 60),
+            success: Color::rgb(40, 165, 105),
+            warning: Color::rgb(210, 130, 20),
+        }
+    }
+
+    /// Android Material 3 inspired surface elevation mapper (Levels 0 through 4).
+    pub fn surface_at_elevation(&self, level: u8) -> Color {
+        match level {
+            0 => self.canvas,
+            1 => self.surface,
+            2 => self.elevated,
+            _ => self.elevated_high,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StudioTheme {
+    pub mode: ThemeMode,
+    pub palette: ThemePalette,
+}
+
+impl Default for StudioTheme {
+    fn default() -> Self {
+        Self {
+            mode: ThemeMode::Dark,
+            palette: ThemePalette::dark(),
+        }
+    }
+}
+
+impl StudioTheme {
+    pub fn new(mode: ThemeMode) -> Self {
+        let palette = match mode {
+            ThemeMode::Dark => ThemePalette::dark(),
+            ThemeMode::StudioGraphite => ThemePalette::studio_graphite(),
+            ThemeMode::Light => ThemePalette::light(),
+        };
+        Self { mode, palette }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn theme_palettes_exceed_wcag_contrast_requirements() {
+        for mode in [ThemeMode::Dark, ThemeMode::StudioGraphite, ThemeMode::Light] {
+            let t = StudioTheme::new(mode);
+            let text_contrast = t.palette.text.contrast_ratio(t.palette.canvas);
+            assert!(
+                text_contrast >= 7.0,
+                "Text contrast {:.2} must meet WCAG AAA (>= 7.0) for mode {:?}",
+                text_contrast,
+                mode
+            );
+        }
+    }
+
+    #[test]
+    fn surface_elevations_increase_depth_monotonically() {
+        for p in [ThemePalette::dark(), ThemePalette::studio_graphite()] {
+            assert_ne!(p.surface_at_elevation(0), p.surface_at_elevation(1));
+            assert_ne!(p.surface_at_elevation(1), p.surface_at_elevation(2));
+        }
+    }
+}

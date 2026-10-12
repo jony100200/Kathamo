@@ -1,0 +1,16 @@
+[package]
+name = "ui-testkit"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+ui-core = { path = "../core" }
+ui-platform = { path = "../platform" }
+ui-render = { path = "../render" }
+ui-themes = { path = "../themes" }
+ui-widgets = { path = "../widgets" }
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_SystemInformation"] }

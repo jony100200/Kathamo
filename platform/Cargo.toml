@@ -1,0 +1,12 @@
+[package]
+name = "ui-platform"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+ui-core = { path = "../core" }
+winit = "0.30"
+accesskit = "0.16"
+accesskit_winit = "0.22"

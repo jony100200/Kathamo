@@ -1,0 +1,14 @@
+[package]
+name = "ui-lab"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+ui-core = { path = "../core" }
+ui-platform = { path = "../platform" }
+ui-render = { path = "../render" }
+ui-themes = { path = "../themes" }
+ui-widgets = { path = "../widgets" }
+ui-testkit = { path = "../testkit" }

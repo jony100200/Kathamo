@@ -1,0 +1,9 @@
+[package]
+name = "ui-themes"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+ui-core = { path = "../core" }

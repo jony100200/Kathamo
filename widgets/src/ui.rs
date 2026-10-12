@@ -311,7 +311,13 @@ impl<'a> KolponaUi<'a> {
     /// Studio dropdown selector ("Choose workspace").
     pub fn dropdown(&mut self, _label: &str, selected: &mut usize, options: &[&str]) -> Response {
         let height = 28.0;
-        let width = 200.0;
+        let width = match self.direction {
+            Direction::Horizontal => {
+                let max_len = options.iter().map(|s| s.len()).max().unwrap_or(10);
+                (max_len as f32 * 8.0 + 36.0).clamp(200.0, 420.0)
+            }
+            Direction::Vertical => (self.bounds.width() - 16.0).max(160.0),
+        };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
         let clicked = hovered && self.pointer.primary_down;
@@ -514,7 +520,7 @@ impl<'a> KolponaUi<'a> {
     pub fn stat_card(&mut self, label: &str, value: &str, subtext: &str) {
         let height = 68.0;
         let width = match self.direction {
-            Direction::Horizontal => (label.len().max(value.len()) as f32 * 9.0 + 36.0).clamp(185.0, 260.0),
+            Direction::Horizontal => (label.len().max(value.len()) as f32 * 9.0 + 42.0).clamp(195.0, 270.0),
             Direction::Vertical => (self.bounds.width() - 16.0).max(120.0),
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));

@@ -180,9 +180,21 @@ pub fn render_dropdown(
     });
 
     // Selected text
+    let selected_str = state.selected_text();
+    let max_chars = ((bounds.width() - 32.0) / 7.5).max(1.0) as usize;
+    let display_str = if selected_str.len() > max_chars && max_chars > 3 {
+        let end_idx = selected_str
+            .char_indices()
+            .nth(max_chars.saturating_sub(3))
+            .map(|(i, _)| i)
+            .unwrap_or(selected_str.len());
+        format!("{}...", &selected_str[..end_idx])
+    } else {
+        selected_str.to_string()
+    };
     cmd_buf.push(DrawCommand::Text {
         pos: Vec2::new(bounds.min.x + 10.0, bounds.min.y + 7.0),
-        text: state.selected_text().to_string(),
+        text: display_str,
         color: if state.disabled {
             palette.text_muted
         } else {
@@ -417,6 +429,7 @@ pub fn render_text_input(
     });
 
     let text_y = bounds.min.y + (bounds.height() - 13.0) * 0.5 - 1.0;
+    let max_chars = ((bounds.width() - 20.0) / 7.5).max(1.0) as usize;
     if text.is_empty() {
         cmd_buf.push(DrawCommand::Text {
             pos: Vec2::new(bounds.min.x + 10.0, text_y),
@@ -426,9 +439,16 @@ pub fn render_text_input(
             strong: false,
         });
     } else {
+        let display_text = if text.len() > max_chars {
+            let skip = text.len().saturating_sub(max_chars);
+            let tail = &text[text.char_indices().nth(skip).map(|(i, _)| i).unwrap_or(0)..];
+            tail.to_string()
+        } else {
+            text.to_string()
+        };
         cmd_buf.push(DrawCommand::Text {
             pos: Vec2::new(bounds.min.x + 10.0, text_y),
-            text: text.to_string(),
+            text: display_text,
             color: palette.text,
             size: 13.0,
             strong: false,
@@ -438,7 +458,8 @@ pub fn render_text_input(
     // Blinking / focus cursor indicator
     if is_focused {
         let char_width = 7.5;
-        let cursor_x = bounds.min.x + 10.0 + text.len() as f32 * char_width;
+        let visible_chars = text.len().min(max_chars);
+        let cursor_x = bounds.min.x + 10.0 + visible_chars as f32 * char_width;
         let cursor_top = bounds.min.y + 6.0;
         let cursor_bottom = bounds.max.y - 6.0;
         cmd_buf.push(DrawCommand::Line {

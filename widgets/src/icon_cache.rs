@@ -57,6 +57,18 @@ pub enum StudioIcon {
     Palette,
     Image,
     Photo,
+    Scissors,
+    Camera,
+    LayoutGrid,
+    Maximize,
+
+    // Developer & System
+    Cpu,
+    Bolt,
+    Terminal,
+    Code,
+    Clock,
+    GitBranch,
 }
 
 impl StudioIcon {
@@ -101,6 +113,16 @@ impl StudioIcon {
             Self::Sparkles => "AI Generation",
             Self::Palette => "Color Palette",
             Self::Image | Self::Photo => "Image",
+            Self::Scissors => "Cut / Split",
+            Self::Camera => "Camera Snapshot",
+            Self::LayoutGrid => "Grid Layout",
+            Self::Maximize => "Fullscreen",
+            Self::Cpu => "Compute / Neural",
+            Self::Bolt => "Fast Inference",
+            Self::Terminal => "Terminal",
+            Self::Code => "Code / Script",
+            Self::Clock => "Clock / History",
+            Self::GitBranch => "Branch / Pipeline",
         }
     }
 
@@ -145,6 +167,16 @@ impl StudioIcon {
             Self::Sparkles => include_str!("../../assets/icons/sparkles.svg"),
             Self::Palette => include_str!("../../assets/icons/palette.svg"),
             Self::Image | Self::Photo => include_str!("../../assets/icons/photo.svg"),
+            Self::Scissors => include_str!("../../assets/icons/scissors.svg"),
+            Self::Camera => include_str!("../../assets/icons/camera.svg"),
+            Self::LayoutGrid => include_str!("../../assets/icons/layout-grid.svg"),
+            Self::Maximize => include_str!("../../assets/icons/maximize.svg"),
+            Self::Cpu => include_str!("../../assets/icons/cpu.svg"),
+            Self::Bolt => include_str!("../../assets/icons/bolt.svg"),
+            Self::Terminal => include_str!("../../assets/icons/terminal.svg"),
+            Self::Code => include_str!("../../assets/icons/code.svg"),
+            Self::Clock => include_str!("../../assets/icons/clock.svg"),
+            Self::GitBranch => include_str!("../../assets/icons/git-branch.svg"),
         }
     }
 
@@ -183,6 +215,16 @@ impl StudioIcon {
             "unlock" => Some(Self::Unlock),
             "zoomin" | "zoom_in" => Some(Self::ZoomIn),
             "zoomout" | "zoom_out" => Some(Self::ZoomOut),
+            "scissors" | "cut" | "split" => Some(Self::Scissors),
+            "camera" | "snapshot" => Some(Self::Camera),
+            "grid" | "layout" | "layout_grid" => Some(Self::LayoutGrid),
+            "maximize" | "fullscreen" | "expand" => Some(Self::Maximize),
+            "cpu" | "compute" | "model" => Some(Self::Cpu),
+            "bolt" | "fast" | "lightning" => Some(Self::Bolt),
+            "terminal" | "cli" | "console" => Some(Self::Terminal),
+            "code" | "script" => Some(Self::Code),
+            "clock" | "time" | "history" => Some(Self::Clock),
+            "branch" | "git" | "node" => Some(Self::GitBranch),
             _ => None,
         }
     }

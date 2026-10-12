@@ -40,6 +40,14 @@ Kathamo/
 
 - **Cold Launch:** 730 ms
 - **Warm Launch:** < 10 ms
-- **p95 Frame Time:** 2.79 ms (6.0× headroom at 60 Hz)
-- **100,000-Item Virtual List:** Steady 60+ FPS with kinetic fling inertia
+- **p95 Frame Time:** 2.58 ms (6.4× headroom at 60 Hz)
+- **100,000-Item Virtual List:** Steady 120+ FPS with kinetic fling inertia
 - **Presentation Flash:** ZERO frames (window stays hidden until first buffer commits)
+
+---
+
+## 4. Licenses & Open Source Acknowledgements
+
+- **Kathamo Core**: Dual-licensed under [MIT](LICENSE-MIT) or Apache-2.0.
+- **Third-Party Acknowledgements**: Complete attribution and licenses for all bundled fonts (`Inter`, `Space Grotesk`, `Noto Sans Bengali`, `JetBrains Mono`, `IBM Plex Mono`), icons (`Tabler Icons`), and foundation crates (`wgpu`, `winit`, `rustybuzz`, `accesskit`, `resvg`) are detailed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+

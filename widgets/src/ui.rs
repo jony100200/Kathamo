@@ -188,7 +188,11 @@ impl<'a> KolponaUi<'a> {
             tree.insert_child(root, node);
         }
 
-        self.advance(self.bounds.width(), size + 8.0);
+        let width = match self.direction {
+            Direction::Horizontal => (text.len() as f32 * 9.5 + 8.0).max(40.0),
+            Direction::Vertical => self.bounds.width(),
+        };
+        self.advance(width, size + 8.0);
     }
 
     /// Bilingual studio heading (English + Bengali script, e.g. "Chobi (ছবি)").
@@ -207,7 +211,11 @@ impl<'a> KolponaUi<'a> {
             size,
             strong: false,
         });
-        self.advance(self.bounds.width(), size + self.item_spacing);
+        let width = match self.direction {
+            Direction::Horizontal => (text.len() as f32 * 7.5 + 4.0).max(30.0),
+            Direction::Vertical => self.bounds.width(),
+        };
+        self.advance(width, size + self.item_spacing);
     }
 
     /// High-contrast video subtitle with subpixel outline (essential for Cholpo and video overlays).
@@ -506,7 +514,7 @@ impl<'a> KolponaUi<'a> {
     pub fn stat_card(&mut self, label: &str, value: &str, subtext: &str) {
         let height = 68.0;
         let width = match self.direction {
-            Direction::Horizontal => 150.0,
+            Direction::Horizontal => (label.len().max(value.len()) as f32 * 9.0 + 36.0).clamp(185.0, 260.0),
             Direction::Vertical => (self.bounds.width() - 16.0).max(120.0),
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));

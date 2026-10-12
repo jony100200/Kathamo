@@ -151,3 +151,99 @@ impl Timeline {
         buf.push(DrawCommand::ClipPop);
     }
 }
+
+/// Renders an audio waveform with vertical amplitude bars and a draggable playhead.
+pub fn render_audio_waveform(
+    buf: &mut CommandBuffer,
+    samples: &[f32],
+    playhead_norm: f32,
+    bounds: Rect,
+    palette: &ThemePalette,
+) {
+    // Backdrop
+    buf.push(DrawCommand::Rect {
+        rect: bounds,
+        fill: palette.canvas,
+        radius: CornerRadius::same(6.0),
+        stroke: Stroke::new(1.0, palette.border),
+    });
+
+    if samples.is_empty() || bounds.width() < 10.0 {
+        return;
+    }
+
+    let bar_width = 3.0;
+    let bar_gap = 2.0;
+    let step = bar_width + bar_gap;
+    let num_bars = ((bounds.width() - 16.0) / step).floor() as usize;
+
+    let center_y = bounds.min.y + bounds.height() * 0.5;
+    let max_half_h = (bounds.height() - 12.0) * 0.5;
+
+    let start_x = bounds.min.x + 8.0;
+    let playhead_x = bounds.min.x + bounds.width() * playhead_norm.clamp(0.0, 1.0);
+
+    for i in 0..num_bars {
+        let sample_idx = (i * samples.len()) / num_bars.max(1);
+        let amp = samples.get(sample_idx).copied().unwrap_or(0.1).clamp(0.05, 1.0);
+        let bar_h = (amp * max_half_h).max(2.0);
+
+        let bar_x = start_x + (i as f32) * step;
+        let bar_rect = Rect::from_min_max(
+            Vec2::new(bar_x, center_y - bar_h),
+            Vec2::new(bar_x + bar_width, center_y + bar_h),
+        );
+
+        let is_played = bar_x <= playhead_x;
+        let fill = if is_played {
+            palette.accent
+        } else {
+            palette.text_muted.with_alpha(100)
+        };
+
+        buf.push(DrawCommand::Rect {
+            rect: bar_rect,
+            fill,
+            radius: CornerRadius::same(1.5),
+            stroke: Stroke::NONE,
+        });
+    }
+
+    // Playhead line
+    buf.push(DrawCommand::Line {
+        start: Vec2::new(playhead_x, bounds.min.y + 2.0),
+        end: Vec2::new(playhead_x, bounds.max.y - 2.0),
+        stroke: Stroke::new(2.0, palette.danger),
+    });
+
+    // Playhead glowing handle
+    buf.push(DrawCommand::Rect {
+        rect: Rect::from_min_size(
+            Vec2::new(playhead_x - 4.0, bounds.min.y + 2.0),
+            Vec2::new(8.0, 8.0),
+        ),
+        fill: palette.danger,
+        radius: CornerRadius::same(2.0),
+        stroke: Stroke::NONE,
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeline_and_waveform_render_clean_commands() {
+        let mut buf = CommandBuffer::new();
+        let palette = ThemePalette::dark();
+        let tl = Timeline::default();
+        let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 200.0));
+        tl.render(&mut buf, viewport, &palette);
+        assert!(!buf.is_empty());
+
+        let samples = vec![0.1, 0.4, 0.8, 0.9, 0.5, 0.3, 0.7, 0.2];
+        let wave_bounds = Rect::from_min_size(Vec2::new(0.0, 210.0), Vec2::new(400.0, 60.0));
+        render_audio_waveform(&mut buf, &samples, 0.5, wave_bounds, &palette);
+        assert!(buf.len() > 10);
+    }
+}

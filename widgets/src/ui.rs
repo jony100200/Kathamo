@@ -793,6 +793,93 @@ impl<'a> KolponaUi<'a> {
         self.cursor.x -= 8.0;
         self.cursor.y += 6.0;
     }
+
+    /// Modern collapsible panel container with toggle chevron (essential for AI agent sidebars).
+    pub fn collapsible_panel<F, R>(&mut self, title: &str, is_open: &mut bool, content: F) -> Response
+    where
+        F: FnOnce(&mut KolponaUi) -> R,
+    {
+        let header_height = 28.0;
+        let start_pos = self.cursor;
+        let header_rect = Rect::from_min_size(
+            start_pos,
+            Vec2::new(self.bounds.width() - 16.0, header_height),
+        );
+        let hovered = header_rect.contains(self.pointer.position);
+        let clicked = hovered && self.pointer.primary_down;
+
+        if clicked {
+            *is_open = !*is_open;
+        }
+
+        let bg_fill = if hovered {
+            self.palette.elevated
+        } else {
+            self.palette.surface
+        };
+
+        self.cmd_buf.push(DrawCommand::Rect {
+            rect: header_rect,
+            fill: bg_fill,
+            radius: CornerRadius::same(4.0),
+            stroke: Stroke::new(1.0, self.palette.border),
+        });
+
+        // Toggle indicator (chevron > or v)
+        let indicator = if *is_open { "v" } else { ">" };
+        self.cmd_buf.push(DrawCommand::Text {
+            pos: Vec2::new(header_rect.min.x + 8.0, header_rect.min.y + 6.0),
+            text: indicator.to_string(),
+            color: self.palette.accent,
+            size: 12.0,
+            strong: true,
+        });
+
+        self.cmd_buf.push(DrawCommand::Text {
+            pos: Vec2::new(header_rect.min.x + 22.0, header_rect.min.y + 6.0),
+            text: title.to_string(),
+            color: self.palette.text,
+            size: 13.0,
+            strong: true,
+        });
+
+        self.advance(header_rect.width(), header_height);
+
+        if *is_open {
+            self.cursor.x += 8.0;
+            content(self);
+            self.cursor.x -= 8.0;
+            self.cursor.y += 6.0;
+        }
+
+        Response {
+            clicked,
+            hovered,
+            changed: clicked,
+        }
+    }
+
+    /// Interactive audio waveform strip with draggable playhead (essential for KS-MotionFlow narration).
+    pub fn audio_waveform(&mut self, samples: &[f32], playhead: &mut f32, height: f32) -> Response {
+        let width = self.bounds.width() - 16.0;
+        let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
+        let hovered = rect.contains(self.pointer.position);
+        let clicked = hovered && self.pointer.primary_down;
+
+        if clicked {
+            let rel_x = (self.pointer.position.x - rect.min.x) / rect.width().max(1.0);
+            *playhead = rel_x.clamp(0.0, 1.0);
+        }
+
+        crate::timeline::render_audio_waveform(self.cmd_buf, samples, *playhead, rect, self.palette);
+        self.advance(width, height);
+
+        Response {
+            clicked,
+            hovered,
+            changed: clicked,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -882,6 +969,29 @@ mod tests {
             card.tabs(&["GGUF", "AWQ", "EXL2"], &mut tab);
         });
 
+        assert!(!cmd_buf.is_empty());
+    }
+
+    #[test]
+    fn collapsible_panel_and_audio_waveform() {
+        let mut cmd_buf = CommandBuffer::new();
+        let mut icon_atlas = IconAtlas::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(600.0, 600.0));
+        let pointer = PointerState::default();
+
+        let mut ui = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
+
+        let mut is_open = true;
+        let resp = ui.collapsible_panel("AI Agent Visual Planner", &mut is_open, |panel| {
+            panel.label("Agent thinking...");
+        });
+        assert!(!resp.clicked());
+
+        let samples = vec![0.2, 0.5, 0.9, 0.4, 0.1, 0.8];
+        let mut playhead = 0.35;
+        let wave_resp = ui.audio_waveform(&samples, &mut playhead, 48.0);
+        assert!(!wave_resp.clicked());
         assert!(!cmd_buf.is_empty());
     }
 }

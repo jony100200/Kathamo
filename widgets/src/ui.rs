@@ -210,6 +210,72 @@ impl<'a> KolponaUi<'a> {
         self.advance(self.bounds.width(), size + self.item_spacing);
     }
 
+    /// High-contrast video subtitle with subpixel outline (essential for Cholpo and video overlays).
+    pub fn subtitle(&mut self, text: &str) {
+        let size = 20.0;
+        let pos = self.cursor;
+        self.cmd_buf.push_text_with_outline(
+            text,
+            pos,
+            size,
+            ui_core::Color::rgb(255, 255, 255),
+            ui_core::Color::rgba(0, 0, 0, 220),
+            1.5,
+            true,
+        );
+        self.advance(self.bounds.width(), size + 10.0);
+    }
+
+    /// Cinematic title card with drop shadow (for story chapters, video intros, and section headers).
+    pub fn title_card(&mut self, title: &str, subtitle: &str) {
+        let height = 72.0;
+        let card_rect =
+            Rect::from_min_size(self.cursor, Vec2::new(self.bounds.width() - 16.0, height));
+
+        // Semi-translucent dark cinematic backdrop
+        self.cmd_buf.push(DrawCommand::Rect {
+            rect: card_rect,
+            fill: self.palette.canvas.with_alpha(200),
+            radius: CornerRadius::same(8.0),
+            stroke: Stroke::new(1.0, self.palette.border),
+        });
+
+        // 1px hairline top specular highlight
+        self.cmd_buf.push(DrawCommand::Rect {
+            rect: Rect::from_min_size(
+                Vec2::new(card_rect.min.x + 8.0, card_rect.min.y),
+                Vec2::new(card_rect.width() - 16.0, 1.0),
+            ),
+            fill: ui_core::Color::rgba(255, 255, 255, 25),
+            radius: CornerRadius::ZERO,
+            stroke: Stroke::NONE,
+        });
+
+        // Title with shadow
+        self.cmd_buf.push_text_with_shadow(
+            title,
+            Vec2::new(card_rect.min.x + 16.0, card_rect.min.y + 14.0),
+            20.0,
+            self.palette.text,
+            ui_core::Color::rgba(0, 0, 0, 160),
+            Vec2::new(1.0, 1.5),
+            true,
+        );
+
+        // Subtitle
+        if !subtitle.is_empty() {
+            self.cmd_buf.push(DrawCommand::Text {
+                text: subtitle.to_string(),
+                pos: Vec2::new(card_rect.min.x + 16.0, card_rect.min.y + 42.0),
+                size: 12.0,
+                color: self.palette.accent,
+                strong: false,
+            });
+        }
+
+        self.advance(card_rect.width(), height + self.item_spacing);
+    }
+
     /// Studio checkbox ("Snap to grid").
     pub fn checkbox(&mut self, label: &str, checked: &mut bool) -> Response {
         let height = 22.0;

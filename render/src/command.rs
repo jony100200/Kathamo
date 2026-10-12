@@ -71,4 +71,73 @@ impl CommandBuffer {
     pub fn is_empty(&self) -> bool {
         self.commands.is_empty()
     }
+
+    /// Emits high-contrast text with an infallible subpixel outline stroke (ideal for subtitles and manga captions).
+    pub fn push_text_with_outline(
+        &mut self,
+        text: impl Into<String>,
+        pos: Vec2,
+        size: f32,
+        color: Color,
+        outline_color: Color,
+        outline_width: f32,
+        strong: bool,
+    ) {
+        let text_str = text.into();
+        let w = outline_width.max(0.5);
+        let offsets = [
+            Vec2::new(-w, 0.0),
+            Vec2::new(w, 0.0),
+            Vec2::new(0.0, -w),
+            Vec2::new(0.0, w),
+            Vec2::new(-w * 0.707, -w * 0.707),
+            Vec2::new(w * 0.707, -w * 0.707),
+            Vec2::new(-w * 0.707, w * 0.707),
+            Vec2::new(w * 0.707, w * 0.707),
+        ];
+        for off in offsets {
+            self.push(DrawCommand::Text {
+                text: text_str.clone(),
+                pos: pos + off,
+                size,
+                color: outline_color,
+                strong,
+            });
+        }
+        self.push(DrawCommand::Text {
+            text: text_str,
+            pos,
+            size,
+            color,
+            strong,
+        });
+    }
+
+    /// Emits text with a cinematic soft drop shadow.
+    pub fn push_text_with_shadow(
+        &mut self,
+        text: impl Into<String>,
+        pos: Vec2,
+        size: f32,
+        color: Color,
+        shadow_color: Color,
+        shadow_offset: Vec2,
+        strong: bool,
+    ) {
+        let text_str = text.into();
+        self.push(DrawCommand::Text {
+            text: text_str.clone(),
+            pos: pos + shadow_offset,
+            size,
+            color: shadow_color,
+            strong,
+        });
+        self.push(DrawCommand::Text {
+            text: text_str,
+            pos,
+            size,
+            color,
+            strong,
+        });
+    }
 }

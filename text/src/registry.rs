@@ -9,12 +9,13 @@ use crate::manifest::FontManifest;
 /// Thread-safe font binary buffer.
 pub type SharedFontBytes = Arc<Vec<u8>>;
 
-/// In-memory font registry providing on-demand lazy loading and script fallbacks.
+/// In-memory font registry providing on-demand lazy loading, system font discovery, and script fallbacks.
 #[derive(Debug)]
 pub struct FontRegistry {
     manifest: FontManifest,
     font_dir: PathBuf,
     loaded_cache: Mutex<HashMap<String, SharedFontBytes>>,
+    system_font_paths: Mutex<HashMap<String, PathBuf>>,
     primary_font_name: String,
 }
 
@@ -35,6 +36,7 @@ impl FontRegistry {
             manifest,
             font_dir,
             loaded_cache: Mutex::new(HashMap::new()),
+            system_font_paths: Mutex::new(HashMap::new()),
             primary_font_name,
         };
 
@@ -59,32 +61,49 @@ impl FontRegistry {
         }
 
         // 2. Locate font in manifest
-        let meta = self.manifest.find_by_name(font_name)?;
-        let font_path = self.font_dir.join(&meta.file);
+        if let Some(meta) = self.manifest.find_by_name(font_name) {
+            let font_path = self.font_dir.join(&meta.file);
 
-        // 3. Read from disk if exists
-        if font_path.exists() {
-            if let Ok(bytes) = std::fs::read(&font_path) {
-                let shared = Arc::new(bytes);
-                cache.insert(font_name.to_string(), Arc::clone(&shared));
-                return Some(shared);
+            // Read from disk if exists in resolved font directory
+            if font_path.exists() {
+                if let Ok(bytes) = std::fs::read(&font_path) {
+                    let shared = Arc::new(bytes);
+                    cache.insert(font_name.to_string(), Arc::clone(&shared));
+                    return Some(shared);
+                }
+            }
+
+            // Fallback: try relative assets/fonts path or CARGO_MANIFEST_DIR
+            if let Some(file_name) = font_path.file_name() {
+                let manifest_dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts"));
+                let alt_path = manifest_dir.join(file_name);
+                if alt_path.exists() {
+                    if let Ok(bytes) = std::fs::read(&alt_path) {
+                        let shared = Arc::new(bytes);
+                        cache.insert(font_name.to_string(), Arc::clone(&shared));
+                        return Some(shared);
+                    }
+                }
+                let rel_assets = PathBuf::from("assets/fonts").join(file_name);
+                if rel_assets.exists() {
+                    if let Ok(bytes) = std::fs::read(&rel_assets) {
+                        let shared = Arc::new(bytes);
+                        cache.insert(font_name.to_string(), Arc::clone(&shared));
+                        return Some(shared);
+                    }
+                }
             }
         }
 
-        // 4. Fallback: try relative assets/fonts path or CARGO_MANIFEST_DIR
-        let manifest_dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts"));
-        let alt_path = manifest_dir.join(font_path.file_name()?);
-        if alt_path.exists() {
-            if let Ok(bytes) = std::fs::read(&alt_path) {
+        // 3. Check system fonts
+        drop(cache); // Release lock before scanning if needed
+        self.ensure_system_fonts_scanned();
+
+        let sys_paths = self.system_font_paths.lock().unwrap();
+        if let Some(path) = sys_paths.get(&font_name.to_lowercase()) {
+            if let Ok(bytes) = std::fs::read(path) {
                 let shared = Arc::new(bytes);
-                cache.insert(font_name.to_string(), Arc::clone(&shared));
-                return Some(shared);
-            }
-        }
-        let rel_assets = PathBuf::from("assets/fonts").join(font_path.file_name()?);
-        if rel_assets.exists() {
-            if let Ok(bytes) = std::fs::read(&rel_assets) {
-                let shared = Arc::new(bytes);
+                let mut cache = self.loaded_cache.lock().unwrap();
                 cache.insert(font_name.to_string(), Arc::clone(&shared));
                 return Some(shared);
             }
@@ -124,6 +143,122 @@ impl FontRegistry {
     /// Returns the Bengali script fallback font name.
     pub fn bengali_font_name(&self) -> &str {
         &self.manifest.defaults.script_fallback_bengali
+    }
+
+    /// Scans installed OS fonts on Windows, Linux, and macOS without loading their large binaries upfront.
+    pub fn scan_system_fonts(&self) -> Vec<String> {
+        let mut paths = Vec::new();
+
+        // Windows standard font directories
+        if cfg!(windows) {
+            paths.push(PathBuf::from(r"C:\Windows\Fonts"));
+            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+                paths.push(PathBuf::from(local_app_data).join(r"Microsoft\Windows\Fonts"));
+            }
+        } else if cfg!(target_os = "macos") {
+            paths.push(PathBuf::from("/System/Library/Fonts"));
+            paths.push(PathBuf::from("/Library/Fonts"));
+            if let Ok(home) = std::env::var("HOME") {
+                paths.push(PathBuf::from(home).join("Library/Fonts"));
+            }
+        } else {
+            // Linux standard font directories
+            paths.push(PathBuf::from("/usr/share/fonts"));
+            paths.push(PathBuf::from("/usr/local/share/fonts"));
+            if let Ok(home) = std::env::var("HOME") {
+                paths.push(PathBuf::from(home).join(".local/share/fonts"));
+            }
+        }
+
+        let mut discovered = HashMap::new();
+        let mut names = Vec::new();
+
+        for dir in paths {
+            if !dir.exists() {
+                continue;
+            }
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let ext = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|s| s.to_lowercase());
+                    if let Some(ext) = ext {
+                        if ext == "ttf" || ext == "otf" || ext == "ttc" {
+                            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                                let clean_name = Self::sanitize_font_name(stem);
+                                let key = clean_name.to_lowercase();
+                                if !discovered.contains_key(&key) {
+                                    names.push(clean_name.clone());
+                                    discovered.insert(key, path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        names.sort();
+        let mut sys_map = self.system_font_paths.lock().unwrap();
+        *sys_map = discovered;
+        names
+    }
+
+    /// Ensures system font directories have been indexed once.
+    fn ensure_system_fonts_scanned(&self) {
+        let is_empty = {
+            let map = self.system_font_paths.lock().unwrap();
+            map.is_empty()
+        };
+        if is_empty {
+            self.scan_system_fonts();
+        }
+    }
+
+    /// Converts raw font filenames (e.g. "arialbd", "segoeui", "Amiri-Bold") into clean readable display names.
+    fn sanitize_font_name(raw: &str) -> String {
+        let lower = raw.to_lowercase();
+        match lower.as_str() {
+            "arial" => "Arial".to_string(),
+            "arialbd" => "Arial Bold".to_string(),
+            "arialbi" => "Arial Bold Italic".to_string(),
+            "ariali" => "Arial Italic".to_string(),
+            "calibri" => "Calibri".to_string(),
+            "calibrib" => "Calibri Bold".to_string(),
+            "comic" => "Comic Sans MS".to_string(),
+            "comicbd" => "Comic Sans MS Bold".to_string(),
+            "consola" => "Consolas".to_string(),
+            "consolab" => "Consolas Bold".to_string(),
+            "georgia" => "Georgia".to_string(),
+            "georgiab" => "Georgia Bold".to_string(),
+            "impact" => "Impact".to_string(),
+            "segoeui" => "Segoe UI".to_string(),
+            "segoeuib" => "Segoe UI Bold".to_string(),
+            "segoeuisb" => "Segoe UI Semibold".to_string(),
+            "times" => "Times New Roman".to_string(),
+            "timesbd" => "Times New Roman Bold".to_string(),
+            "trebuc" => "Trebuchet MS".to_string(),
+            "trebucbd" => "Trebuchet MS Bold".to_string(),
+            "verdana" => "Verdana".to_string(),
+            "verdanab" => "Verdana Bold".to_string(),
+            _ => raw.replace('-', " ").replace('_', " "),
+        }
+    }
+
+    /// Returns all available fonts (bundled studio fonts first, followed by discovered system fonts).
+    pub fn available_fonts(&self) -> Vec<String> {
+        let mut list = vec![
+            "Inter".to_string(),
+            "Space Grotesk".to_string(),
+            "Noto Sans Bengali".to_string(),
+            "JetBrains Mono".to_string(),
+            "IBM Plex Mono".to_string(),
+        ];
+        let sys_fonts = self.scan_system_fonts();
+        list.extend(sys_fonts);
+        list
     }
 
     /// Total heap bytes of font data currently resident in memory.
@@ -191,5 +326,13 @@ mod tests {
             count_after >= count_before,
             "Font count must increase or remain valid upon lazy load"
         );
+    }
+
+    #[test]
+    fn system_font_discovery_and_availability() {
+        let registry = FontRegistry::new();
+        let fonts = registry.available_fonts();
+        assert!(!fonts.is_empty(), "Font list must contain bundled and system fonts");
+        assert!(fonts.contains(&"Inter".to_string()));
     }
 }

@@ -141,6 +141,27 @@ impl Rect {
             Vec2::new(self.max.x - margin.right, self.max.y - margin.bottom),
         )
     }
+
+    #[inline]
+    pub fn expand(self, amount: f32) -> Self {
+        Self::from_min_max(
+            Vec2::new(self.min.x - amount, self.min.y - amount),
+            Vec2::new(self.max.x + amount, self.max.y + amount),
+        )
+    }
+
+    #[inline]
+    pub fn intersect(self, other: Self) -> Option<Self> {
+        let min_x = self.min.x.max(other.min.x);
+        let min_y = self.min.y.max(other.min.y);
+        let max_x = self.max.x.min(other.max.x);
+        let max_y = self.max.y.min(other.max.y);
+        if min_x <= max_x && min_y <= max_y {
+            Some(Self::from_min_max(Vec2::new(min_x, min_y), Vec2::new(max_x, max_y)))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]

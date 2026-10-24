@@ -40,6 +40,13 @@ pub enum DrawCommand {
         rect: Rect,
         color: Color,
     },
+    /// Textured quad / image blit (for 2D raster layers, video frames, or 3D viewport FBOs).
+    Image {
+        rect: Rect,
+        texture_id: u64,
+        uv_rect: Rect,
+        tint: Color,
+    },
 }
 
 #[derive(Debug, Clone, Default)]

@@ -79,12 +79,23 @@ pub struct WorkspaceLayout {
     pub splitters: Vec<ComputedSplitterLayout>,
 }
 
+/// Drop zone locations for interactive panel docking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockDropZone {
+    Left,
+    Right,
+    Top,
+    Bottom,
+    Center, // Tabs with the leaf
+}
+
 /// High-density workstation dock manager.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DockTree {
     pub root: DockNode,
     pub splitter_thickness: f32,
     pub tab_header_height: f32,
+    pub maximized_leaf: Option<String>,
 }
 
 impl DockTree {
@@ -97,6 +108,7 @@ impl DockTree {
             },
             splitter_thickness: 4.0,
             tab_header_height: 26.0,
+            maximized_leaf: None,
         }
     }
 
@@ -105,6 +117,7 @@ impl DockTree {
             root,
             splitter_thickness: 4.0,
             tab_header_height: 26.0,
+            maximized_leaf: None,
         }
     }
 
@@ -222,6 +235,49 @@ impl DockTree {
         }
     }
 
+    /// Sets active tab index in target leaf.
+    pub fn set_active_tab(&mut self, leaf_id: &str, tab_idx: usize) -> bool {
+        Self::set_active_tab_recursive(&mut self.root, leaf_id, tab_idx)
+    }
+
+    fn set_active_tab_recursive(node: &mut DockNode, target_id: &str, tab_idx: usize) -> bool {
+        match node {
+            DockNode::Leaf { id, tabs, active_tab } if id == target_id => {
+                if tab_idx < tabs.len() {
+                    *active_tab = tab_idx;
+                    true
+                } else {
+                    false
+                }
+            }
+            DockNode::Split { first, second, .. } => {
+                Self::set_active_tab_recursive(first, target_id, tab_idx)
+                    || Self::set_active_tab_recursive(second, target_id, tab_idx)
+            }
+            _ => false,
+        }
+    }
+
+    /// Adds a tab panel into a target leaf.
+    pub fn add_tab(&mut self, leaf_id: &str, panel: DockTabPanel) -> bool {
+        Self::add_tab_recursive(&mut self.root, leaf_id, panel)
+    }
+
+    fn add_tab_recursive(node: &mut DockNode, target_id: &str, panel: DockTabPanel) -> bool {
+        match node {
+            DockNode::Leaf { id, tabs, active_tab } if id == target_id => {
+                tabs.push(panel);
+                *active_tab = tabs.len() - 1;
+                true
+            }
+            DockNode::Split { first, second, .. } => {
+                Self::add_tab_recursive(first, target_id, panel.clone())
+                    || Self::add_tab_recursive(second, target_id, panel)
+            }
+            _ => false,
+        }
+    }
+
     fn prune_empty_leaves(node: &mut DockNode) {
         if let DockNode::Split { first, second, .. } = node {
             Self::prune_empty_leaves(first);
@@ -241,8 +297,137 @@ impl DockTree {
         }
     }
 
+    /// Toggles maximization of a leaf panel.
+    pub fn toggle_maximize(&mut self, leaf_id: &str) {
+        if self.maximized_leaf.as_deref() == Some(leaf_id) {
+            self.maximized_leaf = None;
+        } else {
+            self.maximized_leaf = Some(leaf_id.to_string());
+        }
+    }
+
+    /// Checks if a specific leaf is currently maximized.
+    pub fn is_maximized(&self, leaf_id: &str) -> bool {
+        self.maximized_leaf.as_deref() == Some(leaf_id)
+    }
+
+    /// Finds tabs for a given leaf ID.
+    pub fn find_leaf_tabs(node: &DockNode, target_id: &str) -> Option<(Vec<DockTabPanel>, usize)> {
+        match node {
+            DockNode::Leaf { id, tabs, active_tab } if id == target_id => {
+                Some((tabs.clone(), *active_tab))
+            }
+            DockNode::Split { first, second, .. } => {
+                Self::find_leaf_tabs(first, target_id)
+                    .or_else(|| Self::find_leaf_tabs(second, target_id))
+            }
+            _ => None,
+        }
+    }
+
+    /// Determines which drop zone a point falls into within a leaf's bounds.
+    pub fn calculate_drop_zone(&self, leaf_bounds: Rect, pointer_pos: Vec2) -> Option<DockDropZone> {
+        if !leaf_bounds.contains(pointer_pos) {
+            return None;
+        }
+        let w = leaf_bounds.width();
+        let h = leaf_bounds.height();
+        let rel_x = (pointer_pos.x - leaf_bounds.min.x) / w.max(1.0);
+        let rel_y = (pointer_pos.y - leaf_bounds.min.y) / h.max(1.0);
+
+        if rel_x < 0.22 {
+            Some(DockDropZone::Left)
+        } else if rel_x > 0.78 {
+            Some(DockDropZone::Right)
+        } else if rel_y < 0.22 {
+            Some(DockDropZone::Top)
+        } else if rel_y > 0.78 {
+            Some(DockDropZone::Bottom)
+        } else {
+            Some(DockDropZone::Center)
+        }
+    }
+
+    /// Computes preview rectangle for a drop guide.
+    pub fn preview_rect_for_zone(leaf_bounds: Rect, zone: DockDropZone) -> Rect {
+        match zone {
+            DockDropZone::Left => Rect::from_min_size(
+                leaf_bounds.min,
+                Vec2::new(leaf_bounds.width() * 0.5, leaf_bounds.height()),
+            ),
+            DockDropZone::Right => Rect::from_min_size(
+                Vec2::new(leaf_bounds.min.x + leaf_bounds.width() * 0.5, leaf_bounds.min.y),
+                Vec2::new(leaf_bounds.width() * 0.5, leaf_bounds.height()),
+            ),
+            DockDropZone::Top => Rect::from_min_size(
+                leaf_bounds.min,
+                Vec2::new(leaf_bounds.width(), leaf_bounds.height() * 0.5),
+            ),
+            DockDropZone::Bottom => Rect::from_min_size(
+                Vec2::new(leaf_bounds.min.x, leaf_bounds.min.y + leaf_bounds.height() * 0.5),
+                Vec2::new(leaf_bounds.width(), leaf_bounds.height() * 0.5),
+            ),
+            DockDropZone::Center => leaf_bounds,
+        }
+    }
+
+    /// Reorders a tab within a leaf panel.
+    pub fn reorder_tab(&mut self, leaf_id: &str, old_idx: usize, new_idx: usize) -> bool {
+        Self::reorder_tab_recursive(&mut self.root, leaf_id, old_idx, new_idx)
+    }
+
+    fn reorder_tab_recursive(
+        node: &mut DockNode,
+        target_id: &str,
+        old_idx: usize,
+        new_idx: usize,
+    ) -> bool {
+        match node {
+            DockNode::Leaf { id, tabs, active_tab } if id == target_id => {
+                if old_idx < tabs.len() && new_idx < tabs.len() && old_idx != new_idx {
+                    let tab = tabs.remove(old_idx);
+                    tabs.insert(new_idx, tab);
+                    *active_tab = new_idx;
+                    true
+                } else {
+                    false
+                }
+            }
+            DockNode::Split { first, second, .. } => {
+                Self::reorder_tab_recursive(first, target_id, old_idx, new_idx)
+                    || Self::reorder_tab_recursive(second, target_id, old_idx, new_idx)
+            }
+            _ => false,
+        }
+    }
+
     /// Recursively computes geometry for all leaves and splitter divider bars.
     pub fn compute_layout(&self, bounds: Rect) -> WorkspaceLayout {
+        if let Some(ref max_id) = self.maximized_leaf {
+            if let Some((tabs, active_tab)) = Self::find_leaf_tabs(&self.root, max_id) {
+                let header_height = self.tab_header_height;
+                let header_rect = Rect::from_min_size(
+                    bounds.min,
+                    Vec2::new(bounds.width(), header_height),
+                );
+                let content_rect = Rect::from_min_size(
+                    Vec2::new(bounds.min.x, bounds.min.y + header_height),
+                    Vec2::new(bounds.width(), (bounds.height() - header_height).max(0.0)),
+                );
+                return WorkspaceLayout {
+                    leaves: vec![ComputedLeafLayout {
+                        id: max_id.clone(),
+                        bounds,
+                        header_rect,
+                        content_rect,
+                        tabs,
+                        active_tab,
+                    }],
+                    splitters: Vec::new(),
+                };
+            }
+        }
+
         let mut layout = WorkspaceLayout::default();
         self.compute_node_layout(&self.root, bounds, &mut layout);
         layout
@@ -394,5 +579,40 @@ mod tests {
         assert_eq!(layout.leaves.len(), 1);
         assert_eq!(layout.leaves[0].id, "leaf_1");
         assert_eq!(layout.splitters.len(), 0);
+    }
+
+    #[test]
+    fn test_dock_tree_maximize_and_restore() {
+        let mut dock = DockTree::new("leaf_1", DockTabPanel::new("p1", "Panel 1"));
+        dock.split_leaf("leaf_1", "split_1", "leaf_2", SplitAxis::Horizontal, 0.5, DockTabPanel::new("p2", "Panel 2"));
+
+        assert_eq!(dock.compute_layout(Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0))).leaves.len(), 2);
+
+        // Maximize leaf_2
+        dock.toggle_maximize("leaf_2");
+        assert!(dock.is_maximized("leaf_2"));
+        let max_layout = dock.compute_layout(Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0)));
+        assert_eq!(max_layout.leaves.len(), 1);
+        assert_eq!(max_layout.leaves[0].id, "leaf_2");
+        assert_eq!(max_layout.leaves[0].bounds.width(), 800.0);
+        assert_eq!(max_layout.splitters.len(), 0);
+
+        // Restore
+        dock.toggle_maximize("leaf_2");
+        assert!(!dock.is_maximized("leaf_2"));
+        assert_eq!(dock.compute_layout(Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0))).leaves.len(), 2);
+    }
+
+    #[test]
+    fn test_dock_tree_drop_zones() {
+        let dock = DockTree::new("leaf_1", DockTabPanel::new("p1", "Panel 1"));
+        let bounds = Rect::from_min_size(Vec2::new(100.0, 100.0), Vec2::new(200.0, 200.0));
+
+        assert_eq!(dock.calculate_drop_zone(bounds, Vec2::new(110.0, 200.0)), Some(DockDropZone::Left));
+        assert_eq!(dock.calculate_drop_zone(bounds, Vec2::new(280.0, 200.0)), Some(DockDropZone::Right));
+        assert_eq!(dock.calculate_drop_zone(bounds, Vec2::new(200.0, 110.0)), Some(DockDropZone::Top));
+        assert_eq!(dock.calculate_drop_zone(bounds, Vec2::new(200.0, 280.0)), Some(DockDropZone::Bottom));
+        assert_eq!(dock.calculate_drop_zone(bounds, Vec2::new(200.0, 200.0)), Some(DockDropZone::Center));
+        assert_eq!(dock.calculate_drop_zone(bounds, Vec2::new(50.0, 50.0)), None);
     }
 }

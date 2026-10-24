@@ -9,6 +9,8 @@ pub use accessibility::{
     AccessibilityAction, AccessibilityNode, AccessibilityRole, AccessibilityTree,
 };
 pub use dpi::DpiScale;
-pub use input::{FocusManager, Key, Modifiers, PointerButton, PointerState, Shortcut};
+pub use input::{
+    FocusManager, ImeEvent, Key, Modifiers, PointerButton, PointerState, Shortcut, TextInputEvent,
+};
 pub use window::{LifecycleCoordinator, WindowLifecycle, WindowOptions};
 pub use winit;

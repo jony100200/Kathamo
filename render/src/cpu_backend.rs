@@ -349,6 +349,20 @@ impl RenderBackend for CpuBackend {
                     rect,
                     color,
                 } => self.draw_icon(id, svg, *rect, *color),
+                DrawCommand::Image {
+                    rect,
+                    texture_id: _,
+                    uv_rect: _,
+                    tint,
+                } => {
+                    let clip = self.clip();
+                    let s = self.scale;
+                    let x0 = (rect.min.x * s).round() as i32;
+                    let y0 = (rect.min.y * s).round() as i32;
+                    let x1 = (rect.max.x * s).round() as i32;
+                    let y1 = (rect.max.y * s).round() as i32;
+                    self.fill_px_rect(x0, y0, x1, y1, *tint, clip);
+                }
                 DrawCommand::ClipPush { rect } => {
                     let s = self.scale;
                     let parent = self.clip();

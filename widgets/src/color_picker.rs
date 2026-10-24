@@ -114,7 +114,7 @@ pub fn rgb_to_hsv(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
 }
 
 /// Interactive ColorWheel and ColorPicker widget.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColorWheel {
     pub radius: f32,
     pub is_dragging_wheel: bool,

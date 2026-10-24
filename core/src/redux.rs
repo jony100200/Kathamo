@@ -161,9 +161,13 @@ mod tests {
         assert_eq!(store.state().counter, 1);
         assert_eq!(notify_count.load(Ordering::SeqCst), 1);
 
+        store.dispatch(AppAction::Decrement);
+        assert_eq!(store.state().counter, 0);
+        assert_eq!(notify_count.load(Ordering::SeqCst), 2);
+
         store.dispatch(AppAction::SelectTool("Eraser".to_string()));
         assert_eq!(store.state().selected_tool, "Eraser");
-        assert_eq!(notify_count.load(Ordering::SeqCst), 2);
+        assert_eq!(notify_count.load(Ordering::SeqCst), 3);
     }
 
     #[test]

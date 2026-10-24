@@ -651,6 +651,35 @@ impl GpuBackend {
         );
     }
 
+    fn tess_image(&mut self, rect: Rect, uv_rect: Rect, tint: Color) {
+        if tint.a == 0 {
+            return;
+        }
+        let aa = 1.0 / self.scale;
+        let min = rect.min - Vec2::splat(aa);
+        let max = rect.max + Vec2::splat(aa);
+        let center = rect.center();
+        let half = rect.size() * 0.5;
+        let template = Vertex {
+            pos: [0.0; 2],
+            shape: [center.x, center.y, half.x, half.y],
+            radii: [0.0; 4],
+            color: color_f32(tint),
+            color2: [0.0; 4],
+            extra: [0.0, 0.0],
+        };
+        self.push_quad(
+            [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)],
+            template,
+            Some([
+                [uv_rect.min.x, uv_rect.min.y],
+                [uv_rect.max.x, uv_rect.min.y],
+                [uv_rect.max.x, uv_rect.max.y],
+                [uv_rect.min.x, uv_rect.max.y],
+            ]),
+        );
+    }
+
     fn tess_line(&mut self, a: Vec2, b: Vec2, width: f32, color: Color) {
         if color.a == 0 {
             return;
@@ -848,6 +877,12 @@ impl GpuBackend {
                     rect,
                     color,
                 } => self.tess_icon(id, svg, *rect, *color),
+                DrawCommand::Image {
+                    rect,
+                    texture_id: _,
+                    uv_rect,
+                    tint,
+                } => self.tess_image(*rect, *uv_rect, *tint),
                 DrawCommand::ClipPush { rect } => {
                     let r = match self.clip_stack.last() {
                         Some(p) => Rect::from_min_max(

@@ -54,6 +54,15 @@ pub struct NodePin {
     pub pin_type: String, // e.g. "Image", "Mask", "Float", "PBR", "Material"
 }
 
+/// A visual group backdrop enclosing multiple nodes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NodeGroup {
+    pub id: String,
+    pub title: String,
+    pub bounds: Rect, // World coordinates
+    pub color: Color,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GraphNode {
     pub id: String,
@@ -63,6 +72,8 @@ pub struct GraphNode {
     pub inputs: Vec<NodePin>,
     pub outputs: Vec<NodePin>,
     pub category: String,
+    pub is_collapsed: bool,
+    pub preview_color: Option<Color>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,11 +104,16 @@ pub struct NodeEditor {
     pub zoom: f32,
     pub nodes: Vec<GraphNode>,
     pub connections: Vec<NodeConnection>,
+    pub groups: Vec<NodeGroup>,
     pub selected_node: Option<String>,
     pub dragging_node: Option<DraggingNode>,
     pub pending_wire: Option<PendingWire>,
     pub is_panning: bool,
     pub hovered_pin: Option<(String, String, bool)>, // (node_id, pin_id, is_output)
+    pub search_menu_open: bool,
+    pub search_query: String,
+    pub search_world_pos: Vec2,
+    pub search_selected_index: usize,
 }
 
 impl Default for NodeEditor {
@@ -127,6 +143,8 @@ impl Default for NodeEditor {
                         },
                     ],
                     category: "Source".into(),
+                    is_collapsed: false,
+                    preview_color: Some(Color::rgb(245, 158, 11)),
                 },
                 GraphNode {
                     id: "node_stylize".into(),
@@ -154,6 +172,8 @@ impl Default for NodeEditor {
                         pin_type: "Image".into(),
                     }],
                     category: "Filter".into(),
+                    is_collapsed: false,
+                    preview_color: Some(Color::rgb(168, 85, 247)),
                 },
                 GraphNode {
                     id: "node_seamless".into(),
@@ -181,6 +201,8 @@ impl Default for NodeEditor {
                         },
                     ],
                     category: "Processing".into(),
+                    is_collapsed: false,
+                    preview_color: Some(Color::rgb(16, 185, 129)),
                 },
                 GraphNode {
                     id: "node_pbr".into(),
@@ -220,6 +242,8 @@ impl Default for NodeEditor {
                         },
                     ],
                     category: "PBR".into(),
+                    is_collapsed: false,
+                    preview_color: Some(Color::rgb(59, 130, 246)),
                 },
                 GraphNode {
                     id: "node_presentation".into(),
@@ -247,6 +271,8 @@ impl Default for NodeEditor {
                         pin_type: "Media".into(),
                     }],
                     category: "Export".into(),
+                    is_collapsed: false,
+                    preview_color: Some(Color::rgb(244, 63, 94)),
                 },
             ],
             connections: vec![
@@ -275,11 +301,21 @@ impl Default for NodeEditor {
                     to_pin: "in_norm".into(),
                 },
             ],
+            groups: vec![NodeGroup {
+                id: "group_pipeline".into(),
+                title: "Texture Generation Pipeline".into(),
+                bounds: Rect::from_min_size(Vec2::new(40.0, 40.0), Vec2::new(940.0, 220.0)),
+                color: Color::rgb(59, 130, 246),
+            }],
             selected_node: None,
             dragging_node: None,
             pending_wire: None,
             is_panning: false,
             hovered_pin: None,
+            search_menu_open: false,
+            search_query: String::new(),
+            search_world_pos: Vec2::ZERO,
+            search_selected_index: 0,
         }
     }
 }
@@ -393,6 +429,8 @@ impl NodeEditor {
             inputs,
             outputs,
             category: cat_str,
+            is_collapsed: false,
+            preview_color: None,
         };
         self.nodes.push(node);
         self.selected_node = Some(id.clone());
@@ -834,7 +872,8 @@ impl NodeEditor {
                             _ => true,
                         };
 
-                        if compatible {
+                        // Pin type compatibility AND cycle prevention (DAG safety)
+                        if compatible && !self.can_reach(&to_n, &from_n) {
                             // Remove any existing connection to this specific input pin
                             self.connections
                                 .retain(|c| !(c.to_node == to_n && c.to_pin == to_p));
@@ -851,6 +890,25 @@ impl NodeEditor {
                 }
             }
         }
+    }
+
+    /// Checks if target node is reachable from start node in the directed graph (DAG cycle check).
+    pub fn can_reach(&self, start: &str, target: &str) -> bool {
+        let mut visited = std::collections::HashSet::new();
+        let mut stack = vec![start];
+        while let Some(current) = stack.pop() {
+            if current == target {
+                return true;
+            }
+            if visited.insert(current) {
+                for conn in &self.connections {
+                    if conn.from_node == current {
+                        stack.push(&conn.to_node);
+                    }
+                }
+            }
+        }
+        false
     }
 
     pub fn handle_key_down(&mut self, key: Key) -> bool {

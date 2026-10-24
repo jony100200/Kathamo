@@ -5,6 +5,7 @@ pub mod anchor;
 pub mod dock_tree;
 pub mod docking;
 pub mod id;
+pub mod inspector_api;
 pub mod layout;
 pub mod math;
 pub mod modifier;
@@ -15,11 +16,12 @@ pub mod text_edit;
 
 pub use anchor::{Anchors, Offsets};
 pub use dock_tree::{
-    ComputedLeafLayout, ComputedSplitterLayout, DockNode, DockTabPanel, DockTree, SplitAxis,
-    WorkspaceLayout,
+    ComputedLeafLayout, ComputedSplitterLayout, DockDropZone, DockNode, DockTabPanel, DockTree,
+    SplitAxis, WorkspaceLayout,
 };
 pub use docking::{DockPanel, DockSlot, DockWorkspace, ResolvedDockLayout};
 pub use id::ElementId;
+pub use inspector_api::{UiInspectorNode, UiInspectorSnapshot};
 pub use layout::{Alignment, Breakpoint, Direction, LayoutItem, SizeConstraint};
 pub use math::{Color, CornerRadius, Margin, Padding, Rect, Stroke, Vec2};
 pub use modifier::Modifier;

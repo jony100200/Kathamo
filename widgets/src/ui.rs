@@ -692,7 +692,7 @@ impl<'a> KolponaUi<'a> {
             palette: self.palette,
             cursor: Vec2::new(start_x, start_y),
             bounds: row_bounds,
-            pointer: self.pointer,
+            pointer: self.pointer.clone(),
             item_spacing: self.item_spacing,
             direction: Direction::Horizontal,
         };
@@ -728,7 +728,7 @@ impl<'a> KolponaUi<'a> {
             palette: self.palette,
             cursor: Vec2::new(start_x, start_y),
             bounds: col_bounds,
-            pointer: self.pointer,
+            pointer: self.pointer.clone(),
             item_spacing: self.item_spacing,
             direction: Direction::Vertical,
         };
@@ -764,7 +764,7 @@ impl<'a> KolponaUi<'a> {
                 palette: self.palette,
                 cursor: Vec2::new(rect.min.x + 4.0, rect.min.y + 4.0),
                 bounds: rect,
-                pointer: self.pointer,
+                pointer: self.pointer.clone(),
                 item_spacing: self.item_spacing,
                 direction: Direction::Vertical,
             };
@@ -814,7 +814,7 @@ impl<'a> KolponaUi<'a> {
             palette: self.palette,
             cursor: inner_bounds.min,
             bounds: inner_bounds,
-            pointer: self.pointer,
+            pointer: self.pointer.clone(),
             item_spacing: self.item_spacing,
             direction: Direction::Vertical,
         };
@@ -849,7 +849,7 @@ impl<'a> KolponaUi<'a> {
             palette: self.palette,
             cursor: inner_bounds.min,
             bounds: inner_bounds,
-            pointer: self.pointer,
+            pointer: self.pointer.clone(),
             item_spacing: self.item_spacing,
             direction: Direction::Vertical,
         };
@@ -1249,7 +1249,7 @@ mod tests {
         // Frame 1: press down
         pointer.on_button_down(ui_platform::PointerButton::Primary);
 
-        let mut ui1 = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
+        let mut ui1 = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer.clone());
         let resp1 = ui1.button("Action");
         assert!(resp1.clicked(), "Button must trigger on first click frame");
 

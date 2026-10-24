@@ -1,0 +1,17 @@
+[package]
+name = "kathamo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Universal Native UI/UX Framework SDK for Rust"
+
+[dependencies]
+ui-core = { path = "../core" }
+ui-platform = { path = "../platform" }
+ui-render = { path = "../render" }
+ui-themes = { path = "../themes" }
+ui-text = { path = "../text" }
+ui-widgets = { path = "../widgets" }
+ui-testkit = { path = "../testkit" }

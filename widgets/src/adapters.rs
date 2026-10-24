@@ -138,6 +138,20 @@ impl Default for ModelSelectorAdapter {
 }
 
 impl ModelSelectorAdapter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn select(&mut self, index: usize) {
+        if index < self.checkpoints.len() {
+            self.selected_checkpoint = index;
+        }
+    }
+
+    pub fn selected_model(&self) -> Option<&str> {
+        self.checkpoints.get(self.selected_checkpoint).map(|s| s.as_str())
+    }
+
     pub fn render(&self, buf: &mut CommandBuffer, bounds: Rect, palette: &ThemePalette) {
         buf.push(DrawCommand::Rect {
             rect: bounds,
@@ -228,6 +242,20 @@ impl Default for TaskProgressAdapter {
 }
 
 impl TaskProgressAdapter {
+    pub fn new(title: impl Into<String>, status: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            status: status.into(),
+            progress: 0.0,
+            is_active: true,
+        }
+    }
+
+    pub fn update(&mut self, progress: f32, status: impl Into<String>) {
+        self.progress = progress.clamp(0.0, 1.0);
+        self.status = status.into();
+    }
+
     pub fn render(&self, buf: &mut CommandBuffer, bounds: Rect, palette: &ThemePalette) {
         buf.push(DrawCommand::Rect {
             rect: bounds,
@@ -296,6 +324,18 @@ impl Default for ServiceStatusAdapter {
 }
 
 impl ServiceStatusAdapter {
+    pub fn new(name: impl Into<String>, latency_ms: u32) -> Self {
+        Self {
+            name: name.into(),
+            is_connected: true,
+            latency_ms,
+        }
+    }
+
+    pub fn set_offline(&mut self) {
+        self.is_connected = false;
+    }
+
     pub fn render(&self, buf: &mut CommandBuffer, bounds: Rect, palette: &ThemePalette) {
         buf.push(DrawCommand::Rect {
             rect: bounds,
@@ -337,5 +377,63 @@ impl ServiceStatusAdapter {
             color: if self.is_connected { palette.success } else { palette.danger },
             strong: false,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generic_adapters_initialization_and_mutations() {
+        // 1. ToolConfigAdapter
+        let tool = ToolConfigAdapter {
+            active_tool: CanvasTool::Eraser,
+            brush_size: 32.0,
+            ..Default::default()
+        };
+        assert_eq!(tool.active_tool, CanvasTool::Eraser);
+        assert_eq!(tool.brush_size, 32.0);
+
+        // 2. ModelSelectorAdapter
+        let mut model_selector = ModelSelectorAdapter::new();
+        assert_eq!(model_selector.selected_checkpoint, 0);
+        model_selector.select(1);
+        assert_eq!(model_selector.selected_checkpoint, 1);
+        assert_eq!(model_selector.selected_model().unwrap(), "Studio-Art-Photoreal-v1");
+
+        // 3. TaskProgressAdapter
+        let mut progress = TaskProgressAdapter::new("task_01", "Texture Synthesis");
+        assert_eq!(progress.progress, 0.0);
+        assert!(progress.is_active);
+        progress.update(0.75, "Generating displacement normal map...");
+        assert_eq!(progress.progress, 0.75);
+        assert_eq!(progress.status, "Generating displacement normal map...");
+
+        // 4. ServiceStatusAdapter
+        let mut service = ServiceStatusAdapter::new("Local Inference Worker", 12);
+        assert!(service.is_connected);
+        service.set_offline();
+        assert!(!service.is_connected);
+    }
+
+    #[test]
+    fn test_adapters_rendering_emits_commands() {
+        let palette = ThemePalette::dark();
+        let mut buf = CommandBuffer::new();
+
+        let tool = ToolConfigAdapter::default();
+        tool.render(&mut buf, Rect::from_min_size(Vec2::ZERO, Vec2::new(260.0, 36.0)), &palette);
+
+        let selector = ModelSelectorAdapter::new();
+        selector.render(&mut buf, Rect::from_min_size(Vec2::new(0.0, 40.0), Vec2::new(260.0, 36.0)), &palette);
+
+        let progress = TaskProgressAdapter::new("t1", "Baking PBR");
+        progress.render(&mut buf, Rect::from_min_size(Vec2::new(0.0, 80.0), Vec2::new(260.0, 44.0)), &palette);
+
+        let service = ServiceStatusAdapter::new("GPU Daemon", 8);
+        service.render(&mut buf, Rect::from_min_size(Vec2::new(0.0, 130.0), Vec2::new(260.0, 32.0)), &palette);
+
+        assert!(!buf.commands().is_empty());
     }
 }

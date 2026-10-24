@@ -41,7 +41,7 @@ impl Default for CreativeDocument {
             HierarchyItem::new("layer_fx", "Glow & Particles").with_depth(0),
             HierarchyItem::new("layer_bg", "Cyber City Skyline").with_depth(0),
         ];
-        let hierarchy = HierarchyTree::new(items);
+        let hierarchy = HierarchyTree::with_items(items);
 
         // Initial inspector properties for the active layer
         let props = vec![
@@ -99,6 +99,11 @@ impl WorkspaceHost {
     /// Switches the presentation mode smoothly without resetting state.
     pub fn set_mode(&mut self, mode: PresentationMode) {
         self.document.mode = mode;
+    }
+
+    /// Alias for `set_mode`.
+    pub fn switch_mode(&mut self, mode: PresentationMode) {
+        self.set_mode(mode);
     }
 
     /// Handles pointer down across the active presentation layout.
@@ -246,18 +251,15 @@ impl WorkspaceHost {
 
     /// Synchronizes hierarchy tree actions to inspector and canvas.
     fn sync_hierarchy_event(&mut self, event: HierarchyEvent) {
-        match event {
-            HierarchyEvent::Selected(_id) => {
-                if let Some(item) = self.document.hierarchy.selected_item() {
-                    let props = vec![
-                        PropertyItem::float("opacity", "Opacity", item.opacity, 0.0, 1.0, 0.02).with_category("Appearance"),
-                        PropertyItem::boolean("visible", "Visible", item.visible).with_category("General"),
-                        PropertyItem::boolean("locked", "Locked", item.locked).with_category("General"),
-                    ];
-                    self.document.inspector.set_properties(format!("{} Properties", item.name), props);
-                }
+        if let HierarchyEvent::Selected(_id) = event {
+            if let Some(item) = self.document.hierarchy.selected_item() {
+                let props = vec![
+                    PropertyItem::float("opacity", "Opacity", item.opacity, 0.0, 1.0, 0.02).with_category("Appearance"),
+                    PropertyItem::boolean("visible", "Visible", item.visible).with_category("General"),
+                    PropertyItem::boolean("locked", "Locked", item.locked).with_category("General"),
+                ];
+                self.document.inspector.set_properties(format!("{} Properties", item.name), props);
             }
-            _ => {}
         }
     }
 
@@ -303,7 +305,7 @@ impl WorkspaceHost {
                 }
 
                 // Render dock chrome (headers, tabs, splitters, drop guides)
-                self.document.dock_view.render_chrome(buf, &layout, &self.document.dock_tree, ptr, palette);
+                self.document.dock_view.render(buf, &layout, &self.document.dock_tree, palette, ptr);
             }
             PresentationMode::Split => {
                 let half_w = viewport.width() * 0.5;
@@ -324,5 +326,62 @@ impl WorkspaceHost {
                 self.document.graph.render(buf, viewport, palette);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_workspace_host_mode_switching_preserves_document_state() {
+        let mut host = WorkspaceHost::new();
+        assert_eq!(host.document.mode, PresentationMode::Create);
+
+        // Add a layer and set an active tool
+        let new_layer_id = host.document.hierarchy.add_item("Character Inking");
+        host.document.canvas.active_tool = crate::canvas_host::CanvasTool::Brush;
+
+        // Switch to Split mode
+        host.switch_mode(PresentationMode::Split);
+        assert_eq!(host.document.mode, PresentationMode::Split);
+        assert_eq!(host.document.hierarchy.items.len(), 4);
+        assert!(host.document.hierarchy.items.iter().any(|i| i.id == new_layer_id));
+        assert_eq!(host.document.canvas.active_tool, crate::canvas_host::CanvasTool::Brush);
+
+        // Switch to Graph mode
+        host.switch_mode(PresentationMode::Graph);
+        assert_eq!(host.document.mode, PresentationMode::Graph);
+        assert_eq!(host.document.graph.nodes.len(), 5, "Initial graph should have 5 sample nodes");
+
+        // Switch back to Create mode: zero state loss
+        host.switch_mode(PresentationMode::Create);
+        assert_eq!(host.document.mode, PresentationMode::Create);
+        assert_eq!(host.document.hierarchy.items.len(), 4);
+    }
+
+    #[test]
+    fn test_workspace_host_rendering_all_modes() {
+        let mut host = WorkspaceHost::new();
+        let mut buf = CommandBuffer::new();
+        let palette = ThemePalette::dark();
+        let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1280.0, 720.0));
+        let ptr = PointerState::default();
+
+        // 1. Create Mode
+        host.render(&mut buf, viewport, &ptr, &palette);
+        assert!(!buf.commands().is_empty());
+
+        // 2. Split Mode
+        buf.clear();
+        host.switch_mode(PresentationMode::Split);
+        host.render(&mut buf, viewport, &ptr, &palette);
+        assert!(!buf.commands().is_empty());
+
+        // 3. Graph Mode
+        buf.clear();
+        host.switch_mode(PresentationMode::Graph);
+        host.render(&mut buf, viewport, &ptr, &palette);
+        assert!(!buf.commands().is_empty());
     }
 }

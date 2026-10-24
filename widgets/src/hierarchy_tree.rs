@@ -66,7 +66,14 @@ pub struct HierarchyTree {
 }
 
 impl HierarchyTree {
-    pub fn new(items: Vec<HierarchyItem>) -> Self {
+    pub fn new() -> Self {
+        Self::with_items(vec![
+            HierarchyItem::new("layer_base", "Background Canvas"),
+            HierarchyItem::new("layer_sketch", "Rough Sketch"),
+        ])
+    }
+
+    pub fn with_items(items: Vec<HierarchyItem>) -> Self {
         let selected_id = items.iter().find(|i| i.selected).map(|i| i.id.clone());
         Self {
             items,
@@ -81,6 +88,29 @@ impl HierarchyTree {
         for item in &mut self.items {
             item.selected = item.id == id;
         }
+    }
+
+    pub fn toggle_visibility(&mut self, id: &str) {
+        if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {
+            item.visible = !item.visible;
+        }
+    }
+
+    pub fn toggle_lock(&mut self, id: &str) {
+        if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {
+            item.locked = !item.locked;
+        }
+    }
+
+    pub fn start_rename(&mut self, id: &str) {
+        if let Some(item) = self.items.iter().find(|i| i.id == id) {
+            self.renaming_id = Some(id.to_string());
+            self.rename_buffer = TextEditBuffer::new(&item.name);
+        }
+    }
+
+    pub fn cancel_rename(&mut self) {
+        self.renaming_id = None;
     }
 
     pub fn selected_item(&self) -> Option<&HierarchyItem> {
@@ -421,9 +451,9 @@ mod tests {
 
         // Reordering
         assert_eq!(tree.items[0].id, new_id);
-        tree.move_down(&new_id);
+        tree.move_selected_down();
         assert_eq!(tree.items[1].id, new_id);
-        tree.move_up(&new_id);
+        tree.move_selected_up();
         assert_eq!(tree.items[0].id, new_id);
 
         // Deletion
@@ -437,12 +467,12 @@ mod tests {
         let mut tree = HierarchyTree::new();
         let target_id = tree.items[0].id.clone();
 
-        tree.start_renaming(&target_id);
+        tree.start_rename(&target_id);
         assert_eq!(tree.renaming_id.as_deref(), Some(target_id.as_str()));
 
         tree.rename_buffer.clear();
         tree.rename_buffer.insert_str("Ink Inpainting");
-        tree.commit_renaming();
+        tree.commit_rename();
 
         assert_eq!(tree.renaming_id, None);
         assert_eq!(tree.items[0].name, "Ink Inpainting");
@@ -450,13 +480,12 @@ mod tests {
 
     #[test]
     fn test_hierarchy_rendering_emits_commands() {
-        let mut tree = HierarchyTree::new();
+        let tree = HierarchyTree::new();
         let mut buf = CommandBuffer::new();
         let palette = ThemePalette::dark();
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(300.0, 500.0));
-        let ptr = PointerState::default();
 
-        tree.render(&mut buf, viewport, &palette, &ptr);
+        tree.render(&mut buf, viewport, &palette);
         assert!(!buf.commands().is_empty());
     }
 }

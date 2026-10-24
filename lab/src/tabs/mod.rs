@@ -1,5 +1,6 @@
 //! Lab Tabs Module: Enumerates and dispatches all showcase screens in Kolpona UI Lab.
 
+pub mod creative_workspace;
 pub mod design;
 pub mod ojon;
 pub mod showcases;
@@ -11,6 +12,7 @@ use ui_themes::ThemePalette;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LabTab {
+    CreativeWorkspace,
     OjonWorkstation,
     DockingAndOverview,
     DesignSystemAndIcons,
@@ -31,6 +33,9 @@ pub fn render_tab(
     palette: &ThemePalette,
 ) {
     match tab {
+        LabTab::CreativeWorkspace => {
+            creative_workspace::render_creative_workspace_tab(app, cmd_buf, content_rect, palette);
+        }
         LabTab::OjonWorkstation => {
             ojon::render_ojon_workstation_tab(app, cmd_buf, content_rect, palette);
         }

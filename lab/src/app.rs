@@ -50,6 +50,13 @@ pub struct UiLabApp {
     pub ojon_calib_ctx: f32,
     pub ojon_search_query: String,
     pub ojon_test_prompt: String,
+
+    // Creative Studio Workstation
+    pub creative_workspace: WorkspaceHost,
+    pub tool_adapter: ToolConfigAdapter,
+    pub model_adapter: ModelSelectorAdapter,
+    pub task_adapter: TaskProgressAdapter,
+    pub service_adapter: ServiceStatusAdapter,
 }
 
 impl UiLabApp {
@@ -70,7 +77,7 @@ impl UiLabApp {
 
         Self {
             theme: StudioTheme::default(),
-            current_tab: LabTab::OjonWorkstation,
+            current_tab: LabTab::CreativeWorkspace,
             workspace: DockWorkspace::default(),
             canvas: InfiniteCanvas::default(),
             node_editor: NodeEditor::default(),
@@ -107,6 +114,12 @@ impl UiLabApp {
             ojon_calib_ctx: 2048.0,
             ojon_search_query: String::new(),
             ojon_test_prompt: "Explain quantum annealing in simple terms.".into(),
+
+            creative_workspace: WorkspaceHost::new(),
+            tool_adapter: ToolConfigAdapter::default(),
+            model_adapter: ModelSelectorAdapter::new(),
+            task_adapter: TaskProgressAdapter::new("task_synth", "Texture Synthesis"),
+            service_adapter: ServiceStatusAdapter::new("Local Inference Worker", 12),
         }
     }
 
@@ -175,6 +188,7 @@ impl UiLabApp {
 
         // Navigation Tabs
         let tabs_list = [
+            (LabTab::CreativeWorkspace, "Creative Studio"),
             (LabTab::OjonWorkstation, "Ojon Studio"),
             (LabTab::DockingAndOverview, "Overview"),
             (LabTab::DesignSystemAndIcons, "UI Tokens"),
@@ -406,6 +420,7 @@ impl UiLabApp {
         // 1. Check top navigation clicks
         if nav_rect.contains(pos) {
             let tabs_list = [
+                (LabTab::CreativeWorkspace, "Creative Studio"),
                 (LabTab::OjonWorkstation, "Ojon Studio"),
                 (LabTab::DockingAndOverview, "Overview"),
                 (LabTab::DesignSystemAndIcons, "UI Tokens"),
@@ -489,6 +504,9 @@ impl UiLabApp {
                     });
                 }
             }
+            LabTab::CreativeWorkspace => {
+                crate::tabs::creative_workspace::handle_creative_workspace_mouse_down(self, pos, button, content_rect);
+            }
             LabTab::NodeEditor => {
                 self.node_editor.handle_mouse_down(pos, button, content_rect);
             }
@@ -505,6 +523,16 @@ impl UiLabApp {
             Vec2::new(viewport.min.x, viewport.min.y + nav_height),
             Vec2::new(viewport.width(), viewport.height() - nav_height - 30.0),
         );
+
+        if self.current_tab == LabTab::CreativeWorkspace {
+            let workspace_rect = Rect::from_min_size(
+                Vec2::new(content_rect.min.x, content_rect.min.y + 44.0),
+                Vec2::new(content_rect.width(), (content_rect.height() - 44.0).max(50.0)),
+            );
+            let ptr_copy = self.pointer.clone();
+            self.creative_workspace.handle_mouse_move(pos, delta, workspace_rect, &ptr_copy);
+            return;
+        }
 
         if self.current_tab == LabTab::NodeEditor {
             self.node_editor.handle_mouse_move(pos, delta, content_rect);
@@ -542,6 +570,19 @@ impl UiLabApp {
             PointerButton::Middle => self.pointer.middle_down = false,
         }
 
+        if self.current_tab == LabTab::CreativeWorkspace {
+            let nav_height = 48.0;
+            let content_rect = Rect::from_min_size(
+                Vec2::new(viewport.min.x, viewport.min.y + nav_height),
+                Vec2::new(viewport.width(), viewport.height() - nav_height - 30.0),
+            );
+            let workspace_rect = Rect::from_min_size(
+                Vec2::new(content_rect.min.x, content_rect.min.y + 44.0),
+                Vec2::new(content_rect.width(), (content_rect.height() - 44.0).max(50.0)),
+            );
+            self.creative_workspace.handle_mouse_up(pos, button, workspace_rect);
+        }
+
         if self.current_tab == LabTab::NodeEditor {
             let nav_height = 48.0;
             let content_rect = Rect::from_min_size(
@@ -560,6 +601,13 @@ impl UiLabApp {
         );
 
         match self.current_tab {
+            LabTab::CreativeWorkspace => {
+                let workspace_rect = Rect::from_min_size(
+                    Vec2::new(content_rect.min.x, content_rect.min.y + 44.0),
+                    Vec2::new(content_rect.width(), (content_rect.height() - 44.0).max(50.0)),
+                );
+                self.creative_workspace.handle_scroll(delta, self.pointer.position, workspace_rect);
+            }
             LabTab::NodeEditor => {
                 self.node_editor
                     .handle_scroll(delta, self.pointer.position, content_rect);

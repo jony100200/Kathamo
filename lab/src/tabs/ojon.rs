@@ -19,7 +19,7 @@ pub fn render_ojon_workstation_tab(
         stroke: Stroke::NONE,
     });
 
-    let pointer = app.pointer;
+    let pointer = app.pointer.clone();
     let mut ui = KathamoUi::new(cmd_buf, &mut app.icon_atlas, p, content_rect, pointer);
 
     // 1. Top Telemetry & Workstation Header

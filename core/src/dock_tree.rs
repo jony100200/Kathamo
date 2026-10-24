@@ -98,6 +98,12 @@ pub struct DockTree {
     pub maximized_leaf: Option<String>,
 }
 
+impl Default for DockTree {
+    fn default() -> Self {
+        Self::new("main", DockTabPanel::new("tab1", "Workspace"))
+    }
+}
+
 impl DockTree {
     pub fn new(root_leaf_id: impl Into<String>, initial_panel: DockTabPanel) -> Self {
         Self {

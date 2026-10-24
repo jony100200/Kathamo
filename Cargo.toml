@@ -9,6 +9,7 @@ members = [
     "widgets",
     "testkit",
     "lab",
+    "sdk",
 ]
 default-members = ["lab"]
 

@@ -17,6 +17,7 @@ impl UiLabApp {
 
         // Cycle through all tabs during benchmark to measure all workloads
         let tabs = [
+            LabTab::CreativeWorkspace,
             LabTab::OjonWorkstation,
             LabTab::DockingAndOverview,
             LabTab::DesignSystemAndIcons,

@@ -126,7 +126,7 @@ impl DockTreeView {
                 SplitAxis::Horizontal => delta.x / bounds.width().max(10.0),
                 SplitAxis::Vertical => delta.y / bounds.height().max(10.0),
             };
-            dock_tree.resize_split(&split_id, delta_ratio);
+            dock_tree.resize_split(split_id, delta_ratio);
         }
     }
 
@@ -184,6 +184,18 @@ impl DockTreeView {
         }
 
         false
+    }
+
+    /// Alias for `render_chrome`.
+    pub fn render(
+        &self,
+        buf: &mut CommandBuffer,
+        layout: &WorkspaceLayout,
+        dock_tree: &DockTree,
+        palette: &ThemePalette,
+        ptr: &PointerState,
+    ) {
+        self.render_chrome(buf, layout, dock_tree, ptr, palette);
     }
 
     /// Renders chrome: tab headers, close buttons, maximize toggles, splitters, and drop guides.
@@ -277,7 +289,7 @@ impl DockTreeView {
 
         // 2. Render Interactive Splitters
         for sp in &layout.splitters {
-            let is_dragged = self.active_splitter_drag.as_ref().map_or(false, |(id, ..)| id == &sp.split_id);
+            let is_dragged = self.active_splitter_drag.as_ref().is_some_and(|(id, ..)| id == &sp.split_id);
             let is_hovered = sp.handle_rect.expand(2.0).contains(ptr.position);
 
             let fill = if is_dragged {
@@ -342,14 +354,24 @@ mod tests {
 
     #[test]
     fn test_dock_view_interactions() {
-        let mut dock_tree = DockTree::new();
-        // Setup a horizontal split: left panel + right panel
-        dock_tree.root = DockNode::split(
-            SplitAxis::Horizontal,
-            0.5,
-            DockNode::leaf_with_tabs("left", vec![DockTabPanel::new("p1", "Hierarchy")]),
-            DockNode::leaf_with_tabs("right", vec![DockTabPanel::new("p2", "Inspector")]),
-        );
+        let mut dock_tree = DockTree {
+            root: DockNode::Split {
+                id: "split_root".into(),
+                axis: SplitAxis::Horizontal,
+                ratio: 0.5,
+                first: Box::new(DockNode::Leaf {
+                    id: "left".into(),
+                    tabs: vec![DockTabPanel::new("p1", "Hierarchy")],
+                    active_tab: 0,
+                }),
+                second: Box::new(DockNode::Leaf {
+                    id: "right".into(),
+                    tabs: vec![DockTabPanel::new("p2", "Inspector")],
+                    active_tab: 0,
+                }),
+            },
+            ..Default::default()
+        };
 
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(1000.0, 800.0));
         let layout = dock_tree.compute_layout(bounds);
@@ -364,8 +386,10 @@ mod tests {
         assert!(dock_view.active_splitter_drag.is_some());
 
         // Drag splitter
-        let mut ptr = PointerState::default();
-        ptr.primary_down = true;
+        let ptr = PointerState {
+            primary_down: true,
+            ..Default::default()
+        };
         dock_view.handle_mouse_move(splitter_pos + Vec2::new(50.0, 0.0), Vec2::new(50.0, 0.0), bounds, &mut dock_tree, &ptr);
 
         dock_view.handle_mouse_up(splitter_pos, PointerButton::Primary, &layout, &mut dock_tree);
@@ -374,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_dock_view_rendering_emits_commands() {
-        let mut dock_tree = DockTree::new();
+        let dock_tree = DockTree::default();
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0));
         let layout = dock_tree.compute_layout(bounds);
 

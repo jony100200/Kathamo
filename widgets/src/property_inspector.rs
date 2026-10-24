@@ -111,6 +111,26 @@ impl PropertyItem {
         }
     }
 
+    pub fn integer(id: impl Into<String>, label: impl Into<String>, val: i32, min: i32, max: i32) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            category: "General".into(),
+            value: PropertyValue::Int { value: val, min, max },
+            tooltip: None,
+        }
+    }
+
+    pub fn text(id: impl Into<String>, label: impl Into<String>, text: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            category: "General".into(),
+            value: PropertyValue::Text(text.into()),
+            tooltip: None,
+        }
+    }
+
     pub fn with_category(mut self, cat: impl Into<String>) -> Self {
         self.category = cat.into();
         self
@@ -148,6 +168,16 @@ impl MetadataPropertyInspector {
     pub fn set_properties(&mut self, title: impl Into<String>, props: Vec<PropertyItem>) {
         self.title = title.into();
         self.properties = props;
+    }
+
+    pub fn categories(&self) -> Vec<String> {
+        let mut cats = Vec::new();
+        for p in &self.properties {
+            if !cats.contains(&p.category) {
+                cats.push(p.category.clone());
+            }
+        }
+        cats
     }
 
     pub fn get_float(&self, id: &str) -> Option<f32> {
@@ -330,7 +360,7 @@ impl MetadataPropertyInspector {
             // Property Value Editor
             match &prop.value {
                 PropertyValue::Float { value, unit, .. } => {
-                    let is_active = self.active_scrubber_id.as_ref().map_or(false, |(id, _)| id == &prop.id);
+                    let is_active = self.active_scrubber_id.as_ref().is_some_and(|(id, _)| id == &prop.id);
                     buf.push(DrawCommand::Rect {
                         rect: val_rect,
                         fill: palette.canvas,
@@ -464,13 +494,13 @@ mod tests {
 
     #[test]
     fn test_property_inspector_metadata_items() {
-        let mut inspector = MetadataPropertyInspector::new("Transform");
+        let mut inspector = MetadataPropertyInspector::new("Transform", Vec::new());
         let props = vec![
             PropertyItem::float("scale", "Scale", 1.0, 0.1, 10.0, 0.1).with_category("Transform"),
             PropertyItem::integer("seed", "Seed", 42, 0, 9999).with_category("Generation"),
             PropertyItem::boolean("hdr", "HDR Output", true).with_category("Render"),
             PropertyItem::color("tint", "Tint Color", Color::WHITE).with_category("Appearance"),
-            PropertyItem::vec2("offset", "Offset", Vec2::new(10.0, 20.0)).with_category("Transform"),
+            PropertyItem::vec2("offset", "Offset", 10.0, 20.0, -100.0, 100.0).with_category("Transform"),
             PropertyItem::text("name", "Layer Name", "Background").with_category("General"),
         ];
 
@@ -482,17 +512,19 @@ mod tests {
 
     #[test]
     fn test_scrubber_drag_modifies_float() {
-        let mut inspector = MetadataPropertyInspector::new("Test");
+        let mut inspector = MetadataPropertyInspector::new("Test", Vec::new());
         inspector.set_properties("Test", vec![
             PropertyItem::float("roughness", "Roughness", 0.5, 0.0, 1.0, 0.05),
         ]);
 
-        let mut ptr = PointerState::default();
-        ptr.position = Vec2::new(180.0, 50.0);
+        let mut ptr = PointerState {
+            position: Vec2::new(180.0, 50.0),
+            ..Default::default()
+        };
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(300.0, 400.0));
 
         // Click to start scrub
-        let event = inspector.handle_mouse_down(Vec2::new(180.0, 50.0), PointerButton::Primary, viewport, &ptr);
+        let _event = inspector.handle_mouse_down(Vec2::new(180.0, 50.0), PointerButton::Primary, viewport);
         assert!(inspector.active_scrubber_id.is_some());
         assert_eq!(inspector.active_scrubber_id.as_ref().unwrap().0, "roughness");
 
@@ -511,18 +543,17 @@ mod tests {
 
     #[test]
     fn test_property_inspector_rendering_emits_commands() {
-        let mut inspector = MetadataPropertyInspector::new("Inspect");
+        let mut inspector = MetadataPropertyInspector::new("Inspect", Vec::new());
         inspector.set_properties("Inspect", vec![
             PropertyItem::boolean("active", "Active", true),
-            PropertyItem::color("base", "Base Color", Color::RED),
+            PropertyItem::color("base", "Base Color", Color::rgb(255, 0, 0)),
         ]);
 
         let mut buf = CommandBuffer::new();
         let palette = ThemePalette::dark();
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(300.0, 400.0));
-        let ptr = PointerState::default();
 
-        inspector.render(&mut buf, viewport, &palette, &ptr);
+        inspector.render(&mut buf, viewport, &palette);
         assert!(!buf.commands().is_empty());
     }
 }

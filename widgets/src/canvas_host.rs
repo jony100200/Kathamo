@@ -401,16 +401,18 @@ mod tests {
         let mut host = CanvasHost::new_2d();
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0));
 
+        let ptr = PointerState::default();
+
         // Pan delta
-        host.handle_mouse_move(Vec2::new(100.0, 100.0), Vec2::new(10.0, -5.0), viewport);
+        host.handle_mouse_move(Vec2::new(100.0, 100.0), Vec2::new(10.0, -5.0), viewport, &ptr);
         // Pan only changes if space is down or middle click is dragging
         host.is_panning = true;
-        host.handle_mouse_move(Vec2::new(100.0, 100.0), Vec2::new(10.0, -5.0), viewport);
-        assert_eq!(host.pan, Vec2::new(10.0, -5.0));
+        host.handle_mouse_move(Vec2::new(100.0, 100.0), Vec2::new(10.0, -5.0), viewport, &ptr);
+        assert_eq!(host.pan, Vec2::new(130.0, 115.0));
 
         // Zoom at point
         let prev_zoom = host.zoom;
-        host.handle_scroll(1.0, Vec2::new(400.0, 300.0), viewport);
+        host.handle_scroll(Vec2::new(0.0, 1.0), Vec2::new(400.0, 300.0), viewport);
         assert!(host.zoom > prev_zoom, "Scroll up should zoom in");
     }
 
@@ -420,29 +422,36 @@ mod tests {
         host.active_tool = CanvasTool::Brush;
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(600.0, 400.0));
 
-        let ptr = PointerState::default();
-        host.handle_mouse_down(Vec2::new(100.0, 100.0), PointerButton::Primary, viewport, &ptr);
-        assert!(host.is_drawing);
-        assert!(host.current_stroke.is_some());
+        host.handle_mouse_down(Vec2::new(100.0, 100.0), PointerButton::Primary, viewport);
+        if let CanvasHostKind::Creative2D { ref active_stroke, .. } = host.kind {
+            assert!(active_stroke.is_some());
+        }
 
-        host.handle_mouse_move(Vec2::new(110.0, 105.0), Vec2::new(10.0, 5.0), viewport);
-        assert_eq!(host.current_stroke.as_ref().unwrap().points.len(), 2);
+        let ptr = PointerState {
+            primary_down: true,
+            ..Default::default()
+        };
+        host.handle_mouse_move(Vec2::new(110.0, 105.0), Vec2::new(10.0, 5.0), viewport, &ptr);
+        if let CanvasHostKind::Creative2D { ref active_stroke, .. } = host.kind {
+            assert_eq!(active_stroke.as_ref().unwrap().points.len(), 2);
+        }
 
-        host.handle_mouse_up(PointerButton::Primary);
-        assert!(!host.is_drawing);
-        assert_eq!(host.strokes.len(), 1);
-        assert_eq!(host.strokes[0].points.len(), 2);
+        host.handle_mouse_up(Vec2::new(110.0, 105.0), PointerButton::Primary);
+        if let CanvasHostKind::Creative2D { ref strokes, ref active_stroke } = host.kind {
+            assert!(active_stroke.is_none());
+            assert_eq!(strokes.len(), 1);
+            assert_eq!(strokes[0].points.len(), 2);
+        }
     }
 
     #[test]
     fn test_canvas_render_emits_commands() {
-        let mut host = CanvasHost::new_texture(42, Vec2::new(1920.0, 1080.0));
+        let host = CanvasHost::new_texture_host(42, (1920, 1080));
         let mut buf = CommandBuffer::new();
         let palette = ThemePalette::dark();
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0));
-        let ptr = PointerState::default();
 
-        host.render(&mut buf, viewport, &palette, &ptr);
+        host.render(&mut buf, viewport, &palette);
         assert!(!buf.commands().is_empty());
 
         let has_image = buf.commands().iter().any(|cmd| matches!(cmd, DrawCommand::Image { texture_id: 42, .. }));

@@ -38,7 +38,7 @@ pub fn render_design_system_tab(
         stroke: Stroke::new(1.0, p.border),
     });
 
-    let pointer = app.pointer;
+    let pointer = app.pointer.clone();
     let mut ui = KolponaUi::new(cmd_buf, &mut app.icon_atlas, p, col1_rect, pointer);
     ui.heading("1. STUDIO UI API (KolponaUi)");
     ui.label("Applications use Kolpona's unified controls:");

@@ -1,4 +1,4 @@
-//! Godot 4 inspired Anchor and Offset layout system.
+//! Proportional Anchor and Offset layout system.
 //! Provides instant, zero-allocation 4-float positioning for UI elements.
 
 use crate::math::{Rect, Vec2};

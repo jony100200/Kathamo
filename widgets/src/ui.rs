@@ -31,6 +31,8 @@ pub struct Response {
     pub clicked: bool,
     pub hovered: bool,
     pub changed: bool,
+    pub dragging: bool,
+    pub activated: bool,
 }
 
 impl Response {
@@ -44,6 +46,14 @@ impl Response {
 
     pub fn changed(self) -> bool {
         self.changed
+    }
+
+    pub fn dragging(self) -> bool {
+        self.dragging
+    }
+
+    pub fn activated(self) -> bool {
+        self.activated || self.clicked
     }
 }
 
@@ -90,6 +100,12 @@ impl<'a> KolponaUi<'a> {
         self
     }
 
+    /// Evaluates whether an activation click occurred within the given rectangle.
+    #[inline]
+    pub fn is_clicked_in_rect(&self, rect: Rect) -> bool {
+        rect.contains(self.pointer.position) && self.pointer.is_clicked()
+    }
+
     /// Advances the layout cursor based on current layout direction (vertical or horizontal).
     pub fn advance(&mut self, width: f32, height: f32) {
         match self.direction {
@@ -129,7 +145,7 @@ impl<'a> KolponaUi<'a> {
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
 
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
         render_button(self.cmd_buf, rect, text, style, hovered, self.palette);
 
@@ -156,6 +172,8 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: clicked,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -290,7 +308,7 @@ impl<'a> KolponaUi<'a> {
         let width = self.bounds.width() - 16.0;
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
         if clicked {
             *checked = !*checked;
@@ -305,10 +323,12 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: clicked,
+            dragging: false,
+            activated: clicked,
         }
     }
 
-    /// Studio dropdown selector ("Choose workspace").
+    /// Studio dropdown selector ("Choose workspace"). Safe against empty options.
     pub fn dropdown(&mut self, _label: &str, selected: &mut usize, options: &[&str]) -> Response {
         let height = 28.0;
         let width = match self.direction {
@@ -320,9 +340,25 @@ impl<'a> KolponaUi<'a> {
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
-        let mut state = DropdownState::new(options.to_vec(), *selected);
+        if options.is_empty() {
+            let empty_opts = vec!["(Empty)"];
+            let mut state = DropdownState::new(empty_opts, 0);
+            state.hovered = hovered;
+            render_dropdown(self.cmd_buf, &state, rect, self.palette);
+            self.advance(width, height);
+            return Response {
+                clicked,
+                hovered,
+                changed: false,
+                dragging: false,
+                activated: clicked,
+            };
+        }
+
+        let clamped_idx = (*selected).min(options.len() - 1);
+        let mut state = DropdownState::new(options.to_vec(), clamped_idx);
         state.hovered = hovered;
         render_dropdown(self.cmd_buf, &state, rect, self.palette);
 
@@ -335,6 +371,8 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: clicked,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -348,18 +386,32 @@ impl<'a> KolponaUi<'a> {
         self.advance(width, height + 4.0);
     }
 
-    /// Numeric drag scrubber.
+    /// Numeric drag scrubber with interactive drag modification.
     pub fn scrubber(&mut self, label: &str, value: &mut f32, min: f32, max: f32) -> Response {
-        let scrubber = NumericScrubber::new(label, *value, min, max, 0.1);
         let width = self.bounds.width() - 20.0;
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, 26.0));
         let hovered = rect.contains(self.pointer.position);
+        let mut changed = false;
+        let dragging = hovered && self.pointer.primary_down;
+        if dragging && self.pointer.drag_delta.x.abs() > 0.05 {
+            let step = (max - min) * 0.005;
+            let delta = self.pointer.drag_delta.x * step;
+            let new_val = (*value + delta).clamp(min, max);
+            if (new_val - *value).abs() > 1e-4 {
+                *value = new_val;
+                changed = true;
+            }
+        }
+
+        let scrubber = NumericScrubber::new(label, *value, min, max, 0.1);
         scrubber.render(self.cmd_buf, rect, hovered, self.palette);
         self.advance(width, 26.0);
         Response {
             clicked: false,
             hovered,
-            changed: false,
+            changed,
+            dragging,
+            activated: changed,
         }
     }
 
@@ -395,7 +447,7 @@ impl<'a> KolponaUi<'a> {
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
         if clicked {
             *checked = !*checked;
@@ -407,6 +459,8 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: clicked,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -419,14 +473,14 @@ impl<'a> KolponaUi<'a> {
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
         crate::input::render_text_input(
             self.cmd_buf,
             text,
             placeholder,
             rect,
-            hovered,
+            hovered || clicked,
             hovered,
             self.palette,
         );
@@ -435,6 +489,48 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: false,
+            dragging: false,
+            activated: clicked,
+        }
+    }
+
+    /// Interactive text input backed by persistent TextEditBuffer.
+    pub fn text_input_buffered(
+        &mut self,
+        buffer: &mut ui_core::TextEditBuffer,
+        placeholder: &str,
+    ) -> Response {
+        let height = 28.0;
+        let width = match self.direction {
+            Direction::Horizontal => 180.0,
+            Direction::Vertical => (self.bounds.width() - 16.0).max(100.0),
+        };
+        let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
+        let hovered = rect.contains(self.pointer.position);
+        let clicked = self.is_clicked_in_rect(rect);
+
+        if clicked {
+            buffer.set_focused(true);
+        } else if self.pointer.is_clicked() && !hovered {
+            buffer.set_focused(false);
+        }
+
+        crate::input::render_text_input(
+            self.cmd_buf,
+            buffer.as_str(),
+            placeholder,
+            rect,
+            buffer.is_focused(),
+            hovered,
+            self.palette,
+        );
+        self.advance(width, height);
+        Response {
+            clicked,
+            hovered,
+            changed: false,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -447,7 +543,7 @@ impl<'a> KolponaUi<'a> {
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
         // Render input field with offset text
         crate::input::render_text_input(
@@ -455,7 +551,7 @@ impl<'a> KolponaUi<'a> {
             text,
             placeholder,
             rect,
-            hovered,
+            hovered || clicked,
             hovered,
             self.palette,
         );
@@ -473,6 +569,8 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: false,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -485,7 +583,7 @@ impl<'a> KolponaUi<'a> {
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
         let tab_width = (width - 4.0) / tabs.len().max(1) as f32;
         let mut hovered_idx = None;
@@ -513,6 +611,8 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: clicked,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -540,7 +640,7 @@ impl<'a> KolponaUi<'a> {
         let width = (self.bounds.width() - 16.0).max(140.0);
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
 
         crate::input::render_model_card(
             self.cmd_buf,
@@ -557,6 +657,8 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: clicked,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -806,7 +908,7 @@ impl<'a> KolponaUi<'a> {
             Vec2::new(self.bounds.width() - 16.0, header_height),
         );
         let hovered = header_rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(header_rect);
 
         if clicked {
             *is_open = !*is_open;
@@ -856,6 +958,8 @@ impl<'a> KolponaUi<'a> {
             clicked,
             hovered,
             changed: clicked,
+            dragging: false,
+            activated: clicked,
         }
     }
 
@@ -864,9 +968,10 @@ impl<'a> KolponaUi<'a> {
         let width = self.bounds.width() - 16.0;
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);
-        let clicked = hovered && self.pointer.primary_down;
+        let clicked = self.is_clicked_in_rect(rect);
+        let dragging = hovered && self.pointer.primary_down;
 
-        if clicked {
+        if clicked || dragging {
             let rel_x = (self.pointer.position.x - rect.min.x) / rect.width().max(1.0);
             *playhead = rel_x.clamp(0.0, 1.0);
         }
@@ -877,8 +982,127 @@ impl<'a> KolponaUi<'a> {
         Response {
             clicked,
             hovered,
-            changed: clicked,
+            changed: clicked || dragging,
+            dragging,
+            activated: clicked,
         }
+    }
+
+    /// High-density RangeSlider for bounded dual-thumb selection.
+    pub fn range_slider(
+        &mut self,
+        label: Option<&str>,
+        current_min: &mut f32,
+        current_max: &mut f32,
+        range_min: f32,
+        range_max: f32,
+    ) -> Response {
+        let mut slider = crate::range_slider::RangeSlider::new(*current_min, *current_max, range_min, range_max);
+        if let Some(lbl) = label {
+            slider = slider.label(lbl);
+        }
+        slider.show(self, current_min, current_max)
+    }
+
+    /// Hierarchical breadcrumbs navigation trail.
+    pub fn breadcrumbs(
+        &mut self,
+        items: &[crate::breadcrumbs::BreadcrumbItem],
+    ) -> (Response, Option<usize>) {
+        crate::breadcrumbs::Breadcrumbs::new(items).show(self)
+    }
+
+    /// Viewport-clamped floating tooltip.
+    pub fn tooltip(
+        &mut self,
+        text: &str,
+        target_rect: Rect,
+        viewport: Rect,
+    ) {
+        crate::tooltip::TooltipOverlay::new(text, target_rect).show(self, viewport);
+    }
+
+    /// High-density Accordion component.
+    pub fn accordion(
+        &mut self,
+        accordion: &mut crate::accordion::Accordion,
+    ) -> (Response, Option<&'static str>) {
+        let is_clicked = self.pointer.is_clicked();
+        let clicked_id = accordion.render_headers(
+            self.cmd_buf,
+            self.icon_atlas,
+            self.bounds,
+            self.pointer.position,
+            is_clicked,
+            self.palette,
+        );
+        let total_h = accordion.total_height();
+        self.advance(self.bounds.width() - 16.0, total_h);
+        (
+            Response {
+                clicked: clicked_id.is_some(),
+                hovered: self.bounds.contains(self.pointer.position),
+                changed: clicked_id.is_some(),
+                dragging: false,
+                activated: clicked_id.is_some(),
+            },
+            clicked_id,
+        )
+    }
+
+    /// Procedural polar HSV ColorWheel with value brightness scrubber.
+    pub fn color_wheel(
+        &mut self,
+        wheel: &mut crate::color_picker::ColorWheel,
+        color: &mut crate::color_picker::HsvColor,
+    ) -> Response {
+        let is_clicked = self.pointer.is_clicked();
+        let center = Vec2::new(self.cursor.x + wheel.radius + 12.0, self.cursor.y + wheel.radius + 12.0);
+        let changed = wheel.render(
+            self.cmd_buf,
+            center,
+            color,
+            self.pointer.position,
+            self.pointer.primary_down,
+            is_clicked,
+            self.palette,
+        );
+        let total_height = wheel.radius * 2.0 + 70.0;
+        self.advance(self.bounds.width() - 16.0, total_height);
+        Response {
+            clicked: is_clicked,
+            hovered: true,
+            changed,
+            dragging: self.pointer.primary_down,
+            activated: is_clicked,
+        }
+    }
+
+    /// High-density NavigationRail shell primitive.
+    pub fn navigation_rail(
+        &mut self,
+        rail: &crate::navigation_rail::NavigationRail,
+        bounds: Rect,
+    ) -> (Response, Option<&'static str>) {
+        let is_clicked = self.pointer.is_clicked();
+        let clicked_id = rail.render(
+            self.cmd_buf,
+            self.icon_atlas,
+            bounds,
+            self.pointer.position,
+            is_clicked,
+            self.palette,
+        );
+        (
+            Response {
+                clicked: clicked_id.is_some(),
+                hovered: bounds.contains(self.pointer.position),
+                changed: clicked_id.is_some(),
+                dragging: false,
+                activated: clicked_id.is_some(),
+            },
+            clicked_id,
+        )
     }
 }
 
@@ -994,5 +1218,115 @@ mod tests {
         assert!(!wave_resp.clicked());
         assert!(!cmd_buf.is_empty());
     }
+
+    #[test]
+    fn empty_dropdown_is_safe_and_never_panics() {
+        let mut cmd_buf = CommandBuffer::new();
+        let mut icon_atlas = IconAtlas::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 400.0));
+        let pointer = PointerState::default();
+
+        let mut ui = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
+        let mut selected = 0;
+        let empty_options: &[&str] = &[];
+
+        // Must not divide-by-zero or panic
+        let resp = ui.dropdown("Empty", &mut selected, empty_options);
+        assert!(!resp.clicked());
+        assert_eq!(selected, 0);
+    }
+
+    #[test]
+    fn held_click_triggers_once_with_transition_pointer() {
+        let mut cmd_buf = CommandBuffer::new();
+        let mut icon_atlas = IconAtlas::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 400.0));
+
+        let mut pointer = PointerState::default();
+        pointer.position = Vec2::new(20.0, 20.0);
+        // Frame 1: press down
+        pointer.on_button_down(ui_platform::PointerButton::Primary);
+
+        let mut ui1 = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
+        let resp1 = ui1.button("Action");
+        assert!(resp1.clicked(), "Button must trigger on first click frame");
+
+        // Frame 2: button still held down
+        pointer.step_frame();
+        assert!(pointer.primary_down);
+        let mut cmd_buf2 = CommandBuffer::new();
+        let mut ui2 = KathamoUi::new(&mut cmd_buf2, &mut icon_atlas, &palette, bounds, pointer);
+        let resp2 = ui2.button("Action");
+        assert!(!resp2.clicked(), "Button must NOT repeatedly trigger while held down");
+    }
+
+    #[test]
+    fn interactive_scrubber_drag_modifies_value() {
+        let mut cmd_buf = CommandBuffer::new();
+        let mut icon_atlas = IconAtlas::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 400.0));
+
+        let mut pointer = PointerState::default();
+        pointer.position = Vec2::new(20.0, 20.0);
+        pointer.primary_down = true;
+        pointer.drag_delta = Vec2::new(10.0, 0.0); // dragging to the right
+
+        let mut ui = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
+        let mut value = 0.5f32;
+        let resp = ui.scrubber("Exposure", &mut value, 0.0, 1.0);
+        assert!(resp.changed);
+        assert!(value > 0.5f32);
+    }
+
+    #[test]
+    fn convenience_methods_workstation_components() {
+        let mut cmd_buf = CommandBuffer::new();
+        let mut icon_atlas = IconAtlas::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(600.0, 800.0));
+        let pointer = PointerState::default();
+
+        let mut ui = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
+
+        // Range slider
+        let mut min_val = 0.2;
+        let mut max_val = 0.8;
+        let slider_resp = ui.range_slider(Some("Roughness"), &mut min_val, &mut max_val, 0.0, 1.0);
+        assert!(!slider_resp.clicked());
+
+        // Breadcrumbs
+        let items = [
+            crate::breadcrumbs::BreadcrumbItem::new("Library"),
+            crate::breadcrumbs::BreadcrumbItem::new("Textures"),
+            crate::breadcrumbs::BreadcrumbItem::new("Wood_01"),
+        ];
+        let (bc_resp, clicked_crumb) = ui.breadcrumbs(&items);
+        assert_eq!(clicked_crumb, None);
+        assert!(!bc_resp.clicked());
+
+        // Tooltip
+        let target = Rect::from_min_size(Vec2::new(100.0, 100.0), Vec2::new(50.0, 30.0));
+        ui.tooltip("Inspect Mesh", target, bounds);
+
+        // Accordion
+        let mut acc = crate::accordion::Accordion::new(true)
+            .add_item(crate::accordion::AccordionItemState::new("trans", "Transform", true))
+            .add_item(crate::accordion::AccordionItemState::new("mat", "Material", false));
+        let (acc_resp, toggled_id) = ui.accordion(&mut acc);
+        assert_eq!(toggled_id, None);
+        assert!(!acc_resp.clicked());
+
+        // ColorWheel
+        let mut wheel = crate::color_picker::ColorWheel::new(40.0);
+        let mut hsv = crate::color_picker::HsvColor::default();
+        let color_resp = ui.color_wheel(&mut wheel, &mut hsv);
+        assert!(!color_resp.clicked());
+
+        assert!(!cmd_buf.is_empty());
+    }
 }
+
 

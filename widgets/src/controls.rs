@@ -98,7 +98,7 @@ pub fn render_badge(
     });
 }
 
-/// A Blender-style draggable numeric scrubber (scrubs value continuously when dragged).
+/// Draggable numeric scrubber (scrubs value continuously when dragged).
 #[derive(Debug, Clone, PartialEq)]
 pub struct NumericScrubber {
     pub label: String,

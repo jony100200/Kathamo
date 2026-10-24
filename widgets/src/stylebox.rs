@@ -1,4 +1,4 @@
-//! Godot StyleBoxFlat and Android Material 3 State Layer rendering primitive.
+//! Studio StyleBox and State Layer rendering primitive.
 
 use ui_core::{Color, CornerRadius, Rect, Stroke, Vec2};
 use ui_render::{CommandBuffer, DrawCommand};
@@ -30,7 +30,7 @@ impl Default for Shadow {
     }
 }
 
-/// A comprehensive visual box styling model inspired by Godot's StyleBoxFlat.
+/// A comprehensive visual box styling model.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StyleBox {
     pub bg_color: Color,

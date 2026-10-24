@@ -1,23 +1,37 @@
 //! `ui-widgets`: Commercial-grade creative controls and studio workspaces.
 
+pub mod accordion;
+pub mod breadcrumbs;
 pub mod canvas;
+pub mod color_picker;
 pub mod command_palette;
 pub mod controls;
 pub mod icon_cache;
 pub mod input;
 pub mod inspector;
+pub mod navigation_rail;
 pub mod node_editor;
+pub mod range_slider;
 pub mod stylebox;
 pub mod timeline;
+pub mod tooltip;
 pub mod ui;
 pub mod virtual_list;
 
+pub use accordion::{Accordion, AccordionItemState};
+pub use breadcrumbs::{BreadcrumbItem, Breadcrumbs};
+pub use color_picker::{ColorWheel, HsvColor};
 pub use icon_cache::{CachedVectorIcon, IconAtlas, IntoStudioIcon, StudioIcon};
 pub use input::{
     render_checkbox, render_dropdown, render_model_card, render_progress_bar,
     render_segmented_tabs, render_stat_card, render_text_input, render_toggle, CheckboxState,
     DropdownState, ProgressState,
 };
+pub use navigation_rail::{
+    NavigationRail, NavigationRailItem, RailAlignment, RailAnchor, RailLabelMode,
+};
+pub use range_slider::RangeSlider;
+pub use tooltip::TooltipOverlay;
 pub use ui::{KathamoUi, KolponaUi, Response};
 
 pub use ui_text as text;

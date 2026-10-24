@@ -93,6 +93,88 @@ pub struct PointerState {
     pub secondary_down: bool,
     pub middle_down: bool,
     pub scroll_delta: Vec2,
+    /// Single-frame click transition.
+    pub primary_clicked: bool,
+    /// Single-frame press-down transition.
+    pub primary_pressed: bool,
+    /// Single-frame release transition.
+    pub primary_released: bool,
+    /// Movement delta during drag.
+    pub drag_delta: Vec2,
+    /// Whether actively dragging.
+    pub is_dragging: bool,
+    /// Whether transition tracking is active (on_button_down/up or step_frame was called).
+    pub transitions_active: bool,
+}
+
+impl PointerState {
+    /// Returns true if a click occurred on this frame.
+    pub fn is_clicked(&self) -> bool {
+        if self.transitions_active {
+            self.primary_clicked || self.primary_released
+        } else {
+            self.primary_down && !self.is_dragging
+        }
+    }
+
+    /// Returns true if primary button is currently held down.
+    pub fn is_down(&self) -> bool {
+        self.primary_down
+    }
+
+    /// Resets transient per-frame flags before processing new frame inputs.
+    pub fn step_frame(&mut self) {
+        self.transitions_active = true;
+        self.primary_clicked = false;
+        self.primary_pressed = false;
+        self.primary_released = false;
+        self.drag_delta = Vec2::ZERO;
+        self.scroll_delta = Vec2::ZERO;
+    }
+
+    /// Handles button press transition.
+    pub fn on_button_down(&mut self, button: PointerButton) {
+        self.transitions_active = true;
+        match button {
+            PointerButton::Primary => {
+                if !self.primary_down {
+                    self.primary_pressed = true;
+                    self.primary_clicked = true;
+                }
+                self.primary_down = true;
+            }
+            PointerButton::Secondary => self.secondary_down = true,
+            PointerButton::Middle => self.middle_down = true,
+        }
+    }
+
+    /// Handles button release transition.
+    pub fn on_button_up(&mut self, button: PointerButton) {
+        self.transitions_active = true;
+        match button {
+            PointerButton::Primary => {
+                if self.primary_down {
+                    self.primary_released = true;
+                }
+                self.primary_down = false;
+                self.is_dragging = false;
+            }
+            PointerButton::Secondary => self.secondary_down = false,
+            PointerButton::Middle => self.middle_down = false,
+        }
+    }
+
+    /// Handles mouse movement and drag detection.
+    pub fn on_move(&mut self, new_pos: Vec2) {
+        let delta = new_pos - self.position;
+        self.position = new_pos;
+        if self.primary_down || self.secondary_down || self.middle_down {
+            self.drag_delta = delta;
+            if delta.length_sq() > 1.0 {
+                self.is_dragging = true;
+            }
+        }
+    }
 }
 
 /// Simple focus ring manager.
@@ -110,12 +192,21 @@ impl FocusManager {
         self.focused_id = Some(id.into());
     }
 
+    pub fn focus_id(&mut self, id: ui_core::ElementId) {
+        self.focused_id = Some(format!("{}", id));
+    }
+
     pub fn clear(&mut self) {
         self.focused_id = None;
     }
 
     pub fn is_focused(&self, id: &str) -> bool {
         self.focused_id.as_deref() == Some(id)
+    }
+
+    pub fn is_element_focused(&self, id: ui_core::ElementId) -> bool {
+        let s = format!("{}", id);
+        self.focused_id.as_deref() == Some(&s)
     }
 
     pub fn focused_id(&self) -> Option<&str> {
@@ -143,4 +234,50 @@ mod tests {
         fm.clear();
         assert!(!fm.is_focused("search_box"));
     }
+
+    #[test]
+    fn pointer_state_click_transitions_fire_only_once_per_press() {
+        let mut ptr = PointerState::default();
+        assert!(!ptr.is_clicked());
+        assert!(!ptr.is_down());
+
+        // Press down
+        ptr.on_button_down(PointerButton::Primary);
+        assert!(ptr.primary_down);
+        assert!(ptr.primary_pressed);
+        assert!(ptr.primary_clicked);
+        assert!(ptr.is_clicked());
+
+        // Next frame while still holding button down
+        ptr.step_frame();
+        assert!(ptr.primary_down); // Still down
+        assert!(!ptr.primary_pressed); // No new press
+        assert!(!ptr.primary_clicked); // No new click!
+        assert!(!ptr.is_clicked()); // Zero repeated triggering on held press!
+
+        // Release button
+        ptr.on_button_up(PointerButton::Primary);
+        assert!(!ptr.primary_down);
+        assert!(ptr.primary_released);
+        assert!(ptr.is_clicked()); // Activated on release
+
+        // Following frame after release
+        ptr.step_frame();
+        assert!(!ptr.primary_down);
+        assert!(!ptr.primary_released);
+        assert!(!ptr.is_clicked());
+    }
+
+    #[test]
+    fn pointer_drag_tracking_computes_delta() {
+        let mut ptr = PointerState::default();
+        ptr.on_move(Vec2::new(10.0, 20.0));
+        assert!(!ptr.is_dragging);
+
+        ptr.on_button_down(PointerButton::Primary);
+        ptr.on_move(Vec2::new(25.0, 20.0));
+        assert!(ptr.is_dragging);
+        assert_eq!(ptr.drag_delta, Vec2::new(15.0, 0.0));
+    }
 }
+

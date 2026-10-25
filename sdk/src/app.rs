@@ -3,7 +3,7 @@
 use ui_core::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ui_render::GpuBackend;
+use ui_render::{CpuBackend, GpuBackend, RenderBackend};
 use ui_platform::{FocusManager, ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::CommandBuffer;
 use ui_themes::ThemePalette;
@@ -222,6 +222,36 @@ impl<A: KathamoApp> HeadlessAppRunner<A> {
         let mut ctx = AppContext::new(width, height, 1.0);
         app.init(&mut ctx);
         Self { app, ctx }
+    }
+
+    /// Deliver a deterministic click without an operating-system mouse.
+    /// Useful for coding agents verifying UI interaction in headless mode.
+    pub fn click_at(&mut self, pos: Vec2, button: PointerButton) -> bool {
+        self.ctx.pointer.on_move(pos);
+        self.ctx.pointer.on_button_down(button);
+        let handled = self.app.handle_mouse_down(pos, button, &mut self.ctx);
+        self.step_frame();
+        self.app.handle_mouse_up(pos, button, &mut self.ctx);
+        self.ctx.pointer.on_button_up(button);
+        self.step_frame();
+        self.ctx.pointer.step_frame();
+        handled
+    }
+
+    /// Render actual UI pixels to an ARGB8 bitmap for deterministic visual inspection.
+    /// Call step_frame() first, or call this after click_at().
+    pub fn capture_pixels(&self) -> Result<Vec<u32>, String> {
+        let (width, height) = self.ctx.physical_size;
+        if width == 0 || height == 0 { return Err("empty viewport".into()); }
+        let mut cpu = CpuBackend::new();
+        cpu.set_scale_factor(self.ctx.scale);
+        for (id, image) in &self.ctx.images {
+            cpu.upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
+        }
+        cpu.begin_frame(width, height, self.ctx.theme.canvas);
+        cpu.submit(&self.ctx.cmd_buf);
+        cpu.end_frame()?;
+        Ok(cpu.pixels().to_vec())
     }
 
     /// Execute a simulated frame, returning the count of emitted draw commands.

@@ -152,6 +152,22 @@ Kathamo supplies the UI only; applications implement actual painting, scene rend
 
 ---
 
+### Visual Designer (included)
+
+```bash
+cargo run -p kathamo --example visual_designer
+```
+
+Build application UI layouts visually using the left-side component palette, canvas, hierarchy and editable property inspector. Choose an **Empty / Unity / Blender / Krita** starter layout, drag to place and reposition components, resize using the bottom-right handle, and edit properties by clicking their values. Scroll to zoom. **Preview** shows the layout without editor panels.
+
+**Save/Open** read and write a versioned `.kui` document. **Export Rust** writes an editable `build_ui()` function using the public `DesignDocument` model. Default files go into `~/KathamoProjects` (or `%USERPROFILE%\\KathamoProjects` on Windows), not the repository. Click the project-path field to change the destination.
+
+Keyboard: **Ctrl+S** save, **Ctrl+O** open, **Ctrl+E** export, **Ctrl+Z/Y** undo/redo, **Delete** remove, **arrow keys** nudge; **Enter/Escape** apply/cancel a property. Developers and agents can use `DesignDocument::add`, `add_child`, `find_mut`, `set_parent`, `serialize`, `deserialize`, and `render` directly.
+
+This initial Designer exports interface layouts and component properties, not a complete painting/3D/video application's business logic or automatically wired event handlers.
+
+---
+
 ## 8. Licenses & Open Source Acknowledgements
 
 - **Kathamo Core**: Licensed under [MIT](LICENSE).

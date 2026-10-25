@@ -60,6 +60,7 @@ pub use crate::layout::{
 pub use crate::app::{
     AppContext, HeadlessAppRunner, KathamoApp,
 };
+pub use crate::native::{run_native, NativeAppRunner};
 
 // 11. Agent Inspection & Verification
 pub use ui_core::{

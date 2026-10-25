@@ -22,7 +22,7 @@ pub use ui_platform::{
 
 // 4. Render & Commands
 pub use ui_render::{
-    BackendKind, CommandBuffer, DrawCommand, RenderBackend, RenderStats,
+    BackendKind, CommandBuffer, DrawCommand, GpuBackend, CpuBackend, RenderBackend, RenderStats,
 };
 
 // 5. Themes & Design Tokens
@@ -41,7 +41,7 @@ pub use crate::editors::{
     HierarchyEditor, InspectorEditor, NodeGraphEditor, TimelineEditor,
 };
 pub use crate::workspace::{
-    Workspace, WorkspaceHost, WorkspacePreset,
+    DetachedPanel, Workspace, WorkspaceHost, WorkspacePreset,
 };
 
 // 8. Creative Components
@@ -58,7 +58,7 @@ pub use crate::layout::{
 
 // 10. Application Lifecycle & Context
 pub use crate::app::{
-    AppContext, HeadlessAppRunner, KathamoApp,
+    AppContext, HeadlessAppRunner, ImageFrame, KathamoApp, WindowRequest,
 };
 pub use crate::native::{run_native, NativeAppRunner};
 

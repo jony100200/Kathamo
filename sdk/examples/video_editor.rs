@@ -94,8 +94,9 @@ impl VideoEditorApp {
             Box::new(AssetBrowserEditor { browser })
         });
 
-        let mut workspace = WorkspaceHost::with_registry(registry);
-        workspace.switch_workspace(3); // VideoEditing preset
+        let workspace = WorkspaceHost::with_preset(
+            registry, "ws_video", "Video Editor", WorkspacePreset::VideoEditing,
+        );
 
         // Application Menu Bar
         let menu_bar = MenuBar::new(vec![

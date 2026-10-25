@@ -58,6 +58,7 @@ struct Dragging {
 /// Visual editing state; the exported application only needs DesignDocument.
 pub struct VisualDesigner {
     pub document: DesignDocument,
+    pub runtime: DesignRuntime,
     pub selected: Option<String>,
     pub save_path: PathBuf,
     pub preview: bool,
@@ -84,6 +85,7 @@ impl VisualDesigner {
             .join("KathamoProjects");
         Self {
             document: DesignDocument::template(DesignTemplate::Unity),
+            runtime: DesignRuntime::new(),
             selected: None,
             save_path: project_folder.join("untitled.kui"),
             preview: false,
@@ -663,8 +665,12 @@ impl KathamoApp for VisualDesigner {
                 }
             }
         }
-        self.document.render(buf, g.origin, g.scale,
-            if self.preview { None } else { self.selected.as_deref() }, &t);
+        if self.preview {
+            // Live preview uses the same widgets and input handling as consumer applications.
+            self.runtime.render(&self.document, buf, g.page, &ctx.pointer, &t);
+        } else {
+            self.document.render(buf, g.origin, g.scale, self.selected.as_deref(), &t);
+        }
         if let Some(kind) = self.palette_drag {
             if g.page.contains(ctx.pointer.position) {
                 let size = kind.default_size() * g.scale;
@@ -690,23 +696,47 @@ impl KathamoApp for VisualDesigner {
 
     fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton,
                          ctx: &mut AppContext) -> bool {
+        if self.preview {
+            for i in 0..TOP_ACTIONS.len() {
+                if Self::top_button_rect(i).contains(pos) {
+                    self.toolbar_action(i);
+                    return true;
+                }
+            }
+            return self.runtime.pointer_down(&self.document, pos, button, &ctx.pointer);
+        }
         if button != PointerButton::Primary { return false; }
         self.handle_primary_down(pos, ctx.bounds())
     }
 
     fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2,
                          ctx: &mut AppContext) -> bool {
+        if self.preview {
+            self.runtime.pointer_move(pos, delta);
+            return true;
+        }
         if !ctx.pointer.primary_down { return false; }
         self.handle_drag(pos, delta, ctx.bounds())
     }
 
     fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton,
                        ctx: &mut AppContext) -> bool {
+        if self.preview {
+            let consumed = self.runtime.pointer_up(&self.document, pos, button);
+            let events = self.runtime.take_events();
+            if let Some(event) = events.last() {
+                self.status = format!("UI event: {} ({:?})", event.action_id, event.kind);
+            }
+            return consumed;
+        }
         if button != PointerButton::Primary { return false; }
         self.handle_release(pos, ctx.bounds())
     }
 
     fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
+        if self.preview && self.runtime.scroll(&self.document, delta, pos) {
+            return true;
+        }
         if self.canvas_geometry(ctx.bounds()).frame.contains(pos) {
             self.zoom = (self.zoom * if delta.y > 0.0 { 1.08 } else { 0.92 }).clamp(0.35, 3.0);
             true
@@ -715,10 +745,24 @@ impl KathamoApp for VisualDesigner {
 
     fn handle_key_down(&mut self, key: Key, modifiers: Modifiers,
                        _ctx: &mut AppContext) -> bool {
+        if self.preview {
+            if key == Key::Escape {
+                self.preview = false;
+                return true;
+            }
+            if self.runtime.key_down(&self.document, key.clone(), modifiers) {
+                let events = self.runtime.take_events();
+                if let Some(event) = events.last() {
+                    self.status = format!("UI event: {} ({:?})", event.action_id, event.kind);
+                }
+                return true;
+            }
+        }
         self.handle_shortcut(key, modifiers)
     }
 
     fn handle_text_input(&mut self, text: &str, _ctx: &mut AppContext) -> bool {
+        if self.preview { return self.runtime.text_input(&self.document, text); }
         if let Some((_, value)) = &mut self.editing {
             value.push_str(text);
             true

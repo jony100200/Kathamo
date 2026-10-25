@@ -352,6 +352,20 @@ cargo run --example video_editor -p kathamo -- --native
 cargo run --example desktop_app -p kathamo -- --native
 ```
 
+### Visual Designer document (shared with the native Designer)
+
+```rust
+let mut ui = DesignDocument::template(DesignTemplate::Unity);
+let id = ui.add(DesignKind::Button, "Run",
+    Rect::from_min_size(Vec2::new(300.0, 100.0), Vec2::new(120.0, 30.0)));
+ui.find_mut(&id).unwrap().label = "Build".into();
+ui.save("interface.kui").unwrap();
+let reloaded = DesignDocument::load("interface.kui").unwrap();
+let rust_source = reloaded.export_rust();
+```
+
+Run `cargo run -p kathamo --example visual_designer` to edit the same `.kui` file visually. Agents should edit the document by stable component IDs rather than generating pixel-position-only screenshots. The Designer exports UI code; consuming applications connect actual behavior.
+
 ### Agent Inspection & Verification (`InterfaceInspector`)
 Verify UI layouts, widget bounds, and element states deterministically:
 ```rust

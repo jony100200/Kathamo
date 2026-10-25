@@ -15,12 +15,13 @@ use crate::text::{self, GlyphCache, GlyphKey, Mask};
 use crate::vector::{IconKey, IconRasterCache};
 use std::time::Instant;
 use std::collections::HashMap;
+use std::sync::Arc;
 use ui_core::{Color, CornerRadius, Rect, Vec2};
 
 struct CpuImage {
     width: u32,
     height: u32,
-    rgba: Vec<u8>,
+    rgba: Arc<[u8]>, 
 }
 
 pub struct CpuBackend {
@@ -59,7 +60,7 @@ impl CpuBackend {
             (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(4)) != Some(rgba.len()) {
             return Err("RGBA8 image length must be width * height * 4".into());
         }
-        self.images.insert(id, CpuImage { width, height, rgba: rgba.to_vec() });
+        self.images.insert(id, CpuImage { width, height, rgba: Arc::from(rgba) });
         Ok(())
     }
 
@@ -78,6 +79,7 @@ impl CpuBackend {
             );
             return;
         };
+        let (image_width, image_height, rgba) = (image.width, image.height, image.rgba.clone());
         let clip = self.clip();
         let scale = self.scale;
         let x0 = (rect.min.x * scale).floor() as i32;
@@ -94,10 +96,10 @@ impl CpuBackend {
             for x in left..right {
                 let u = (uv.min.x + (x as f32 - x0 as f32 + 0.5) / w * uv.width()).clamp(0.0, 1.0);
                 let v = (uv.min.y + (y as f32 - y0 as f32 + 0.5) / h * uv.height()).clamp(0.0, 1.0);
-                let ix = ((u * image.width as f32) as u32).min(image.width - 1);
-                let iy = ((v * image.height as f32) as u32).min(image.height - 1);
-                let at = ((iy * image.width + ix) * 4) as usize;
-                let (r,g,b,a) = (image.rgba[at],image.rgba[at+1],image.rgba[at+2],image.rgba[at+3]);
+                let ix = ((u * image_width as f32) as u32).min(image_width - 1);
+                let iy = ((v * image_height as f32) as u32).min(image_height - 1);
+                let at = ((iy * image_width + ix) * 4) as usize;
+                let (r,g,b,a) = (rgba[at],rgba[at+1],rgba[at+2],rgba[at+3]);
                 let color = Color::rgba(
                     (r as u16 * tint.r as u16 / 255) as u8,
                     (g as u16 * tint.g as u16 / 255) as u8,

@@ -22,7 +22,7 @@ impl Creative2dEditorApp {
         let mut registry = EditorRegistry::new();
 
         // 1. Customized 2D Canvas Editor
-        registry.register_factory("canvas", "2D Canvas", "Viewports", || {
+        registry.register_factory("canvas_2d", "2D Canvas", "Viewports", || {
             Box::new(CanvasEditor::new_2d())
         });
 

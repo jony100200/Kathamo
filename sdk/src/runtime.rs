@@ -15,7 +15,7 @@ use ui_widgets::controls::{render_button, ButtonStyle};
 use ui_widgets::input::{render_text_input, render_toggle};
 
 use crate::components::{AssetBrowser, ConsoleView};
-use crate::designer::{DesignDocument, DesignElement, DesignKind};
+use crate::designer::{DesignDocument, DesignElement, DesignKind, DesignPlacement};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiValue {
@@ -403,7 +403,28 @@ impl DesignRuntime {
         let mut pos = parent.min + Vec2::new(
             authored.min.x * self.root_scale.x, authored.min.y * self.root_scale.y);
         let mut size = scaled;
-        match self.responsive.get(id).copied().unwrap_or(ResponsiveRule::Absolute) {
+        let placement = self.responsive.get(id).copied()
+            .or_else(|| doc.layout_rules.get(id).map(|p| match p {
+                DesignPlacement::Absolute => ResponsiveRule::Absolute,
+                DesignPlacement::Fill => ResponsiveRule::Fill { inset: 0.0 },
+                other => {
+                    let (left, right, top, bottom) = match other {
+                        DesignPlacement::StretchX => (true, true, true, false),
+                        DesignPlacement::StretchY => (true, false, true, true),
+                        DesignPlacement::StretchBoth => (true, true, true, true),
+                        DesignPlacement::Right => (false, true, true, false),
+                        DesignPlacement::Bottom => (true, false, false, true),
+                        DesignPlacement::BottomRight => (false, true, false, true),
+                        _ => (true, false, true, false),
+                    };
+                    ResponsiveRule::Anchored {
+                        left, right, top, bottom,
+                        min_size: Vec2::splat(1.0), max_size: None,
+                    }
+                }
+            }))
+            .unwrap_or(ResponsiveRule::Absolute);
+        match placement {
             ResponsiveRule::Absolute => {}
             ResponsiveRule::Fill { inset } => {
                 let inset = inset.max(0.0);

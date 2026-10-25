@@ -1,9 +1,20 @@
 //! Standard Application Lifecycle, Context, and Runner for Kathamo SDK.
 
 use ui_core::*;
+use std::collections::HashMap;
+use std::sync::Arc;
+use ui_render::GpuBackend;
 use ui_platform::{FocusManager, ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::CommandBuffer;
 use ui_themes::ThemePalette;
+
+/// An RGBA8 frame supplied by the consuming application (4 bytes per pixel).
+pub struct ImageFrame {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Arc<[u8]>,
+    pub version: u64,
+}
 
 /// Unified runtime context provided to applications on each frame.
 pub struct AppContext {
@@ -15,6 +26,8 @@ pub struct AppContext {
     pub theme: ThemePalette,
     pub cmd_buf: CommandBuffer,
     pub frame_count: u64,
+    pub images: HashMap<u64, ImageFrame>,
+    next_image_version: u64,
 }
 
 impl Default for AppContext {
@@ -36,7 +49,26 @@ impl AppContext {
             theme: ThemePalette::dark(),
             cmd_buf: CommandBuffer::new(),
             frame_count: 0,
+            images: HashMap::new(),
+            next_image_version: 0,
         }
+    }
+
+    /// Register or update an RGBA8 image for use with DrawCommand::Image.
+    /// CPU-safe-mode and GPU rendering both consume this same image.
+    pub fn set_image_rgba8(&mut self, id: u64, width: u32, height: u32, rgba: impl Into<Arc<[u8]>>) -> Result<(), String> {
+        let rgba = rgba.into();
+        if width == 0 || height == 0 ||
+            (width as usize).checked_mul(height as usize).and_then(|v| v.checked_mul(4)) != Some(rgba.len()) {
+            return Err("invalid RGBA8 image dimensions or byte count".into());
+        }
+        self.next_image_version = self.next_image_version.wrapping_add(1);
+        self.images.insert(id, ImageFrame { width, height, rgba, version: self.next_image_version });
+        Ok(())
+    }
+
+    pub fn remove_image(&mut self, id: u64) {
+        self.images.remove(&id);
     }
 
     /// Resize context viewport on OS window resize.
@@ -107,6 +139,10 @@ pub trait KathamoApp: 'static {
     fn handle_ime(&mut self, _event: ImeEvent, _ctx: &mut AppContext) -> bool {
         false
     }
+
+    /// Optional zero-copy GPU viewport registration and rendering hook.
+    /// `GpuBackend::register_external_view` accepts same-device wgpu texture views.
+    fn prepare_gpu(&mut self, _gpu: &mut GpuBackend) {}
 
     /// Enable this for animation or other actively updating views.
     fn wants_continuous_redraw(&self) -> bool {

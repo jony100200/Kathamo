@@ -44,6 +44,8 @@ pub use crate::workspace::{
     DetachedPanel, Workspace, WorkspaceHost, WorkspacePreset,
 };
 
+pub use crate::designer::{DesignDocument, DesignElement, DesignKind, DesignTemplate};
+
 // 8. Creative Components
 pub use crate::components::{
     AssetBrowser, AssetItem, AssetViewMode, ConsoleLogEntry, ConsoleLogLevel, ConsoleView,

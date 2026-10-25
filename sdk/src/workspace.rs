@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use ui_core::*;
-use ui_platform::{PointerButton, PointerState};
+use ui_platform::{ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::ThemePalette;
 use ui_widgets::DockTreeView;
@@ -140,6 +140,7 @@ pub struct WorkspaceHost {
     pub workspaces: Vec<Workspace>,
     pub active_workspace_idx: usize,
     pub dock_view: DockTreeView,
+    pub focused_panel_id: Option<String>,
 }
 
 impl Default for WorkspaceHost {
@@ -159,6 +160,7 @@ impl WorkspaceHost {
             workspaces: Vec::new(),
             active_workspace_idx: 0,
             dock_view: DockTreeView::new(),
+            focused_panel_id: None,
         };
 
         // Initialize standard preset workspaces
@@ -183,6 +185,7 @@ impl WorkspaceHost {
             workspaces: Vec::new(),
             active_workspace_idx: 0,
             dock_view: DockTreeView::new(),
+            focused_panel_id: None,
         };
         host.add_preset_workspace(id, name, preset);
         host
@@ -195,6 +198,7 @@ impl WorkspaceHost {
             workspaces: Vec::new(),
             active_workspace_idx: 0,
             dock_view: DockTreeView::new(),
+            focused_panel_id: None,
         };
         host.populate_workspace_editors(&mut workspace);
         host.workspaces.push(workspace);
@@ -337,6 +341,7 @@ impl WorkspaceHost {
         self.workspaces = workspaces;
         self.active_workspace_idx = active_index;
         self.dock_view = DockTreeView::new();
+        self.focused_panel_id = None;
         Ok(())
     }
 
@@ -363,6 +368,25 @@ impl WorkspaceHost {
         self.ensure_editors_instantiated();
         let ws = &mut self.workspaces[self.active_workspace_idx];
         let layout = ws.dock_tree.compute_layout(bounds);
+
+        // Focus the active pane or the clicked tab before delegating input.
+        if button == PointerButton::Primary {
+            for leaf in &layout.leaves {
+                if leaf.bounds.contains(pos) {
+                    if leaf.header_rect.contains(pos) {
+                        let tab_index = ((pos.x - leaf.header_rect.min.x - 8.0) / 114.0).floor() as isize;
+                        if tab_index >= 0 {
+                            if let Some(tab) = leaf.tabs.get(tab_index as usize) {
+                                self.focused_panel_id = Some(tab.id.clone());
+                            }
+                        }
+                    } else if let Some(panel) = leaf.tabs.get(leaf.active_tab) {
+                        self.focused_panel_id = Some(panel.id.clone());
+                    }
+                    break;
+                }
+            }
+        }
 
         // 1. Check if hit dock splitter or tab header
         if self.dock_view.handle_mouse_down(pos, button, &layout, &mut ws.dock_tree) {
@@ -450,6 +474,62 @@ impl WorkspaceHost {
         false
     }
 
+    /// Traverse pane focus in a stable order; Tab/Shift+Tab switches the active pane.
+    pub fn handle_key_down(&mut self, key: Key, modifiers: Modifiers) -> bool {
+        if key == Key::Escape && (self.dock_view.dragging_tab.is_some() || self.dock_view.active_splitter_drag.is_some()) {
+            self.dock_view.dragging_tab = None;
+            self.dock_view.active_splitter_drag = None;
+            return true;
+        }
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        if key == Key::Tab && !modifiers.alt && !modifiers.command {
+            let mut ids = Vec::new();
+            collect_node_panels(&ws.dock_tree.root, &mut ids);
+            if ids.is_empty() { return false; }
+            let index = self.focused_panel_id.as_ref()
+                .and_then(|focus| ids.iter().position(|p| &p.id == focus));
+            let next = match index {
+                Some(i) if modifiers.shift => (i + ids.len() - 1) % ids.len(),
+                Some(i) => (i + 1) % ids.len(),
+                None if modifiers.shift => ids.len() - 1,
+                None => 0,
+            };
+            let id = ids[next].id.clone();
+            Self::activate_tab_for_panel(&mut ws.dock_tree.root, &id);
+            self.focused_panel_id = Some(id);
+            return true;
+        }
+        self.focused_panel_id.as_ref()
+            .and_then(|id| ws.editors.get_mut(id))
+            .is_some_and(|editor| editor.handle_key_down(key, modifiers))
+    }
+
+    fn activate_tab_for_panel(node: &mut DockNode, panel_id: &str) -> bool {
+        match node {
+            DockNode::Leaf { tabs, active_tab, .. } => {
+                if let Some(index) = tabs.iter().position(|p| p.id == panel_id) {
+                    *active_tab = index;
+                    true
+                } else { false }
+            }
+            DockNode::Split { first, second, .. } =>
+                Self::activate_tab_for_panel(first, panel_id) ||
+                Self::activate_tab_for_panel(second, panel_id),
+        }
+    }
+
+    pub fn handle_text_input(&mut self, text: &str) -> bool {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        self.focused_panel_id.as_ref().and_then(|id| ws.editors.get_mut(id))
+            .is_some_and(|editor| editor.handle_text_input(text))
+    }
+
+    pub fn handle_ime(&mut self, event: ImeEvent) -> bool {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        self.focused_panel_id.as_ref().and_then(|id| ws.editors.get_mut(id))
+            .is_some_and(|editor| editor.handle_ime(event))
+    }
+
     // -------------------------------------------------------------------------
     // RENDERING
     // -------------------------------------------------------------------------
@@ -475,6 +555,19 @@ impl WorkspaceHost {
                     editor.render(cmd_buf, leaf.content_rect, ptr, palette);
                     cmd_buf.push(DrawCommand::ClipPop);
                 }
+            }
+        }
+
+        // The focused editor has a visible focus ring.
+        if let Some(focused) = &self.focused_panel_id {
+            if let Some(leaf) = layout.leaves.iter().find(|l|
+                l.tabs.get(l.active_tab).is_some_and(|tab| &tab.id == focused)) {
+                cmd_buf.push(DrawCommand::Rect {
+                    rect: leaf.content_rect,
+                    fill: Color::TRANSPARENT,
+                    radius: CornerRadius::ZERO,
+                    stroke: Stroke::new(1.0, palette.accent),
+                });
             }
         }
 

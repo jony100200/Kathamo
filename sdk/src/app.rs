@@ -304,7 +304,6 @@ impl<A: KathamoApp> HeadlessAppRunner<A> {
         self.app.handle_mouse_up(pos, button, &mut self.ctx);
         self.ctx.pointer.on_button_up(button);
         self.step_frame();
-        self.ctx.pointer.step_frame();
         handled
     }
 
@@ -331,6 +330,7 @@ impl<A: KathamoApp> HeadlessAppRunner<A> {
         self.ctx.cmd_buf.clear();
         self.ctx.frame_count += 1;
         self.app.update(&mut self.ctx);
+        self.ctx.pointer.step_frame();
         self.ctx.cmd_buf.commands().len()
     }
 }
@@ -341,6 +341,7 @@ mod tests {
 
     struct TestApp {
         rendered_frames: u64,
+        pointer_clicks: u64,
     }
 
     impl KathamoApp for TestApp {
@@ -354,6 +355,7 @@ mod tests {
 
         fn update(&mut self, ctx: &mut AppContext) {
             self.rendered_frames += 1;
+            self.pointer_clicks += u64::from(ctx.pointer.primary_clicked);
             ctx.cmd_buf.push(ui_render::DrawCommand::Rect {
                 rect: Rect::from_min_size(Vec2::ZERO, Vec2::new(100.0, 100.0)),
                 fill: Color::WHITE,
@@ -365,7 +367,10 @@ mod tests {
 
     #[test]
     fn test_headless_app_runner_executes_lifecycle() {
-        let app = TestApp { rendered_frames: 0 };
+        let app = TestApp {
+            rendered_frames: 0,
+            pointer_clicks: 0,
+        };
         let mut runner = HeadlessAppRunner::new(app);
         assert_eq!(runner.ctx.physical_size, (1280, 720));
         assert_eq!(runner.ctx.viewport.size(), Vec2::new(1280.0, 720.0));
@@ -374,5 +379,22 @@ mod tests {
         assert_eq!(command_count, 1);
         assert_eq!(runner.app.rendered_frames, 1);
         assert_eq!(runner.ctx.frame_count, 1);
+    }
+
+    #[test]
+    fn headless_pointer_edges_expire_after_each_frame() {
+        let mut runner = HeadlessAppRunner::new(TestApp {
+            rendered_frames: 0,
+            pointer_clicks: 0,
+        });
+        runner.click_at(Vec2::new(10.0, 10.0), PointerButton::Primary);
+        runner.step_frame();
+        assert_eq!(runner.app.pointer_clicks, 1);
+        assert!(!runner.ctx.pointer.primary_down);
+        runner.ctx.pointer.on_button_down(PointerButton::Primary);
+        runner.step_frame();
+        runner.step_frame();
+        assert_eq!(runner.app.pointer_clicks, 2);
+        assert!(runner.ctx.pointer.primary_down);
     }
 }

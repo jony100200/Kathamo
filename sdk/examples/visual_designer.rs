@@ -16,13 +16,14 @@ const TOP_ACTIONS: [&str; 11] = [
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum EditField { Name, Kind, Parent, Visible, X, Y, Width, Height, Background, Foreground, StateBinding, ActionBinding, Path }
+enum EditField { Name, Kind, Parent, Visible, X, Y, Width, Height, Background, Foreground, Placement, StateBinding, ActionBinding, Path }
 
 impl EditField {
-    const ALL: [Self; 12] = [
+    const ALL: [Self; 13] = [
         Self::Name, Self::Kind, Self::Parent, Self::Visible,
         Self::X, Self::Y, Self::Width, Self::Height,
-        Self::Background, Self::Foreground, Self::StateBinding, Self::ActionBinding,
+        Self::Background, Self::Foreground, Self::Placement,
+        Self::StateBinding, Self::ActionBinding,
     ];
     fn label(self) -> &'static str {
         match self {
@@ -38,6 +39,7 @@ impl EditField {
             Self::Foreground => "Text colour",
             Self::StateBinding => "State key",
             Self::ActionBinding => "Action ID",
+            Self::Placement => "Layout",
             Self::Path => "Project file",
         }
     }
@@ -263,6 +265,8 @@ impl VisualDesigner {
             EditField::Foreground => color_text(node.foreground),
             EditField::StateBinding => self.document.state_bindings.get(&node.id).cloned().unwrap_or_default(),
             EditField::ActionBinding => self.document.action_bindings.get(&node.id).cloned().unwrap_or_default(),
+            EditField::Placement => self.document.layout_rules.get(&node.id).copied()
+                .unwrap_or_default().name().into(),
             EditField::Path => unreachable!(),
         }
     }
@@ -282,6 +286,17 @@ impl VisualDesigner {
             return;
         }
         let Some(id) = self.selected.clone() else { return; };
+        if field == EditField::Placement {
+            match DesignPlacement::parse(value.trim()) {
+                Some(mode) => {
+                    self.note_change();
+                    self.document.layout_rules.insert(id, mode);
+                    self.status = format!("Layout: {}", mode.name());
+                }
+                None => self.status = "Layout: Absolute / Fill / StretchX / StretchY / StretchBoth / Right / Bottom / BottomRight".into(),
+            }
+            return;
+        }
         if matches!(field, EditField::StateBinding | EditField::ActionBinding) {
             self.note_change();
             let table = if field == EditField::StateBinding {
@@ -341,7 +356,7 @@ impl VisualDesigner {
             match field {
                 EditField::Name => node.label = value,
                 EditField::Kind => node.kind = new_kind.unwrap(),
-                EditField::Parent | EditField::StateBinding | EditField::ActionBinding => unreachable!(),
+                EditField::Parent | EditField::Placement | EditField::StateBinding | EditField::ActionBinding => unreachable!(),
                 EditField::Visible => node.visible = new_visible.unwrap(),
                 EditField::X => node.bounds = Rect::from_min_size(
                     Vec2::new(numeric.unwrap(), node.bounds.min.y), node.bounds.size()),
@@ -645,9 +660,9 @@ impl KathamoApp for VisualDesigner {
                 label(buf, "Select a component to edit", Vec2::new(w - 279.0, 205.0),
                     12.0, t.text_muted, false);
             }
-            label(buf, "Click a property and type to edit", Vec2::new(w - 279.0, 735.0),
+            label(buf, "Click a property and type to edit", Vec2::new(w - 279.0, 782.0),
                 10.0, t.text_muted, false);
-            label(buf, "Enter: apply  |  Esc: cancel", Vec2::new(w - 279.0, 753.0),
+            label(buf, "Enter: apply  |  Esc: cancel", Vec2::new(w - 279.0, 800.0),
                 10.0, t.text_muted, false);
         }
 

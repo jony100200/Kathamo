@@ -51,6 +51,13 @@ struct Batch {
     scissor: [u32; 4],
     start: u32,
     end: u32,
+    texture_id: Option<u64>,
+}
+
+struct GpuImage {
+    _texture: Option<wgpu::Texture>,
+    _view: wgpu::TextureView,
+    bind_group: wgpu::BindGroup,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -116,6 +123,11 @@ struct DeviceState {
     queue: wgpu::Queue,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
+    image_layout: wgpu::BindGroupLayout,
+    atlas_view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
+    image_sampler: wgpu::Sampler,
+    _dummy_image: wgpu::Texture,
     uniform_buf: wgpu::Buffer,
     atlas_tex: wgpu::Texture,
     vbuf: wgpu::Buffer,
@@ -140,6 +152,7 @@ pub struct GpuBackend {
     indices: Vec<u32>,
     batches: Vec<Batch>,
     clip_stack: Vec<Rect>,
+    images: HashMap<u64, GpuImage>,
 
     packer: ShelfPacker,
     slots: HashMap<AtlasKey, Option<Slot>>,
@@ -261,6 +274,22 @@ impl DeviceState {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
 
@@ -294,6 +323,34 @@ impl DeviceState {
             ..Default::default()
         });
 
+        let image_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("kathamo-image-linear-sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        let dummy_image = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("kathamo-image-placeholder"),
+            size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &dummy_image, mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &[255, 255, 255, 255],
+            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+            wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+        );
+        let dummy_view = dummy_image.create_view(&wgpu::TextureViewDescriptor::default());
+
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("kolpona-ui-bg"),
             layout: &bgl,
@@ -309,6 +366,14 @@ impl DeviceState {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&dummy_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&image_sampler),
                 },
             ],
         });
@@ -362,6 +427,11 @@ impl DeviceState {
             queue,
             pipeline,
             bind_group,
+            image_layout: bgl,
+            atlas_view,
+            sampler,
+            image_sampler,
+            _dummy_image: dummy_image,
             uniform_buf,
             atlas_tex,
             vbuf,
@@ -590,6 +660,7 @@ impl GpuBackend {
         if let Some(last) = self.batches.last_mut() {
             if last.end == last.start {
                 last.scissor = scissor;
+                last.texture_id = None;
                 return;
             }
         }
@@ -597,7 +668,15 @@ impl GpuBackend {
             scissor,
             start,
             end: start,
+            texture_id: None,
         });
+    }
+
+    fn start_image_batch(&mut self, texture_id: u64) {
+        self.start_batch();
+        if let Some(batch) = self.batches.last_mut() {
+            batch.texture_id = Some(texture_id);
+        }
     }
 
     fn push_quad(&mut self, corners: [Vec2; 4], template: Vertex, uvs: Option<[[f32; 2]; 4]>) {
@@ -666,7 +745,7 @@ impl GpuBackend {
             radii: [0.0; 4],
             color: color_f32(tint),
             color2: [0.0; 4],
-            extra: [0.0, 0.0],
+            extra: [0.0, 3.0],
         };
         self.push_quad(
             [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)],
@@ -879,10 +958,18 @@ impl GpuBackend {
                 } => self.tess_icon(id, svg, *rect, *color),
                 DrawCommand::Image {
                     rect,
-                    texture_id: _,
+                    texture_id,
                     uv_rect,
                     tint,
-                } => self.tess_image(*rect, *uv_rect, *tint),
+                } => {
+                    if self.images.contains_key(texture_id) {
+                        self.start_image_batch(*texture_id);
+                        self.tess_image(*rect, *uv_rect, *tint);
+                        self.start_batch();
+                    } else {
+                        self.tess_rect(*rect, *tint, CornerRadius::ZERO, Stroke::NONE);
+                    }
+                },
                 DrawCommand::ClipPush { rect } => {
                     let r = match self.clip_stack.last() {
                         Some(p) => Rect::from_min_max(
@@ -990,6 +1077,15 @@ impl GpuBackend {
                 continue;
             }
             pass.set_scissor_rect(b.scissor[0], b.scissor[1], b.scissor[2], b.scissor[3]);
+            if let Some(id) = b.texture_id {
+                if let Some(image) = self.images.get(&id) {
+                    pass.set_bind_group(0, &image.bind_group, &[]);
+                } else {
+                    pass.set_bind_group(0, &self.dev.bind_group, &[]);
+                }
+            } else {
+                pass.set_bind_group(0, &self.dev.bind_group, &[]);
+            }
             pass.draw_indexed(b.start..b.end, 0, 0..1);
         }
     }
@@ -1202,6 +1298,7 @@ impl RenderBackend for GpuBackend {
         self.dev = dev;
         self.target = Some(target);
         self.lost = lost;
+        self.images.clear(); // Texture views belong to the old device; register again after recovery.
         self.reset_atlas();
         Ok(())
     }

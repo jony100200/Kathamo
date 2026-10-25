@@ -382,21 +382,23 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
         if self.window.is_some() {
             return;
         }
+        eprintln!("[Kathamo Native] resumed() event triggered, creating OS window...");
         let (width, height) = self.app.default_size();
         let attributes = WindowAttributes::default()
             .with_title(self.app.title())
             .with_inner_size(LogicalSize::new(width as f64, height as f64))
             .with_min_inner_size(LogicalSize::new(480.0, 320.0))
-            .with_visible(false);
+            .with_visible(true);
 
         match event_loop.create_window(attributes) {
             Ok(window) => {
+                eprintln!("[Kathamo Native] OS window created: {:?}", window.id());
                 let window = Arc::new(window);
                 self.update_size(&window);
                 window.set_ime_allowed(true);
                 match SoftwarePresenter::new(window.clone()) {
                     Ok(presenter) => self.presenter = Some(presenter),
-                    Err(err) => eprintln!("Kathamo software presenter unavailable: {err}"),
+                    Err(err) => eprintln!("[Kathamo Native] software presenter unavailable: {err}"),
                 }
                 match GpuBackend::new_for_window(
                     window.clone(),
@@ -406,14 +408,16 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     Ok(mut gpu) => {
                         gpu.set_scale_factor(self.ctx.scale);
                         self.gpu = Some(gpu);
+                        eprintln!("[Kathamo Native] GPU backend initialized.");
                     }
-                    Err(err) => eprintln!("Kathamo GPU unavailable, using CPU: {err}"),
+                    Err(err) => eprintln!("[Kathamo Native] GPU unavailable, using CPU: {err}"),
                 }
                 self.window = Some(window.clone());
                 window.request_redraw();
+                eprintln!("[Kathamo Native] Initial redraw requested.");
             }
             Err(err) => {
-                eprintln!("Kathamo could not create a window: {err}");
+                eprintln!("[Kathamo Native] could not create window: {err}");
                 event_loop.exit();
             }
         }
@@ -515,6 +519,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                 }
             }
             WindowEvent::RedrawRequested => {
+                eprintln!("[Kathamo Native] RedrawRequested received, presenting frame...");
                 match self.present() {
                     Ok(()) => {
                         if !self.revealed
@@ -578,7 +583,7 @@ impl SecondaryWindow {
                     WindowAttributes::default()
                         .with_title(title)
                         .with_inner_size(LogicalSize::new(width as f64, height as f64))
-                        .with_visible(false),
+                        .with_visible(true),
                 )
                 .map_err(|e| e.to_string())?,
         );

@@ -2045,6 +2045,10 @@ impl KathamoApp for KathamoForgeApp {
         }
         false
     }
+
+    fn wants_continuous_redraw(&self) -> bool {
+        self.sim_state == SimulationState::Playing
+    }
 }
 
 // =============================================================================

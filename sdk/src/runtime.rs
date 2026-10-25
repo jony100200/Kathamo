@@ -216,6 +216,7 @@ pub struct DesignRuntime {
     // Logical document-sized layout plus optional rule overrides.
     computed: HashMap<String, Rect>,
     bounds: Rect,
+    root_scale: Vec2,
 }
 
 impl Default for DesignRuntime {
@@ -231,6 +232,7 @@ impl DesignRuntime {
             text_inputs: HashMap::new(), pressed: None, events: Vec::new(),
             computed: HashMap::new(),
             bounds: Rect::from_min_size(Vec2::ZERO, Vec2::new(1200.0, 760.0)),
+            root_scale: Vec2::new(1.0, 1.0),
         }
     }
 
@@ -304,6 +306,8 @@ impl DesignRuntime {
     /// preserve parent-relative positioning. The root scales to its assigned window.
     pub fn relayout(&mut self, doc: &DesignDocument, bounds: Rect) {
         self.bounds = bounds;
+        self.root_scale = Vec2::new(bounds.width() / doc.width.max(1.0),
+                                    bounds.height() / doc.height.max(1.0));
         self.computed.clear();
         // Parent ordering is not required for loading, so resolve recursively.
         for node in &doc.elements {
@@ -322,27 +326,33 @@ impl DesignRuntime {
             doc.find(parent_id)?.bounds.size()
         } else { Vec2::new(doc.width, doc.height) };
         let authored = node.bounds;
-        let size_delta = parent.size() - authored_parent;
-        let mut pos = parent.min + authored.min;
-        let mut size = authored.size();
+        let scaled = Vec2::new(authored.width() * self.root_scale.x,
+                               authored.height() * self.root_scale.y);
+        let parent_authored_size = Vec2::new(
+            authored_parent.x * self.root_scale.x, authored_parent.y * self.root_scale.y);
+        let size_delta = parent.size() - parent_authored_size;
+        let mut pos = parent.min + Vec2::new(
+            authored.min.x * self.root_scale.x, authored.min.y * self.root_scale.y);
+        let mut size = scaled;
         match self.responsive.get(id).copied().unwrap_or(ResponsiveRule::Absolute) {
             ResponsiveRule::Absolute => {}
             ResponsiveRule::Fill { inset } => {
                 let inset = inset.max(0.0);
-                pos = parent.min + Vec2::splat(inset);
-                size = Vec2::new((parent.width() - inset * 2.0).max(1.0),
-                                 (parent.height() - inset * 2.0).max(1.0));
+                let scaled = Vec2::new(inset * self.root_scale.x, inset * self.root_scale.y);
+                pos = parent.min + scaled;
+                size = Vec2::new((parent.width() - scaled.x * 2.0).max(1.0),
+                                 (parent.height() - scaled.y * 2.0).max(1.0));
             }
             ResponsiveRule::Anchored { left, right, top, bottom, min_size, max_size } => {
                 if left && right { size.x += size_delta.x; }
                 else if right { pos.x += size_delta.x; }
                 if top && bottom { size.y += size_delta.y; }
                 else if bottom { pos.y += size_delta.y; }
-                size.x = size.x.max(min_size.x).max(1.0);
-                size.y = size.y.max(min_size.y).max(1.0);
+                size.x = size.x.max(min_size.x * self.root_scale.x).max(1.0);
+                size.y = size.y.max(min_size.y * self.root_scale.y).max(1.0);
                 if let Some(max) = max_size {
-                    size.x = size.x.min(max.x.max(min_size.x));
-                    size.y = size.y.min(max.y.max(min_size.y));
+                    size.x = size.x.min(max.x.max(min_size.x) * self.root_scale.x);
+                    size.y = size.y.min(max.y.max(min_size.y) * self.root_scale.y);
                 }
             }
         }
@@ -588,7 +598,7 @@ mod tests {
             min_size: Vec2::new(120.0, 30.0), max_size: None,
         });
         rt.relayout(&doc, rect(0.0, 0.0, 1000.0, 600.0));
-        assert_eq!(rt.component_bounds(&id).unwrap().width(), 600.0);
+        assert_eq!(rt.component_bounds(&id).unwrap().width(), 500.0);
         rt.focused = Some(id.clone());
         assert!(rt.text_input(&doc, "বাংলা hello"));
         assert_eq!(rt.get(&id), Some(&UiValue::Text("বাংলা hello".into())));

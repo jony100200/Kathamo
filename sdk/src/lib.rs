@@ -35,6 +35,7 @@ pub mod app;
 pub mod components;
 pub mod designer;
 pub mod editors;
+pub mod graph_document;
 pub mod inspect;
 pub mod layout;
 pub mod native;

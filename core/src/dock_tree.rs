@@ -16,9 +16,12 @@ pub enum SplitAxis {
 /// A panel housed within a tabbed dock leaf.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DockTabPanel {
+    /// Unique pane instance ID within a workspace.
     pub id: String,
     pub title: String,
     pub is_closable: bool,
+    /// Registered editor factory ID. None uses the pane ID for backward compatibility.
+    pub factory_id: Option<String>,
 }
 
 impl DockTabPanel {
@@ -27,7 +30,14 @@ impl DockTabPanel {
             id: id.into(),
             title: title.into(),
             is_closable: true,
+            factory_id: None,
         }
+    }
+
+    /// Open another independent pane using an already registered editor type.
+    pub fn with_factory(mut self, factory_id: impl Into<String>) -> Self {
+        self.factory_id = Some(factory_id.into());
+        self
     }
 
     pub fn non_closable(mut self) -> Self {

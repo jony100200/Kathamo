@@ -691,4 +691,17 @@ mod tests {
         assert!(doc.remove(&a));
         assert!(doc.elements.is_empty());
     }
+    #[test]
+    fn designer_binding_and_layout_roundtrip() {
+        let mut doc = DesignDocument::template(DesignTemplate::ChatApp);
+        let id = doc.elements.iter().find(|n| n.label == "Send").unwrap().id.clone();
+        assert_eq!(doc.layout_rules.get(&id), Some(&DesignPlacement::BottomRight));
+        doc.action_bindings.insert(id.clone(), "send.chat".into());
+        let loaded = DesignDocument::deserialize(&doc.serialize()).unwrap();
+        assert_eq!(loaded, doc);
+        assert!(loaded.export_rust().contains("send.chat"));
+        assert!(loaded.export_rust().contains("DesignPlacement::BottomRight"));
+        assert!(DesignDocument::deserialize("KATHAMO_DESIGN_1\nD\t6162\t1200\t760\t1\nL\t626164\tFill\n").is_err());
+    }
+
 }

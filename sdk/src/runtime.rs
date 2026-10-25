@@ -737,4 +737,23 @@ mod tests {
         assert!(rt.text_input(&doc, "বাংলা hello"));
         assert_eq!(rt.get(&id), Some(&UiValue::Text("বাংলা hello".into())));
     }
+    #[test]
+    fn same_agent_and_mouse_event_channel_with_ime() {
+        let mut doc = DesignDocument::new("Test", 800.0, 600.0);
+        let id = doc.add(DesignKind::TextInput, "Prompt", rect(12.0, 12.0, 320.0, 32.0));
+        doc.action_bindings.insert(id.clone(), "form.submit".into());
+        let mut rt = DesignRuntime::new();
+        rt.sync(&doc);
+        rt.focused = Some(id.clone());
+        assert!(rt.ime(&doc, ImeEvent::Preedit("বা".into(), None)));
+        assert!(rt.get(&id).is_none());
+        assert!(rt.ime(&doc, ImeEvent::Commit("বাংলা".into())));
+        assert_eq!(rt.get(&id), Some(&UiValue::Text("বাংলা".into())));
+        rt.take_events();
+        rt.activate(&doc, &id).unwrap();
+        assert_eq!(rt.take_events()[0].action_id, "form.submit");
+        rt.set_text_by_id(&doc, &id, "done").unwrap();
+        assert_eq!(rt.get(&id), Some(&UiValue::Text("done".into())));
+    }
+
 }

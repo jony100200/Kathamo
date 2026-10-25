@@ -734,5 +734,32 @@ fn shorten(text: &str, max: usize) -> String {
 }
 
 fn main() {
-    run_native(VisualDesigner::new()).expect("Kathamo Visual Designer could not start");
+    let mut designer = VisualDesigner::new();
+    let mut headless = false;
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--headless" => headless = true,
+            "--file" => {
+                if let Some(path) = args.next() {
+                    designer.save_path = PathBuf::from(path);
+                    if designer.save_path.exists() {
+                        designer.open();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if headless {
+        let mut runner = HeadlessAppRunner::new(designer);
+        let count = runner.step_frame();
+        assert!(count > 0, "Visual Designer must emit UI draw commands");
+        let image = runner.capture_pixels().expect("Designer CPU rendering failed");
+        assert_eq!(image.len(), 1600 * 960);
+        println!("Kathamo Visual Designer: {} UI commands, {} rendered pixels",
+            count, image.len());
+        return;
+    }
+    run_native(designer).expect("Kathamo Visual Designer could not start");
 }

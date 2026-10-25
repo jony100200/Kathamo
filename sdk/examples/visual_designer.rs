@@ -10,8 +10,8 @@ const PALETTE_ROW: f32 = 27.0;
 const TREE_Y: f32 = 585.0;
 const PROP_Y: f32 = 190.0;
 const PROP_ROW: f32 = 39.0;
-const TOP_ACTIONS: [&str; 11] = [
-    "New", "Unity", "Blender", "Krita", "Save", "Open",
+const TOP_ACTIONS: [&str; 12] = [
+    "New", "Unity", "Blender", "Krita", "Chat", "Save", "Open",
     "Export Rust", "Preview", "Undo", "Redo", "Delete",
 ];
 
@@ -206,15 +206,16 @@ impl VisualDesigner {
             1 => self.select_template(DesignTemplate::Unity),
             2 => self.select_template(DesignTemplate::Blender),
             3 => self.select_template(DesignTemplate::Krita),
-            4 => self.save(),
-            5 => self.open(),
-            6 => self.export(),
-            7 => { self.preview = !self.preview; self.status = if self.preview {
+            4 => self.select_template(DesignTemplate::ChatApp),
+            5 => self.save(),
+            6 => self.open(),
+            7 => self.export(),
+            8 => { self.preview = !self.preview; self.status = if self.preview {
                 "Preview: click Preview or press Esc to edit".into()
             } else { "Edit mode".into() }; }
-            8 => self.undo(),
-            9 => self.redo(),
-            10 => self.delete_selected(),
+            9 => self.undo(),
+            10 => self.redo(),
+            11 => self.delete_selected(),
             _ => {}
         }
     }

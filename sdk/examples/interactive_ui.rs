@@ -115,6 +115,9 @@ impl KathamoApp for InteractiveUi {
     fn handle_text_input(&mut self, text: &str, _ctx: &mut AppContext) -> bool {
         self.runtime.text_input(&self.document, text)
     }
+    fn handle_ime(&mut self, event: ImeEvent, _ctx: &mut AppContext) -> bool {
+        self.runtime.ime(&self.document, event)
+    }
 }
 
 fn main() {

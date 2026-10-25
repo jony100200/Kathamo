@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ui_core::{Color, CornerRadius, Rect, Stroke, TextEditBuffer, Vec2};
-use ui_platform::{Key, Modifiers, PointerButton, PointerState};
+use ui_platform::{ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::ThemePalette;
 use ui_widgets::{
@@ -219,6 +219,7 @@ pub struct DesignRuntime {
     pub focused: Option<String>,
     instances: HashMap<String, (DesignKind, Instance)>,
     text_inputs: HashMap<String, TextEditBuffer>,
+    composition: Option<(String, String)>,
     pressed: Option<String>,
     events: Vec<UiEvent>,
     // Logical document-sized layout plus optional rule overrides.
@@ -237,7 +238,8 @@ impl DesignRuntime {
             registry: ComponentRegistry::new(), values: HashMap::new(),
             bindings: HashMap::new(), actions: HashMap::new(),
             responsive: HashMap::new(), focused: None, instances: HashMap::new(),
-            text_inputs: HashMap::new(), pressed: None, events: Vec::new(),
+            text_inputs: HashMap::new(), composition: None,
+            pressed: None, events: Vec::new(),
             computed: HashMap::new(),
             bounds: Rect::from_min_size(Vec2::ZERO, Vec2::new(1200.0, 760.0)),
             root_scale: Vec2::new(1.0, 1.0),
@@ -452,11 +454,17 @@ impl DesignRuntime {
                     DesignKind::Toggle => render_toggle(buf,
                         matches!(value, Some(UiValue::Bool(true))),
                         rect.contains(ptr.position), &node.label, rect, pal),
-                    DesignKind::TextInput => render_text_input(buf,
-                        match value { Some(UiValue::Text(s)) => s.as_str(), _ => "" },
-                        &node.label, rect,
-                        self.focused.as_deref() == Some(node.id.as_str()),
-                        rect.contains(ptr.position), pal),
+                    DesignKind::TextInput => {
+                        let mut shown = match value {
+                            Some(UiValue::Text(s)) => s.clone(), _ => String::new()
+                        };
+                        if let Some((id, composing)) = &self.composition {
+                            if id == &node.id { shown.push_str(composing); }
+                        }
+                        render_text_input(buf, &shown, &node.label, rect,
+                            self.focused.as_deref() == Some(node.id.as_str()),
+                            rect.contains(ptr.position), pal);
+                    }
                     DesignKind::Label => {
                         let label = match value {
                             Some(UiValue::Text(v)) => v.clone(),
@@ -634,6 +642,24 @@ impl DesignRuntime {
         let changed = UiValue::Text(editor.as_str().to_owned());
         self.values.insert(k, changed.clone());
         self.emit(&id, UiEventKind::Changed(changed));
+        true
+    }
+
+    /// IME composition is displayed without committing partial Bengali/other
+    /// script input. Only Commit updates state and emits a Changed event.
+    pub fn ime(&mut self, doc: &DesignDocument, event: ImeEvent) -> bool {
+        let Some(id) = self.focused.clone() else { return false; };
+        if doc.find(&id).map(|n| n.kind) != Some(DesignKind::TextInput) {
+            return false;
+        }
+        match event {
+            ImeEvent::Preedit(text, _) => self.composition = Some((id, text)),
+            ImeEvent::Commit(text) => {
+                self.composition = None;
+                return self.text_input(doc, &text);
+            }
+            ImeEvent::Disabled => self.composition = None,
+        }
         true
     }
 

@@ -8,6 +8,7 @@ pub struct InteractiveUi {
     pub document: DesignDocument,
     pub runtime: DesignRuntime,
     pub messages: Vec<String>,
+    last_id: String,
 }
 
 impl InteractiveUi {
@@ -47,11 +48,8 @@ impl InteractiveUi {
             left: false, right: true, top: false, bottom: true,
             min_size: Vec2::new(135.0, 44.0), max_size: None,
         });
-        Self { document, runtime, messages: Vec::new() }
-            .with_message_label(last)
+        Self { document, runtime, messages: Vec::new(), last_id: last }
     }
-
-    fn with_message_label(self, _id: String) -> Self { self }
 
     fn consume_events(&mut self) {
         for event in self.runtime.take_events() {
@@ -64,18 +62,15 @@ impl InteractiveUi {
                     };
                     if !text.is_empty() {
                         self.messages.push(text.clone());
-                        if let Some(node) = self.document.elements.iter_mut()
-                            .find(|n| n.label == "Write a message below" ||
-                                      n.id == "last_message") {
+                        if let Some(node) = self.document.find_mut(&self.last_id) {
                             node.label = text;
-                            node.id = "last_message".into();
                         }
                         self.runtime.set("message.draft", UiValue::Text(String::new()));
                     }
                 }
                 "message.new" => {
                     self.messages.clear();
-                    if let Some(node) = self.document.find_mut("last_message") {
+                    if let Some(node) = self.document.find_mut(&self.last_id) {
                         node.label = "Write a message below".into();
                     }
                     self.runtime.set("message.draft", UiValue::Text(String::new()));
@@ -140,6 +135,6 @@ fn main() {
     runner.app.runtime.pointer_down(&runner.app.document, click, PointerButton::Primary, &p);
     runner.app.runtime.pointer_up(&runner.app.document, click, PointerButton::Primary);
     runner.step_frame();
-    assert_eq!(runner.app.messages, vec!["Hello বাংলা"]);
+    assert_eq!(runner.app.messages, vec!["Hello বাংলা".to_string()]);
     println!("Kathamo live UI: native widget bindings and UTF-8 input passed headless exercise");
 }

@@ -38,7 +38,7 @@ pub struct UiEvent {
 
 /// Consumers can supply a real widget implementation for a built-in kind or specific ID.
 /// Coordinates are logical window coordinates and the runtime clips to the component bounds.
-pub trait DesignWidget {
+pub trait DesignWidget: Send + Sync {
     fn render(
         &mut self,
         buf: &mut CommandBuffer,

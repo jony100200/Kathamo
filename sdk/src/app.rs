@@ -92,7 +92,8 @@ pub struct HeadlessAppRunner<A: KathamoApp> {
 
 impl<A: KathamoApp> HeadlessAppRunner<A> {
     pub fn new(mut app: A) -> Self {
-        let mut ctx = AppContext::default();
+        let (width, height) = app.default_size();
+        let mut ctx = AppContext::new(width, height, 1.0);
         app.init(&mut ctx);
         Self { app, ctx }
     }
@@ -119,6 +120,10 @@ mod tests {
             "Test Suite App"
         }
 
+        fn default_size(&self) -> (u32, u32) {
+            (1280, 720)
+        }
+
         fn update(&mut self, ctx: &mut AppContext) {
             self.rendered_frames += 1;
             ctx.cmd_buf.push(ui_render::DrawCommand::Rect {
@@ -134,6 +139,8 @@ mod tests {
     fn test_headless_app_runner_executes_lifecycle() {
         let app = TestApp { rendered_frames: 0 };
         let mut runner = HeadlessAppRunner::new(app);
+        assert_eq!(runner.ctx.physical_size, (1280, 720));
+        assert_eq!(runner.ctx.viewport.size(), Vec2::new(1280.0, 720.0));
 
         let command_count = runner.step_frame();
         assert_eq!(command_count, 1);

@@ -525,6 +525,11 @@ impl WorkspaceHost {
         false
     }
 
+    /// Take the latest drag-out tab ID for an application's native window request.
+    pub fn take_detach_request(&mut self) -> Option<String> {
+        self.dock_view.pending_detach.take()
+    }
+
     /// Move a dock panel out of its workspace without recreating its editor state.
     /// The application owns the returned editor and may show it in a second OS window.
     pub fn detach_panel(&mut self, panel_id: &str) -> Option<DetachedPanel> {

@@ -132,7 +132,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
     }
 
     fn secondary_window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
-        if matches!(event, WindowEvent::CloseRequested) {
+        if matches!(&event, WindowEvent::CloseRequested) {
             if let Some(child) = self.children.remove(&id) {
                 self.app.window_closed(&child.id);
                 if let Some(main) = &self.window { main.request_redraw(); }

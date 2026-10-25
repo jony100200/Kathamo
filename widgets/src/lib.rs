@@ -17,6 +17,7 @@ pub mod navigation_rail;
 pub mod node_editor;
 pub mod property_inspector;
 pub mod range_slider;
+pub mod rich_text;
 pub mod stylebox;
 pub mod timeline;
 pub mod tooltip;
@@ -37,6 +38,7 @@ pub use navigation_rail::{
     NavigationRail, NavigationRailItem, RailAlignment, RailAnchor, RailLabelMode,
 };
 pub use range_slider::RangeSlider;
+pub use rich_text::{MarkdownView, ChatMessage, ChatRole, ChatTranscript};
 pub use tooltip::TooltipOverlay;
 pub use ui::{KathamoUi, KolponaUi, Response};
 

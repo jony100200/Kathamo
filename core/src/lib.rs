@@ -22,7 +22,7 @@ pub use dock_tree::{
 pub use docking::{DockPanel, DockSlot, DockWorkspace, ResolvedDockLayout};
 pub use id::ElementId;
 pub use inspector_api::{UiInspectorNode, UiInspectorSnapshot};
-pub use layout::{Alignment, Breakpoint, Direction, LayoutItem, SizeConstraint};
+pub use layout::{resolve_grid_layout, resolve_stack_layout, resolve_wrap_layout, Alignment, Breakpoint, Direction, LayoutItem, SizeConstraint};
 pub use math::{Color, CornerRadius, Margin, Padding, Rect, Stroke, Vec2};
 pub use modifier::Modifier;
 pub use redux::{Reducer, Store, UndoManager};

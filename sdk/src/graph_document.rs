@@ -285,7 +285,9 @@ impl GraphDocument {
 }
 
 fn hex(v: &str) -> String {
-    v.bytes().map(|b| format!("{b:02x}")).collect::<String>()
+    let mut out = String::with_capacity(v.len() * 2);
+    for byte in v.bytes() { out.push_str(&format!("{byte:02x}")); }
+    out
 }
 fn unhex(v: &str) -> Result<String, String> {
     if v.len() % 2 != 0 { return Err("invalid encoded string".into()); }

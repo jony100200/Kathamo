@@ -156,6 +156,10 @@ Kathamo supplies the UI only; applications implement actual painting, scene rend
 
 ```bash
 cargo run -p kathamo --example visual_designer
+# Optional: open a specific saved project
+cargo run -p kathamo --example visual_designer -- --file path/to/interface.kui
+# Non-graphical smoke check for agents
+cargo run -p kathamo --example visual_designer -- --headless
 ```
 
 Build application UI layouts visually using the left-side component palette, canvas, hierarchy and editable property inspector. Choose an **Empty / Unity / Blender / Krita** starter layout, drag to place and reposition components, resize using the bottom-right handle, and edit properties by clicking their values. Scroll to zoom. **Preview** shows the layout without editor panels.

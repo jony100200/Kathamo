@@ -347,7 +347,7 @@ impl VisualDesigner {
         }
         if pos.x > window.max.x - 295.0 {
             let path = Rect::from_min_size(
-                Vec2::new(window.max.x - 287.0, 103.0), Vec2::new(270.0, 30.0));
+                Vec2::new(window.max.x - 287.0, 128.0), Vec2::new(270.0, 31.0));
             if path.contains(pos) {
                 self.edit(EditField::Path);
                 return true;

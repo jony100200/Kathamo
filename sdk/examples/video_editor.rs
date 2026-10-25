@@ -23,7 +23,7 @@ impl VideoEditorApp {
         let mut registry = EditorRegistry::new();
 
         // 1. Video Monitor Preview Canvas
-        registry.register_factory("canvas", "Video Monitor Preview", "Viewports", || {
+        registry.register_factory("viewport_3d", "Video Monitor Preview", "Viewports", || {
             Box::new(CanvasEditor::new_3d_mock())
         });
 

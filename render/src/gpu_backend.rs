@@ -58,6 +58,7 @@ struct GpuImage {
     _texture: Option<wgpu::Texture>,
     _view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
+    size: (u32, u32),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -619,7 +620,7 @@ impl GpuBackend {
     /// Re-register views after a device-loss recovery.
     pub fn register_external_view(&mut self, id: u64, view: wgpu::TextureView) {
         let bind_group = self.make_image_bind_group(&view);
-        self.images.insert(id, GpuImage { _texture: None, _view: view, bind_group });
+        self.images.insert(id, GpuImage { _texture: None, _view: view, bind_group, size: (0, 0) });
     }
 
     fn make_image_bind_group(&self, view: &wgpu::TextureView) -> wgpu::BindGroup {
@@ -643,8 +644,22 @@ impl GpuBackend {
             (width as usize).checked_mul(height as usize).and_then(|x| x.checked_mul(4)) != Some(rgba.len()) {
             return Err("RGBA8 image length must be width * height * 4".into());
         }
-        // Reuse the existing texture when possible for high-frequency video/image updates.
-        // Texture width/height are tracked by the caller; replace when dimensions change.
+
+        // Update in place for video frames and painting; only reallocate on resize.
+        if let Some(existing) = self.images.get(&id) {
+            if existing.size == (width, height) {
+                if let Some(texture) = &existing._texture {
+                    self.dev.queue.write_texture(
+                        wgpu::ImageCopyTexture { texture, mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                        rgba,
+                        wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: Some(height) },
+                        wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+                    );
+                    return Ok(());
+                }
+            }
+        }
         let texture = self.dev.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("kathamo-application-rgba"),
             size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
@@ -666,7 +681,7 @@ impl GpuBackend {
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let bind_group = self.make_image_bind_group(&view);
-        self.images.insert(id, GpuImage { _texture: Some(texture), _view: view, bind_group });
+        self.images.insert(id, GpuImage { _texture: Some(texture), _view: view, bind_group, size: (width, height) });
         Ok(())
     }
 

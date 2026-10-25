@@ -511,6 +511,11 @@ impl DesignRuntime {
         match (kind, &key) {
             (Some(DesignKind::Button), Key::Enter | Key::Space) =>
                 self.emit(&id, UiEventKind::Activated),
+            (Some(DesignKind::TextInput), Key::Enter) => {
+                // Applications can bind Enter to a submit action without embedding
+                // any application-specific logic in the framework.
+                self.emit(&id, UiEventKind::Activated);
+            }
             (Some(DesignKind::Toggle), Key::Enter | Key::Space) => {
                 let k = self.state_key(&id).to_owned();
                 let checked = !matches!(self.values.get(&k), Some(UiValue::Bool(true)));

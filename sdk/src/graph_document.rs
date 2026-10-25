@@ -3,7 +3,9 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
-use ui_core::{Color, Rect, Vec2};
+use ui_core::{Color, CornerRadius, Rect, Stroke, Vec2};
+use ui_render::{CommandBuffer, DrawCommand};
+use ui_themes::ThemePalette;
 use ui_widgets::{GraphNode, NodeConnection, NodeEditor, NodeGroup, NodePin};
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -214,6 +216,62 @@ impl GraphDocument {
         }
         doc.validate()?;
         Ok(doc)
+    }
+
+    /// An approachable step/card presentation of the exact same GraphDocument.
+    /// No second copy of the graph, no workflow execution embedded in the framework.
+    pub fn render_guided(&self, buf: &mut CommandBuffer, bounds: Rect,
+                         scroll_y: f32, selected_id: Option<&str>,
+                         pal: &ThemePalette) -> Result<(), String> {
+        let steps = self.guided_steps()?;
+        let row_h = 94.0;
+        let x = bounds.min.x + 20.0;
+        let w = (bounds.width() - 40.0).max(120.0);
+        buf.push(DrawCommand::ClipPush { rect: bounds });
+        for (i, (id, title)) in steps.iter().enumerate() {
+            let y = bounds.min.y + 18.0 + i as f32 * row_h - scroll_y;
+            let card = Rect::from_min_size(Vec2::new(x, y), Vec2::new(w, 76.0));
+            if !card.intersects(bounds) { continue; }
+            let selected = selected_id == Some(id.as_str());
+            let node = self.nodes.iter().find(|n| &n.id == id);
+            buf.push(DrawCommand::Rect {
+                rect: card,
+                fill: pal.surface,
+                radius: CornerRadius::same(8.0),
+                stroke: Stroke::new(if selected { 2.0 } else { 1.0 },
+                    if selected { pal.accent } else { pal.border }),
+            });
+            buf.push(DrawCommand::Text {
+                text: format!("{}. {}", i + 1, title),
+                pos: card.min + Vec2::new(15.0, 13.0), size: 14.0,
+                color: pal.text, strong: true,
+            });
+            if let Some(n) = node {
+                buf.push(DrawCommand::Text {
+                    text: format!("{}  |  {} inputs  |  {} outputs",
+                        n.category, n.inputs.len(), n.outputs.len()),
+                    pos: card.min + Vec2::new(15.0, 43.0), size: 11.0,
+                    color: pal.text_muted, strong: false,
+                });
+            }
+        }
+        buf.push(DrawCommand::ClipPop);
+        Ok(())
+    }
+
+    /// Select a guided card by point, returning the same stable ID as the graph canvas.
+    pub fn guided_hit_test(&self, bounds: Rect, pos: Vec2,
+                           scroll_y: f32) -> Result<Option<String>, String> {
+        if !bounds.contains(pos) { return Ok(None); }
+        let i = ((pos.y - bounds.min.y + scroll_y - 18.0) / 94.0).floor() as isize;
+        if i < 0 { return Ok(None); }
+        let x = bounds.min.x + 20.0;
+        let w = (bounds.width() - 40.0).max(120.0);
+        let card = Rect::from_min_size(
+            Vec2::new(x, bounds.min.y + 18.0 + i as f32 * 94.0 - scroll_y),
+            Vec2::new(w, 76.0));
+        if !card.contains(pos) { return Ok(None); }
+        Ok(self.guided_steps()?.get(i as usize).map(|(id, _)| id.clone()))
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), String> {

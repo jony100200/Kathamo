@@ -423,7 +423,9 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     self.ctx.focus.cycle_focus(self.modifiers.shift);
                 }
                 if let Some(text) = event.text {
-                    self.app.handle_text_input(text.as_str(), &mut self.ctx);
+                    if !self.modifiers.ctrl && !self.modifiers.command {
+                        self.app.handle_text_input(text.as_str(), &mut self.ctx);
+                    }
                 }
                 window.request_redraw();
             }

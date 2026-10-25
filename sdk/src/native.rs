@@ -1,6 +1,7 @@
 //! Native window runner for applications using the public Kathamo SDK.
 
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use ui_core::Vec2;
 use ui_platform::{
@@ -36,6 +37,8 @@ pub struct NativeAppRunner<A: KathamoApp> {
     presenter: Option<SoftwarePresenter>,
     modifiers: Modifiers,
     revealed: bool,
+    gpu_images_uploaded: HashMap<u64, u64>,
+    cpu_images_uploaded: HashMap<u64, u64>,
 }
 
 impl<A: KathamoApp> NativeAppRunner<A> {
@@ -52,6 +55,8 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             presenter: None,
             modifiers: Modifiers::NONE,
             revealed: false,
+            gpu_images_uploaded: HashMap::new(),
+            cpu_images_uploaded: HashMap::new(),
         }
     }
 
@@ -65,6 +70,39 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         self.cpu.set_scale_factor(scale);
     }
 
+    fn upload_frames_gpu(&mut self) -> Result<(), String> {
+        let Some(gpu) = self.gpu.as_mut() else { return Ok(()); };
+        self.gpu_images_uploaded.retain(|id, _| {
+            if self.ctx.images.contains_key(id) { true } else {
+                gpu.remove_image(*id);
+                false
+            }
+        });
+        for (id, image) in &self.ctx.images {
+            if self.gpu_images_uploaded.get(id) != Some(&image.version) {
+                gpu.upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
+                self.gpu_images_uploaded.insert(*id, image.version);
+            }
+        }
+        Ok(())
+    }
+
+    fn upload_frames_cpu(&mut self) -> Result<(), String> {
+        self.cpu_images_uploaded.retain(|id, _| {
+            if self.ctx.images.contains_key(id) { true } else {
+                self.cpu.remove_image(*id);
+                false
+            }
+        });
+        for (id, image) in &self.ctx.images {
+            if self.cpu_images_uploaded.get(id) != Some(&image.version) {
+                self.cpu.upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
+                self.cpu_images_uploaded.insert(*id, image.version);
+            }
+        }
+        Ok(())
+    }
+
     fn present(&mut self) -> Result<(), String> {
         let (width, height) = self.ctx.physical_size;
         if width == 0 || height == 0 {
@@ -76,6 +114,10 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         self.app.update(&mut self.ctx);
 
         if let Some(gpu) = &mut self.gpu {
+            self.app.prepare_gpu(gpu);
+        }
+        self.upload_frames_gpu()?;
+        if let Some(gpu) = &mut self.gpu {
             gpu.begin_frame(width, height, self.ctx.theme.canvas);
             gpu.submit(&self.ctx.cmd_buf);
             if gpu.end_frame().is_ok() {
@@ -84,7 +126,10 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             }
             // A lost GPU device gets one recovery attempt before software fallback.
             if gpu.recover().is_ok() {
+                self.gpu_images_uploaded.clear();
+                self.app.prepare_gpu(gpu);
                 gpu.set_scale_factor(self.ctx.scale);
+                // Application must re-register any external views after recovery.
                 gpu.begin_frame(width, height, self.ctx.theme.canvas);
                 gpu.submit(&self.ctx.cmd_buf);
                 if gpu.end_frame().is_ok() {
@@ -95,6 +140,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             self.gpu = None;
         }
 
+        self.upload_frames_cpu()?;
         self.cpu.begin_frame(width, height, self.ctx.theme.canvas);
         self.cpu.submit(&self.ctx.cmd_buf);
         self.cpu.end_frame()?;

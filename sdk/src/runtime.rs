@@ -9,7 +9,7 @@ use ui_platform::{Key, Modifiers, PointerButton, PointerState};
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::ThemePalette;
 use ui_widgets::{
-    CanvasHost, HierarchyTree, NodeEditor, Timeline,
+    CanvasHost, HierarchyTree, NodeEditor, Timeline, MarkdownView, ChatTranscript,
 };
 use ui_widgets::controls::{render_button, ButtonStyle};
 use ui_widgets::input::{render_text_input, render_toggle};
@@ -99,10 +99,12 @@ enum Instance {
     Console(ConsoleView),
     Timeline(Timeline),
     Canvas(CanvasHost),
+    Markdown(MarkdownView),
+    Chat(ChatTranscript),
 }
 
 impl Instance {
-    fn from_kind(kind: DesignKind) -> Option<Self> {
+    fn from_kind(kind: DesignKind, label: &str) -> Option<Self> {
         match kind {
             DesignKind::NodeGraph => {
                 let mut editor = NodeEditor::default();
@@ -116,6 +118,8 @@ impl Instance {
             DesignKind::Console => Some(Self::Console(ConsoleView::new())),
             DesignKind::Timeline => Some(Self::Timeline(Timeline::default())),
             DesignKind::Viewport => Some(Self::Canvas(CanvasHost::new_2d())),
+            DesignKind::Markdown => Some(Self::Markdown(MarkdownView::new(label))),
+            DesignKind::ChatTranscript => Some(Self::Chat(ChatTranscript::new())),
             _ => None,
         }
     }
@@ -130,6 +134,8 @@ impl Instance {
             Self::Console(w) => w.render(buf, rect, pal),
             Self::Timeline(w) => w.render(buf, rect, pal),
             Self::Canvas(w) => w.render(buf, rect, pal),
+            Self::Markdown(w) => w.render(buf, rect, pal),
+            Self::Chat(w) => w.render(buf, rect, pal),
         }
     }
 
@@ -179,6 +185,8 @@ impl Instance {
             Self::Custom(w) => w.scroll(delta, pos, rect),
             Self::Graph(w) => w.handle_scroll(delta, pos, rect),
             Self::Canvas(w) => { w.handle_scroll(delta, pos, rect); }
+            Self::Markdown(w) => { w.scroll_y = (w.scroll_y - delta.y * 20.0).max(0.0); }
+            Self::Chat(w) => { w.scroll_y = (w.scroll_y - delta.y * 20.0).max(0.0); }
             _ => {}
         }
     }
@@ -311,6 +319,18 @@ impl DesignRuntime {
         }
     }
 
+    pub fn chat(&mut self, id: &str) -> Option<&mut ChatTranscript> {
+        match self.instances.get_mut(id) {
+            Some((_, Instance::Chat(chat))) => Some(chat), _ => None,
+        }
+    }
+
+    pub fn markdown(&mut self, id: &str) -> Option<&mut MarkdownView> {
+        match self.instances.get_mut(id) {
+            Some((_, Instance::Markdown(markdown))) => Some(markdown), _ => None,
+        }
+    }
+
     pub fn canvas(&mut self, id: &str) -> Option<&mut CanvasHost> {
         match self.instances.get_mut(id) {
             Some((_, Instance::Canvas(canvas))) => Some(canvas), _ => None,
@@ -333,7 +353,7 @@ impl DesignRuntime {
             if recreate { self.instances.remove(&node.id); }
             if !self.instances.contains_key(&node.id) {
                 let instance = self.registry.factory(node).map(|f| Instance::Custom(f()))
-                    .or_else(|| Instance::from_kind(node.kind));
+                    .or_else(|| Instance::from_kind(node.kind, &node.label));
                 if let Some(value) = instance {
                     self.instances.insert(node.id.clone(), (node.kind, value));
                 }

@@ -313,8 +313,11 @@ impl DesignRuntime {
     /// preserve parent-relative positioning. The root scales to its assigned window.
     pub fn relayout(&mut self, doc: &DesignDocument, bounds: Rect) {
         self.bounds = bounds;
-        self.root_scale = Vec2::new(bounds.width() / doc.width.max(1.0),
-                                    bounds.height() / doc.height.max(1.0));
+        // Uniform DPI-safe document scale leaves any extra width/height available
+        // for anchored or fill-constrained components rather than stretching fonts.
+        let scale = (bounds.width() / doc.width.max(1.0))
+            .min(bounds.height() / doc.height.max(1.0)).max(0.01);
+        self.root_scale = Vec2::splat(scale);
         self.computed.clear();
         // Parent ordering is not required for loading, so resolve recursively.
         for node in &doc.elements {
@@ -605,7 +608,7 @@ mod tests {
             min_size: Vec2::new(120.0, 30.0), max_size: None,
         });
         rt.relayout(&doc, rect(0.0, 0.0, 1000.0, 600.0));
-        assert_eq!(rt.component_bounds(&id).unwrap().width(), 500.0);
+        assert_eq!(rt.component_bounds(&id).unwrap().width(), 600.0);
         rt.focused = Some(id.clone());
         assert!(rt.text_input(&doc, "বাংলা hello"));
         assert_eq!(rt.get(&id), Some(&UiValue::Text("বাংলা hello".into())));

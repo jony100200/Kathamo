@@ -260,7 +260,13 @@ impl KathamoApp for Spatial3dEditorApp {
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.handle_mouse_up(pos, button, workspace_rect)
+        let handled = self.workspace.handle_mouse_up(pos, button, workspace_rect);
+        if let Some(panel_id) = self.workspace.take_detach_request() {
+            if let Some(panel) = self.workspace.detach_to_window(&panel_id, ctx, 920, 580) {
+                self.detached.insert(panel.tab.id.clone(), panel);
+            }
+        }
+        handled
     }
 
     fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {

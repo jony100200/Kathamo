@@ -16,16 +16,20 @@ const TOP_ACTIONS: [&str; 11] = [
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum EditField { Name, X, Y, Width, Height, Background, Foreground, Path }
+enum EditField { Name, Kind, Parent, Visible, X, Y, Width, Height, Background, Foreground, Path }
 
 impl EditField {
-    const ALL: [Self; 7] = [
-        Self::Name, Self::X, Self::Y, Self::Width, Self::Height,
+    const ALL: [Self; 10] = [
+        Self::Name, Self::Kind, Self::Parent, Self::Visible,
+        Self::X, Self::Y, Self::Width, Self::Height,
         Self::Background, Self::Foreground,
     ];
     fn label(self) -> &'static str {
         match self {
             Self::Name => "Label",
+            Self::Kind => "Component type",
+            Self::Parent => "Parent ID",
+            Self::Visible => "Visible",
             Self::X => "X",
             Self::Y => "Y",
             Self::Width => "Width",
@@ -95,11 +99,15 @@ impl VisualDesigner {
     }
 
     fn canvas_geometry(&self, window: Rect) -> CanvasGeometry {
-        let frame = Rect::from_min_size(
-            Vec2::new(233.0, 74.0),
-            Vec2::new((window.width() - 533.0).max(320.0),
-                (window.height() - 110.0).max(280.0)),
-        );
+        let frame = if self.preview {
+            Rect::from_min_size(Vec2::new(8.0, 64.0),
+                Vec2::new((window.width() - 16.0).max(320.0),
+                    (window.height() - 105.0).max(280.0)))
+        } else {
+            Rect::from_min_size(Vec2::new(233.0, 74.0),
+                Vec2::new((window.width() - 533.0).max(320.0),
+                    (window.height() - 110.0).max(280.0)))
+        };
         let fit = ((frame.width() - 56.0) / self.document.width)
             .min((frame.height() - 56.0) / self.document.height)
             .max(0.1);
@@ -240,6 +248,9 @@ impl VisualDesigner {
         };
         match field {
             EditField::Name => node.label.clone(),
+            EditField::Kind => node.kind.name().into(),
+            EditField::Parent => node.parent.clone().unwrap_or_default(),
+            EditField::Visible => node.visible.to_string(),
             EditField::X => format!("{:.0}", node.bounds.min.x),
             EditField::Y => format!("{:.0}", node.bounds.min.y),
             EditField::Width => format!("{:.0}", node.bounds.width()),
@@ -265,6 +276,35 @@ impl VisualDesigner {
             return;
         }
         let Some(id) = self.selected.clone() else { return; };
+        if field == EditField::Parent {
+            let mut proposed = self.document.clone();
+            let parent = value.trim();
+            match proposed.set_parent(&id, if parent.is_empty() { None } else { Some(parent) }) {
+                Ok(()) => {
+                    self.note_change();
+                    self.document = proposed;
+                    self.status = "Parent changed".into();
+                }
+                Err(error) => self.status = format!("Parent rejected: {error}"),
+            }
+            return;
+        }
+        let new_kind = if field == EditField::Kind {
+            match DesignKind::parse(&value) {
+                Some(kind) => Some(kind),
+                None => {
+                    self.status = "Unknown type; use the palette component names".into();
+                    return;
+                }
+            }
+        } else { None };
+        let new_visible = if field == EditField::Visible {
+            match value.to_ascii_lowercase().as_str() {
+                "true" | "yes" | "1" => Some(true),
+                "false" | "no" | "0" => Some(false),
+                _ => { self.status = "Visible accepts true or false".into(); return; }
+            }
+        } else { None };
         let numeric = match field {
             EditField::X | EditField::Y | EditField::Width | EditField::Height =>
                 match value.parse::<f32>() {
@@ -284,6 +324,9 @@ impl VisualDesigner {
         if let Some(node) = self.document.find_mut(&id) {
             match field {
                 EditField::Name => node.label = value,
+                EditField::Kind => node.kind = new_kind.unwrap(),
+                EditField::Parent => unreachable!(),
+                EditField::Visible => node.visible = new_visible.unwrap(),
                 EditField::X => node.bounds = Rect::from_min_size(
                     Vec2::new(numeric.unwrap(), node.bounds.min.y), node.bounds.size()),
                 EditField::Y => node.bounds = Rect::from_min_size(
@@ -586,9 +629,9 @@ impl KathamoApp for VisualDesigner {
                 label(buf, "Select a component to edit", Vec2::new(w - 279.0, 205.0),
                     12.0, t.text_muted, false);
             }
-            label(buf, "Click a property and type to edit", Vec2::new(w - 279.0, 510.0),
+            label(buf, "Click a property and type to edit", Vec2::new(w - 279.0, 645.0),
                 10.0, t.text_muted, false);
-            label(buf, "Enter: apply  |  Esc: cancel", Vec2::new(w - 279.0, 528.0),
+            label(buf, "Enter: apply  |  Esc: cancel", Vec2::new(w - 279.0, 663.0),
                 10.0, t.text_muted, false);
         }
 

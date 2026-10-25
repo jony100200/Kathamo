@@ -149,6 +149,15 @@ impl DesignDocument {
         self.add(kind, title, Rect::from_min_size(Vec2::new(x, y), Vec2::new(w, h)));
     }
 
+    /// Create a child component with parent-relative coordinates.
+    pub fn add_child(&mut self, parent: &str, kind: DesignKind,
+                     label: impl Into<String>, bounds: Rect) -> Result<String, String> {
+        if self.find(parent).is_none() { return Err("unknown parent".into()); }
+        let id = self.add(kind, label, bounds);
+        self.find_mut(&id).unwrap().parent = Some(parent.to_owned());
+        Ok(id)
+    }
+
     pub fn add(&mut self, kind: DesignKind, label: impl Into<String>, bounds: Rect) -> String {
         let id = loop {
             let id = format!("component_{}", self.next_id);
@@ -271,9 +280,6 @@ impl DesignDocument {
             let id = unhex(f[1])?;
             if id.is_empty() || !known.insert(id.clone()) { return Err("duplicate component ID".into()); }
             let parent = if f[2] == "-" { None } else { Some(unhex(f[2])?) };
-            if parent.as_ref().is_some_and(|p| !known.contains(p)) {
-                return Err("a parent must precede its children".into());
-            }
             let kind = DesignKind::parse(f[3]).ok_or("unknown component kind")?;
             let (x, y, w, h) = (finite(f[5])?, finite(f[6])?, positive(f[7])?, positive(f[8])?);
             let mut node = DesignElement::new(id, kind, unhex(f[4])?,
@@ -284,6 +290,15 @@ impl DesignDocument {
             node.visible = match f[11] { "0" => false, "1" => true,
                 _ => return Err("invalid visible flag".into()) };
             doc.elements.push(node);
+        }
+        // Parent order may vary when an agent reparents existing components.
+        for node in &doc.elements {
+            if node.parent.as_ref().is_some_and(|p| !known.contains(p)) {
+                return Err("unknown component parent".into());
+            }
+            if doc.absolute_bounds(&node.id).is_none() {
+                return Err("component hierarchy cycle".into());
+            }
         }
         Ok(doc)
     }
@@ -300,7 +315,7 @@ impl DesignDocument {
     /// Export an editable Rust function constructing the same runtime UI document.
     pub fn export_rust(&self) -> String {
         let mut out = format!(
-            "use kathamo::prelude::*;\n\npub fn build_ui() -> DesignDocument {{\n    let mut ui = DesignDocument::new({:?}, {}f32, {}f32);\n",
+            "use kathamo::prelude::*;\n\n// Render with: build_ui().render(&mut ctx.cmd_buf, ctx.bounds().min, 1.0, None, &ctx.theme);\npub fn build_ui() -> DesignDocument {{\n    let mut ui = DesignDocument::new({:?}, {}f32, {}f32);\n",
             self.name, self.width, self.height);
         for n in &self.elements {
             out.push_str(&format!(

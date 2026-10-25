@@ -16,13 +16,13 @@ const TOP_ACTIONS: [&str; 11] = [
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum EditField { Name, Kind, Parent, Visible, X, Y, Width, Height, Background, Foreground, Path }
+enum EditField { Name, Kind, Parent, Visible, X, Y, Width, Height, Background, Foreground, StateBinding, ActionBinding, Path }
 
 impl EditField {
-    const ALL: [Self; 10] = [
+    const ALL: [Self; 12] = [
         Self::Name, Self::Kind, Self::Parent, Self::Visible,
         Self::X, Self::Y, Self::Width, Self::Height,
-        Self::Background, Self::Foreground,
+        Self::Background, Self::Foreground, Self::StateBinding, Self::ActionBinding,
     ];
     fn label(self) -> &'static str {
         match self {
@@ -36,6 +36,8 @@ impl EditField {
             Self::Height => "Height",
             Self::Background => "Background",
             Self::Foreground => "Text colour",
+            Self::StateBinding => "State key",
+            Self::ActionBinding => "Action ID",
             Self::Path => "Project file",
         }
     }
@@ -259,6 +261,8 @@ impl VisualDesigner {
             EditField::Height => format!("{:.0}", node.bounds.height()),
             EditField::Background => color_text(node.background),
             EditField::Foreground => color_text(node.foreground),
+            EditField::StateBinding => self.document.state_bindings.get(&node.id).cloned().unwrap_or_default(),
+            EditField::ActionBinding => self.document.action_bindings.get(&node.id).cloned().unwrap_or_default(),
             EditField::Path => unreachable!(),
         }
     }
@@ -278,6 +282,16 @@ impl VisualDesigner {
             return;
         }
         let Some(id) = self.selected.clone() else { return; };
+        if matches!(field, EditField::StateBinding | EditField::ActionBinding) {
+            self.note_change();
+            let table = if field == EditField::StateBinding {
+                &mut self.document.state_bindings
+            } else { &mut self.document.action_bindings };
+            if value.trim().is_empty() { table.remove(&id); }
+            else { table.insert(id, value); }
+            self.status = format!("Updated {}", field.label());
+            return;
+        }
         if field == EditField::Parent {
             let mut proposed = self.document.clone();
             let parent = value.trim();
@@ -327,7 +341,7 @@ impl VisualDesigner {
             match field {
                 EditField::Name => node.label = value,
                 EditField::Kind => node.kind = new_kind.unwrap(),
-                EditField::Parent => unreachable!(),
+                EditField::Parent | EditField::StateBinding | EditField::ActionBinding => unreachable!(),
                 EditField::Visible => node.visible = new_visible.unwrap(),
                 EditField::X => node.bounds = Rect::from_min_size(
                     Vec2::new(numeric.unwrap(), node.bounds.min.y), node.bounds.size()),
@@ -631,9 +645,9 @@ impl KathamoApp for VisualDesigner {
                 label(buf, "Select a component to edit", Vec2::new(w - 279.0, 205.0),
                     12.0, t.text_muted, false);
             }
-            label(buf, "Click a property and type to edit", Vec2::new(w - 279.0, 645.0),
+            label(buf, "Click a property and type to edit", Vec2::new(w - 279.0, 735.0),
                 10.0, t.text_muted, false);
-            label(buf, "Enter: apply  |  Esc: cancel", Vec2::new(w - 279.0, 663.0),
+            label(buf, "Enter: apply  |  Esc: cancel", Vec2::new(w - 279.0, 753.0),
                 10.0, t.text_muted, false);
         }
 

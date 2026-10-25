@@ -149,35 +149,34 @@ impl DockTreeView {
             for leaf in &layout.leaves {
                 if leaf.id != dragging.source_leaf_id && leaf.bounds.contains(pos) {
                     if let Some(zone) = dock_tree.calculate_drop_zone(leaf.bounds, pos) {
-                        // Close from source leaf
-                        dock_tree.close_panel(&dragging.source_leaf_id, &dragging.panel.id);
-                        // Dock into destination
-                        match zone {
-                            DockDropZone::Center => {
-                                dock_tree.add_tab(&leaf.id, dragging.panel);
-                            }
-                            DockDropZone::Left => {
-                                let new_split = format!("split_{}", leaf.id);
-                                let new_leaf = format!("leaf_{}", dragging.panel.id);
-                                dock_tree.split_leaf(&leaf.id, new_split, new_leaf, SplitAxis::Horizontal, 0.3, dragging.panel);
-                            }
-                            DockDropZone::Right => {
-                                let new_split = format!("split_{}", leaf.id);
-                                let new_leaf = format!("leaf_{}", dragging.panel.id);
-                                dock_tree.split_leaf(&leaf.id, new_split, new_leaf, SplitAxis::Horizontal, 0.7, dragging.panel);
-                            }
-                            DockDropZone::Top => {
-                                let new_split = format!("split_{}", leaf.id);
-                                let new_leaf = format!("leaf_{}", dragging.panel.id);
-                                dock_tree.split_leaf(&leaf.id, new_split, new_leaf, SplitAxis::Vertical, 0.3, dragging.panel);
-                            }
-                            DockDropZone::Bottom => {
-                                let new_split = format!("split_{}", leaf.id);
-                                let new_leaf = format!("leaf_{}", dragging.panel.id);
-                                dock_tree.split_leaf(&leaf.id, new_split, new_leaf, SplitAxis::Vertical, 0.7, dragging.panel);
-                            }
+                        // Commit both operations together: a failed drop must not lose a panel.
+                        let mut next = dock_tree.clone();
+                        if !next.close_panel(&dragging.source_leaf_id, &dragging.panel.id) {
+                            return false;
                         }
-                        return true;
+                        let success = match zone {
+                            DockDropZone::Center => next.add_tab(&leaf.id, dragging.panel),
+                            DockDropZone::Left | DockDropZone::Right |
+                            DockDropZone::Top | DockDropZone::Bottom => {
+                                let (axis, ratio) = match zone {
+                                    DockDropZone::Left => (SplitAxis::Horizontal, 0.3),
+                                    DockDropZone::Right => (SplitAxis::Horizontal, 0.7),
+                                    DockDropZone::Top => (SplitAxis::Vertical, 0.3),
+                                    DockDropZone::Bottom => (SplitAxis::Vertical, 0.7),
+                                    DockDropZone::Center => unreachable!(),
+                                };
+                                next.split_leaf(
+                                    &leaf.id,
+                                    format!("split_{}_{}", leaf.id, dragging.panel.id),
+                                    format!("leaf_{}", dragging.panel.id),
+                                    axis, ratio, dragging.panel,
+                                )
+                            }
+                        };
+                        if success {
+                            *dock_tree = next;
+                        }
+                        return success;
                     }
                 }
             }

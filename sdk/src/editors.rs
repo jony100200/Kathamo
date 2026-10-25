@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ui_core::*;
-use ui_platform::{PointerButton, PointerState};
+use ui_platform::{ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::CommandBuffer;
 use ui_themes::ThemePalette;
 use ui_widgets::{
@@ -72,6 +72,11 @@ pub trait Editor: Send + Sync {
     fn handle_scroll(&mut self, _delta: Vec2, _pos: Vec2, _viewport: Rect) -> bool {
         false
     }
+
+    /// Keyboard and text events for the focused editor instance.
+    fn handle_key_down(&mut self, _key: Key, _modifiers: Modifiers) -> bool { false }
+    fn handle_text_input(&mut self, _text: &str) -> bool { false }
+    fn handle_ime(&mut self, _event: ImeEvent) -> bool { false }
 
     /// Optional serialization of view state (e.g. pan/zoom, active tab, camera position).
     fn save_state(&self) -> Option<String> {
@@ -410,6 +415,10 @@ impl Editor for NodeGraphEditor {
     fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, viewport: Rect) -> bool {
         self.editor.handle_scroll(delta, pos, viewport);
         true
+    }
+
+    fn handle_key_down(&mut self, key: Key, _modifiers: Modifiers) -> bool {
+        self.editor.handle_key_down(key)
     }
 }
 

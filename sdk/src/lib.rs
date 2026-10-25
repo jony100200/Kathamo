@@ -39,6 +39,7 @@ pub mod inspect;
 pub mod layout;
 pub mod native;
 pub mod prelude;
+pub mod runtime;
 pub mod workspace;
 
 // Re-export core crates for low-level access when needed

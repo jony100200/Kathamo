@@ -281,6 +281,13 @@ impl DesignRuntime {
     }
 
     pub fn sync(&mut self, doc: &DesignDocument) {
+        // Explicit consumer bindings take precedence; document defaults are applied once.
+        for (id, key) in &doc.state_bindings {
+            self.bindings.entry(id.clone()).or_insert_with(|| key.clone());
+        }
+        for (id, action) in &doc.action_bindings {
+            self.actions.entry(id.clone()).or_insert_with(|| action.clone());
+        }
         self.instances.retain(|id, _| doc.find(id).is_some());
         self.text_inputs.retain(|id, _| doc.find(id).is_some());
         for node in &doc.elements {

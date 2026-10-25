@@ -33,6 +33,7 @@
 
 pub mod app;
 pub mod components;
+pub mod designer;
 pub mod editors;
 pub mod inspect;
 pub mod layout;

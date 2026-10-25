@@ -746,6 +746,18 @@ impl WorkspaceHost {
             return true;
         }
         let ws = &mut self.workspaces[self.active_workspace_idx];
+        // Text/code surfaces can consume Tab for indentation. Ctrl+Tab always
+        // traverses panes, and unhandled Tab retains the normal pane traversal.
+        if key == Key::Tab && !modifiers.ctrl && !modifiers.alt && !modifiers.command {
+            if self
+                .focused_panel_id
+                .as_ref()
+                .and_then(|id| ws.editors.get_mut(id))
+                .is_some_and(|editor| editor.handle_key_down(key.clone(), modifiers))
+            {
+                return true;
+            }
+        }
         if key == Key::Tab && !modifiers.alt && !modifiers.command {
             let mut ids = Vec::new();
             collect_node_panels(&ws.dock_tree.root, &mut ids);

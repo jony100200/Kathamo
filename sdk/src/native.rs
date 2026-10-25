@@ -392,7 +392,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
             .with_title(self.app.title())
             .with_inner_size(LogicalSize::new(width as f64, height as f64))
             .with_min_inner_size(LogicalSize::new(480.0, 320.0))
-            .with_visible(true);
+            .with_visible(false);
 
         match event_loop.create_window(attributes) {
             Ok(window) => {

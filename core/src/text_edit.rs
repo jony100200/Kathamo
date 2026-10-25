@@ -48,13 +48,17 @@ impl TextEditBuffer {
     }
 
     /// Changes only when content changes, so views can cache line indexes.
-    pub fn revision(&self) -> u64 { self.revision }
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
 
     /// Place a character-indexed caret, preserving UTF-8 boundaries.
     pub fn set_cursor(&mut self, index: usize, extend_selection: bool) {
         if extend_selection {
             self.selection_anchor.get_or_insert(self.cursor);
-        } else { self.selection_anchor = None; }
+        } else {
+            self.selection_anchor = None;
+        }
         self.cursor = index.min(self.char_len());
     }
 
@@ -132,6 +136,13 @@ impl TextEditBuffer {
 
     /// Moves the cursor one character to the left.
     pub fn move_left(&mut self, extend_selection: bool) {
+        if !extend_selection {
+            if let Some((start, _)) = self.selection_range() {
+                self.cursor = start;
+                self.selection_anchor = None;
+                return;
+            }
+        }
         if extend_selection && self.selection_anchor.is_none() {
             self.selection_anchor = Some(self.cursor);
         } else if !extend_selection {
@@ -144,6 +155,13 @@ impl TextEditBuffer {
 
     /// Moves the cursor one character to the right.
     pub fn move_right(&mut self, extend_selection: bool) {
+        if !extend_selection {
+            if let Some((_, end)) = self.selection_range() {
+                self.cursor = end;
+                self.selection_anchor = None;
+                return;
+            }
+        }
         if extend_selection && self.selection_anchor.is_none() {
             self.selection_anchor = Some(self.cursor);
         } else if !extend_selection {

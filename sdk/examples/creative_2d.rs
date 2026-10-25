@@ -65,8 +65,9 @@ impl Creative2dEditorApp {
             Box::new(InspectorEditor { inspector })
         });
 
-        let mut workspace = WorkspaceHost::with_registry(registry);
-        workspace.switch_workspace(0); // Creative2D preset
+        let workspace = WorkspaceHost::with_preset(
+            registry, "ws_2d", "2D Canvas", WorkspacePreset::Creative2D,
+        );
 
         // Setup Application Menu Bar
         let menu_bar = MenuBar::new(vec![

@@ -255,6 +255,43 @@ impl DesignRuntime {
     pub fn get(&self, key: &str) -> Option<&UiValue> { self.values.get(key) }
     pub fn take_events(&mut self) -> Vec<UiEvent> { std::mem::take(&mut self.events) }
 
+    /// Deterministic, ID-addressed interface operation for agents and tests.
+    /// Application permission checks still apply when consuming the emitted action.
+    pub fn activate(&mut self, doc: &DesignDocument, id: &str) -> Result<(), String> {
+        let node = doc.find(id).ok_or("unknown component ID")?;
+        if !node.visible { return Err("component is hidden".into()); }
+        match node.kind {
+            DesignKind::Button | DesignKind::TextInput => {
+                self.emit(id, UiEventKind::Activated);
+                Ok(())
+            }
+            DesignKind::Toggle => {
+                let key = self.state_key(id).to_owned();
+                let checked = !matches!(self.values.get(&key), Some(UiValue::Bool(true)));
+                self.values.insert(key, UiValue::Bool(checked));
+                self.emit(id, UiEventKind::Changed(UiValue::Bool(checked)));
+                Ok(())
+            }
+            _ => Err("component is not an activatable control".into()),
+        }
+    }
+
+    /// Set input through the same state/event channel as human typing.
+    pub fn set_text_by_id(&mut self, doc: &DesignDocument,
+                          id: &str, text: &str) -> Result<(), String> {
+        let node = doc.find(id).ok_or("unknown component ID")?;
+        if !node.visible || node.kind != DesignKind::TextInput {
+            return Err("component is not a visible text field".into());
+        }
+        let key = self.state_key(id).to_owned();
+        self.text_inputs.entry(id.to_owned())
+            .or_insert_with(|| TextEditBuffer::new("")).set_text(text);
+        let value = UiValue::Text(text.to_owned());
+        self.values.insert(key, value.clone());
+        self.emit(id, UiEventKind::Changed(value));
+        Ok(())
+    }
+
     /// Return mutable real widgets for data population by consuming applications.
     pub fn graph(&mut self, id: &str) -> Option<&mut NodeEditor> {
         match self.instances.get_mut(id) {
@@ -400,6 +437,18 @@ impl DesignRuntime {
                         &node.label, rect,
                         self.focused.as_deref() == Some(node.id.as_str()),
                         rect.contains(ptr.position), pal),
+                    DesignKind::Label => {
+                        let label = match value {
+                            Some(UiValue::Text(v)) => v.clone(),
+                            Some(UiValue::Number(v)) => format!("{v}"),
+                            Some(UiValue::Bool(v)) => v.to_string(),
+                            _ => node.label.clone(),
+                        };
+                        buf.push(DrawCommand::Text {
+                            text: label, pos: rect.min + Vec2::new(8.0, 7.0),
+                            size: 13.0, color: node.foreground, strong: false,
+                        });
+                    }
                     _ => {
                         buf.push(DrawCommand::Rect { rect, fill: node.background,
                             radius: CornerRadius::same(3.0),

@@ -66,9 +66,13 @@ impl<'a> RangeSlider<'a> {
         let value_width = if self.show_values { 90.0 } else { 0.0 };
 
         let track_x = rect.min.x + label_width + thumb_radius;
-        let track_width = (rect.width() - label_width - value_width - (thumb_radius * 2.0)).max(20.0);
+        let track_width =
+            (rect.width() - label_width - value_width - (thumb_radius * 2.0)).max(20.0);
         let track_y = rect.min.y + (rect.height() - track_height) * 0.5;
-        let track_rect = Rect::from_min_size(Vec2::new(track_x, track_y), Vec2::new(track_width, track_height));
+        let track_rect = Rect::from_min_size(
+            Vec2::new(track_x, track_y),
+            Vec2::new(track_width, track_height),
+        );
 
         // Render Label
         if let Some(lbl) = self.label {
@@ -90,11 +94,17 @@ impl<'a> RangeSlider<'a> {
         let thumb_center_y = track_y + track_height * 0.5;
 
         let min_thumb_rect = Rect::from_min_size(
-            Vec2::new(min_thumb_center_x - thumb_radius, thumb_center_y - thumb_radius),
+            Vec2::new(
+                min_thumb_center_x - thumb_radius,
+                thumb_center_y - thumb_radius,
+            ),
             Vec2::new(thumb_radius * 2.0, thumb_radius * 2.0),
         );
         let max_thumb_rect = Rect::from_min_size(
-            Vec2::new(max_thumb_center_x - thumb_radius, thumb_center_y - thumb_radius),
+            Vec2::new(
+                max_thumb_center_x - thumb_radius,
+                thumb_center_y - thumb_radius,
+            ),
             Vec2::new(thumb_radius * 2.0, thumb_radius * 2.0),
         );
 
@@ -142,7 +152,10 @@ impl<'a> RangeSlider<'a> {
         // Draw active fill between thumbs
         let fill_x = track_x + norm_min * track_width;
         let fill_width = ((norm_max - norm_min) * track_width).max(0.0);
-        let fill_rect = Rect::from_min_size(Vec2::new(fill_x, track_y), Vec2::new(fill_width, track_height));
+        let fill_rect = Rect::from_min_size(
+            Vec2::new(fill_x, track_y),
+            Vec2::new(fill_width, track_height),
+        );
         ui.cmd_buf.push(DrawCommand::Rect {
             rect: fill_rect,
             fill: palette.accent,
@@ -207,10 +220,10 @@ impl<'a> RangeSlider<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::icon_cache::IconAtlas;
     use ui_platform::input::PointerState;
     use ui_render::CommandBuffer;
     use ui_themes::ThemePalette;
-    use crate::icon_cache::IconAtlas;
 
     #[test]
     fn test_range_slider_clamping_and_render() {
@@ -220,13 +233,7 @@ mod tests {
         let pointer = PointerState::default();
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 300.0));
 
-        let mut ui = KolponaUi::new(
-            &mut cmd_buf,
-            &mut icon_atlas,
-            &palette,
-            bounds,
-            pointer,
-        );
+        let mut ui = KolponaUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
 
         let mut min_val = 10.0;
         let mut max_val = 80.0;

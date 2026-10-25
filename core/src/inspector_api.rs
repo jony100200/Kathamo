@@ -86,7 +86,11 @@ pub struct UiInspectorSnapshot {
 }
 
 impl UiInspectorSnapshot {
-    pub fn new(root: UiInspectorNode, window_size: (u32, u32), focused_element: Option<String>) -> Self {
+    pub fn new(
+        root: UiInspectorNode,
+        window_size: (u32, u32),
+        focused_element: Option<String>,
+    ) -> Self {
         Self {
             root,
             window_size,
@@ -101,14 +105,20 @@ impl UiInspectorSnapshot {
     /// Generates a human-readable text dump of the entire UI tree for agent inspection.
     pub fn dump_tree(&self) -> String {
         let mut s = String::new();
-        s.push_str(&format!("UI Tree Snapshot ({}x{}):\n", self.window_size.0, self.window_size.1));
+        s.push_str(&format!(
+            "UI Tree Snapshot ({}x{}):\n",
+            self.window_size.0, self.window_size.1
+        ));
         Self::dump_node(&self.root, 0, &mut s);
         s
     }
 
     fn dump_node(node: &UiInspectorNode, depth: usize, out: &mut String) {
         let indent = "  ".repeat(depth);
-        let label_str = node.label.as_deref().map_or("".to_string(), |l| format!(" \"{}\"", l));
+        let label_str = node
+            .label
+            .as_deref()
+            .map_or("".to_string(), |l| format!(" \"{}\"", l));
         let focus_str = if node.focused { " [FOCUSED]" } else { "" };
         let active_str = if node.active { " [ACTIVE]" } else { "" };
 
@@ -139,17 +149,35 @@ mod tests {
 
     #[test]
     fn test_inspector_tree_query() {
-        let mut root = UiInspectorNode::new("window", "Window", Rect::from_min_size(Vec2::ZERO, Vec2::new(1280.0, 720.0)));
-        let mut canvas = UiInspectorNode::new("canvas_host", "CanvasHost", Rect::from_min_size(Vec2::new(200.0, 40.0), Vec2::new(800.0, 680.0)))
-            .with_active(true);
-        canvas.add_child(UiInspectorNode::new("layer_1", "Layer", Rect::from_min_size(Vec2::new(220.0, 60.0), Vec2::new(100.0, 100.0))).with_label("Hero"));
+        let mut root = UiInspectorNode::new(
+            "window",
+            "Window",
+            Rect::from_min_size(Vec2::ZERO, Vec2::new(1280.0, 720.0)),
+        );
+        let mut canvas = UiInspectorNode::new(
+            "canvas_host",
+            "CanvasHost",
+            Rect::from_min_size(Vec2::new(200.0, 40.0), Vec2::new(800.0, 680.0)),
+        )
+        .with_active(true);
+        canvas.add_child(
+            UiInspectorNode::new(
+                "layer_1",
+                "Layer",
+                Rect::from_min_size(Vec2::new(220.0, 60.0), Vec2::new(100.0, 100.0)),
+            )
+            .with_label("Hero"),
+        );
 
         root.add_child(canvas);
 
         let snapshot = UiInspectorSnapshot::new(root, (1280, 720), Some("canvas_host".into()));
         assert!(snapshot.find("canvas_host").is_some());
         assert!(snapshot.find("layer_1").is_some());
-        assert_eq!(snapshot.find("layer_1").unwrap().label.as_deref(), Some("Hero"));
+        assert_eq!(
+            snapshot.find("layer_1").unwrap().label.as_deref(),
+            Some("Hero")
+        );
 
         let layers = snapshot.root.find_by_role("Layer");
         assert_eq!(layers.len(), 1);

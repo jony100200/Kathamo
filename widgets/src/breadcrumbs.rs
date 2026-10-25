@@ -100,7 +100,10 @@ impl<'a> Breadcrumbs<'a> {
             // Draw item label
             ui.cmd_buf.push(DrawCommand::Text {
                 text: item.label.to_string(),
-                pos: Vec2::new(current_x + 4.0, rect.min.y + (height - self.font_size) * 0.5),
+                pos: Vec2::new(
+                    current_x + 4.0,
+                    rect.min.y + (height - self.font_size) * 0.5,
+                ),
                 size: self.font_size,
                 color: text_color,
                 strong: is_last,
@@ -143,10 +146,10 @@ impl<'a> Breadcrumbs<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::icon_cache::IconAtlas;
     use ui_platform::input::PointerState;
     use ui_render::CommandBuffer;
     use ui_themes::ThemePalette;
-    use crate::icon_cache::IconAtlas;
 
     #[test]
     fn test_breadcrumbs_render() {
@@ -156,13 +159,7 @@ mod tests {
         let pointer = PointerState::default();
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(500.0, 200.0));
 
-        let mut ui = KolponaUi::new(
-            &mut cmd_buf,
-            &mut icon_atlas,
-            &palette,
-            bounds,
-            pointer,
-        );
+        let mut ui = KolponaUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
 
         let items = [
             BreadcrumbItem::new("Workspace"),

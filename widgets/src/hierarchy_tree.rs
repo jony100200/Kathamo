@@ -140,7 +140,10 @@ impl HierarchyTree {
         let sel = self.selected_id.clone()?;
         if let Some(pos) = self.items.iter().position(|i| i.id == sel) {
             self.items.remove(pos);
-            self.selected_id = self.items.get(pos.min(self.items.len().saturating_sub(1))).map(|i| i.id.clone());
+            self.selected_id = self
+                .items
+                .get(pos.min(self.items.len().saturating_sub(1)))
+                .map(|i| i.id.clone());
             if let Some(ref new_sel) = self.selected_id {
                 for item in &mut self.items {
                     item.selected = &item.id == new_sel;
@@ -200,10 +203,17 @@ impl HierarchyTree {
 
         // Toolbar buttons hit test (at top of panel)
         let toolbar_h = 32.0;
-        let toolbar_rect = Rect::from_min_size(viewport.min, Vec2::new(viewport.width(), toolbar_h));
+        let toolbar_rect =
+            Rect::from_min_size(viewport.min, Vec2::new(viewport.width(), toolbar_h));
         if toolbar_rect.contains(pos) {
-            let add_btn = Rect::from_min_size(Vec2::new(viewport.max.x - 70.0, viewport.min.y + 4.0), Vec2::new(28.0, 24.0));
-            let del_btn = Rect::from_min_size(Vec2::new(viewport.max.x - 36.0, viewport.min.y + 4.0), Vec2::new(28.0, 24.0));
+            let add_btn = Rect::from_min_size(
+                Vec2::new(viewport.max.x - 70.0, viewport.min.y + 4.0),
+                Vec2::new(28.0, 24.0),
+            );
+            let del_btn = Rect::from_min_size(
+                Vec2::new(viewport.max.x - 36.0, viewport.min.y + 4.0),
+                Vec2::new(28.0, 24.0),
+            );
 
             if add_btn.contains(pos) {
                 self.add_item("New Layer");
@@ -222,17 +232,26 @@ impl HierarchyTree {
         let row_h = 28.0;
 
         for (idx, item) in self.items.iter_mut().enumerate() {
-            let row_rect = Rect::from_min_size(Vec2::new(viewport.min.x + 4.0, y), Vec2::new(viewport.width() - 8.0, row_h));
+            let row_rect = Rect::from_min_size(
+                Vec2::new(viewport.min.x + 4.0, y),
+                Vec2::new(viewport.width() - 8.0, row_h),
+            );
             if row_rect.contains(pos) {
                 // Check eye visibility icon
-                let eye_rect = Rect::from_min_size(Vec2::new(row_rect.min.x + 4.0, row_rect.min.y + 4.0), Vec2::new(20.0, 20.0));
+                let eye_rect = Rect::from_min_size(
+                    Vec2::new(row_rect.min.x + 4.0, row_rect.min.y + 4.0),
+                    Vec2::new(20.0, 20.0),
+                );
                 if eye_rect.contains(pos) {
                     item.visible = !item.visible;
                     return Some(HierarchyEvent::ToggleVisibility(item.id.clone()));
                 }
 
                 // Check lock icon
-                let lock_rect = Rect::from_min_size(Vec2::new(row_rect.min.x + 28.0, row_rect.min.y + 4.0), Vec2::new(20.0, 20.0));
+                let lock_rect = Rect::from_min_size(
+                    Vec2::new(row_rect.min.x + 28.0, row_rect.min.y + 4.0),
+                    Vec2::new(20.0, 20.0),
+                );
                 if lock_rect.contains(pos) {
                     item.locked = !item.locked;
                     return Some(HierarchyEvent::ToggleLocked(item.id.clone()));
@@ -290,7 +309,8 @@ impl HierarchyTree {
 
         // Toolbar header
         let toolbar_h = 32.0;
-        let toolbar_rect = Rect::from_min_size(viewport.min, Vec2::new(viewport.width(), toolbar_h));
+        let toolbar_rect =
+            Rect::from_min_size(viewport.min, Vec2::new(viewport.width(), toolbar_h));
         buf.push(DrawCommand::Rect {
             rect: toolbar_rect,
             fill: palette.elevated,
@@ -307,7 +327,10 @@ impl HierarchyTree {
         });
 
         // Add layer button
-        let add_btn = Rect::from_min_size(Vec2::new(viewport.max.x - 70.0, viewport.min.y + 4.0), Vec2::new(28.0, 24.0));
+        let add_btn = Rect::from_min_size(
+            Vec2::new(viewport.max.x - 70.0, viewport.min.y + 4.0),
+            Vec2::new(28.0, 24.0),
+        );
         buf.push(DrawCommand::Rect {
             rect: add_btn,
             fill: palette.surface,
@@ -323,7 +346,10 @@ impl HierarchyTree {
         });
 
         // Delete layer button
-        let del_btn = Rect::from_min_size(Vec2::new(viewport.max.x - 36.0, viewport.min.y + 4.0), Vec2::new(28.0, 24.0));
+        let del_btn = Rect::from_min_size(
+            Vec2::new(viewport.max.x - 36.0, viewport.min.y + 4.0),
+            Vec2::new(28.0, 24.0),
+        );
         buf.push(DrawCommand::Rect {
             rect: del_btn,
             fill: palette.surface,
@@ -343,7 +369,10 @@ impl HierarchyTree {
         let row_h = 28.0;
 
         for item in &self.items {
-            let row_rect = Rect::from_min_size(Vec2::new(viewport.min.x + 4.0, y), Vec2::new(viewport.width() - 8.0, row_h));
+            let row_rect = Rect::from_min_size(
+                Vec2::new(viewport.min.x + 4.0, y),
+                Vec2::new(viewport.width() - 8.0, row_h),
+            );
             let is_sel = item.selected;
 
             buf.push(DrawCommand::Rect {
@@ -367,7 +396,11 @@ impl HierarchyTree {
                 text: eye_text.into(),
                 pos: Vec2::new(row_rect.min.x + 8.0, row_rect.min.y + 6.0),
                 size: 12.0,
-                color: if item.visible { palette.text } else { palette.text_muted.with_alpha(100) },
+                color: if item.visible {
+                    palette.text
+                } else {
+                    palette.text_muted.with_alpha(100)
+                },
                 strong: false,
             });
 
@@ -377,7 +410,11 @@ impl HierarchyTree {
                 text: lock_text.into(),
                 pos: Vec2::new(row_rect.min.x + 30.0, row_rect.min.y + 6.0),
                 size: 11.0,
-                color: if item.locked { palette.warning } else { palette.text_muted.with_alpha(80) },
+                color: if item.locked {
+                    palette.warning
+                } else {
+                    palette.text_muted.with_alpha(80)
+                },
                 strong: false,
             });
 
@@ -386,7 +423,10 @@ impl HierarchyTree {
             let name_x = row_rect.min.x + 52.0 + indent;
 
             if self.renaming_id.as_deref() == Some(&item.id) {
-                let edit_rect = Rect::from_min_size(Vec2::new(name_x, row_rect.min.y + 2.0), Vec2::new(row_rect.width() - 60.0 - indent, row_h - 4.0));
+                let edit_rect = Rect::from_min_size(
+                    Vec2::new(name_x, row_rect.min.y + 2.0),
+                    Vec2::new(row_rect.width() - 60.0 - indent, row_h - 4.0),
+                );
                 buf.push(DrawCommand::Rect {
                     rect: edit_rect,
                     fill: palette.elevated,
@@ -405,7 +445,11 @@ impl HierarchyTree {
                     text: item.name.clone(),
                     pos: Vec2::new(name_x, row_rect.min.y + 7.0),
                     size: 12.0,
-                    color: if item.visible { palette.text } else { palette.text_muted },
+                    color: if item.visible {
+                        palette.text
+                    } else {
+                        palette.text_muted
+                    },
                     strong: is_sel,
                 });
             }
@@ -435,7 +479,11 @@ mod tests {
     #[test]
     fn test_hierarchy_tree_layer_management() {
         let mut tree = HierarchyTree::new();
-        assert_eq!(tree.items.len(), 2, "Default hierarchy should contain 2 sample layers");
+        assert_eq!(
+            tree.items.len(),
+            2,
+            "Default hierarchy should contain 2 sample layers"
+        );
 
         let new_id = tree.add_item("Foreground Lineart");
         assert_eq!(tree.items.len(), 3);

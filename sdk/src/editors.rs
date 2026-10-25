@@ -7,9 +7,7 @@ use ui_core::*;
 use ui_platform::{ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::CommandBuffer;
 use ui_themes::ThemePalette;
-use ui_widgets::{
-    CanvasHost, HierarchyTree, MetadataPropertyInspector, NodeEditor, Timeline,
-};
+use ui_widgets::{CanvasHost, HierarchyTree, MetadataPropertyInspector, NodeEditor, Timeline};
 
 use crate::components::{AssetBrowser, ConsoleView};
 
@@ -74,9 +72,15 @@ pub trait Editor: Send + Sync {
     }
 
     /// Keyboard and text events for the focused editor instance.
-    fn handle_key_down(&mut self, _key: Key, _modifiers: Modifiers) -> bool { false }
-    fn handle_text_input(&mut self, _text: &str) -> bool { false }
-    fn handle_ime(&mut self, _event: ImeEvent) -> bool { false }
+    fn handle_key_down(&mut self, _key: Key, _modifiers: Modifiers) -> bool {
+        false
+    }
+    fn handle_text_input(&mut self, _text: &str) -> bool {
+        false
+    }
+    fn handle_ime(&mut self, _event: ImeEvent) -> bool {
+        false
+    }
 
     /// Optional serialization of view state (e.g. pan/zoom, active tab, camera position).
     fn save_state(&self) -> Option<String> {
@@ -245,7 +249,13 @@ impl Editor for CanvasEditor {
         self.host.render(cmd_buf, viewport, palette);
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, viewport: Rect, _ptr: &PointerState) -> bool {
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        _ptr: &PointerState,
+    ) -> bool {
         self.host.handle_mouse_down(pos, button, viewport);
         true
     }
@@ -301,8 +311,16 @@ impl Editor for HierarchyEditor {
         self.tree.render(cmd_buf, viewport, palette);
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, viewport: Rect, ptr: &PointerState) -> bool {
-        self.tree.handle_mouse_down(pos, button, viewport, ptr).is_some()
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        ptr: &PointerState,
+    ) -> bool {
+        self.tree
+            .handle_mouse_down(pos, button, viewport, ptr)
+            .is_some()
     }
 }
 
@@ -342,8 +360,16 @@ impl Editor for InspectorEditor {
         self.inspector.render(cmd_buf, viewport, palette);
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, viewport: Rect, _ptr: &PointerState) -> bool {
-        self.inspector.handle_mouse_down(pos, button, viewport).is_some()
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        _ptr: &PointerState,
+    ) -> bool {
+        self.inspector
+            .handle_mouse_down(pos, button, viewport)
+            .is_some()
     }
 
     fn handle_mouse_move(
@@ -391,7 +417,13 @@ impl Editor for NodeGraphEditor {
         self.editor.render(cmd_buf, viewport, palette);
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, viewport: Rect, _ptr: &PointerState) -> bool {
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        _ptr: &PointerState,
+    ) -> bool {
         self.editor.handle_mouse_down(pos, button, viewport);
         true
     }
@@ -481,8 +513,16 @@ impl Editor for AssetBrowserEditor {
         self.browser.render(cmd_buf, viewport, ptr, palette);
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, viewport: Rect, _ptr: &PointerState) -> bool {
-        self.browser.handle_mouse_down(pos, button, viewport).is_some()
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        _ptr: &PointerState,
+    ) -> bool {
+        self.browser
+            .handle_mouse_down(pos, button, viewport)
+            .is_some()
     }
 }
 

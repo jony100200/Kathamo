@@ -13,8 +13,8 @@ use ui_core::{Color, CornerRadius, Rect, Stroke, Vec2};
 use ui_platform::PointerButton;
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::ThemePalette;
-use ui_widgets::workspace_host::PresentationMode;
 use ui_widgets::canvas_host::CanvasTool;
+use ui_widgets::workspace_host::PresentationMode;
 
 pub fn render_creative_workspace_tab(
     app: &mut UiLabApp,
@@ -24,10 +24,8 @@ pub fn render_creative_workspace_tab(
 ) {
     // 1. Studio Top Control Bar (Toolbar + Presentation Switcher + Model Adapter)
     let top_bar_h = 44.0;
-    let top_bar_rect = Rect::from_min_size(
-        content_rect.min,
-        Vec2::new(content_rect.width(), top_bar_h),
-    );
+    let top_bar_rect =
+        Rect::from_min_size(content_rect.min, Vec2::new(content_rect.width(), top_bar_h));
 
     cmd_buf.push(DrawCommand::Rect {
         rect: top_bar_rect,
@@ -102,7 +100,13 @@ pub fn render_creative_workspace_tab(
 
         cmd_buf.push(DrawCommand::Rect {
             rect: tool_rect,
-            fill: if is_active { p.accent.with_alpha(180) } else if is_hover { p.elevated } else { p.surface },
+            fill: if is_active {
+                p.accent.with_alpha(180)
+            } else if is_hover {
+                p.elevated
+            } else {
+                p.surface
+            },
             radius: CornerRadius::same(4.0),
             stroke: Stroke::new(1.0, if is_active { p.accent } else { p.border }),
         });
@@ -168,10 +172,17 @@ pub fn render_creative_workspace_tab(
         radius: CornerRadius::same(5.0),
         stroke: Stroke::new(1.0, p.border),
     });
-    let dot_rect = Rect::from_min_size(Vec2::new(service_rect.min.x + 8.0, service_rect.min.y + 9.0), Vec2::new(10.0, 10.0));
+    let dot_rect = Rect::from_min_size(
+        Vec2::new(service_rect.min.x + 8.0, service_rect.min.y + 9.0),
+        Vec2::new(10.0, 10.0),
+    );
     cmd_buf.push(DrawCommand::Rect {
         rect: dot_rect,
-        fill: if app.service_adapter.is_connected { p.success } else { p.danger },
+        fill: if app.service_adapter.is_connected {
+            p.success
+        } else {
+            p.danger
+        },
         radius: CornerRadius::same(5.0),
         stroke: Stroke::NONE,
     });
@@ -186,10 +197,14 @@ pub fn render_creative_workspace_tab(
     // 2. Main Workstation Area: delegated to WorkspaceHost
     let workspace_rect = Rect::from_min_size(
         Vec2::new(content_rect.min.x, content_rect.min.y + top_bar_h),
-        Vec2::new(content_rect.width(), (content_rect.height() - top_bar_h).max(50.0)),
+        Vec2::new(
+            content_rect.width(),
+            (content_rect.height() - top_bar_h).max(50.0),
+        ),
     );
 
-    app.creative_workspace.render(cmd_buf, workspace_rect, &app.pointer, p);
+    app.creative_workspace
+        .render(cmd_buf, workspace_rect, &app.pointer, p);
 }
 
 /// Handles mouse down interactions for top control bar in Creative Workspace tab.
@@ -200,10 +215,8 @@ pub fn handle_creative_workspace_mouse_down(
     content_rect: Rect,
 ) -> bool {
     let top_bar_h = 44.0;
-    let top_bar_rect = Rect::from_min_size(
-        content_rect.min,
-        Vec2::new(content_rect.width(), top_bar_h),
-    );
+    let top_bar_rect =
+        Rect::from_min_size(content_rect.min, Vec2::new(content_rect.width(), top_bar_h));
 
     if top_bar_rect.contains(pos) && button == PointerButton::Primary {
         let mut cur_x = top_bar_rect.min.x + 12.0;
@@ -261,12 +274,16 @@ pub fn handle_creative_workspace_mouse_down(
     // Delegate into WorkspaceHost
     let workspace_rect = Rect::from_min_size(
         Vec2::new(content_rect.min.x, content_rect.min.y + top_bar_h),
-        Vec2::new(content_rect.width(), (content_rect.height() - top_bar_h).max(50.0)),
+        Vec2::new(
+            content_rect.width(),
+            (content_rect.height() - top_bar_h).max(50.0),
+        ),
     );
 
     if workspace_rect.contains(pos) {
         let ptr_copy = app.pointer.clone();
-        app.creative_workspace.handle_mouse_down(pos, button, workspace_rect, &ptr_copy);
+        app.creative_workspace
+            .handle_mouse_down(pos, button, workspace_rect, &ptr_copy);
         return true;
     }
 

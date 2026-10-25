@@ -57,26 +57,50 @@ impl VideoEditorApp {
         });
 
         // 3. Clip & Track Property Inspector
-        registry.register_factory("property_inspector", "Clip Properties", "Inspectors", || {
-            let inspector = MetadataPropertyInspector::new(
-                "Selected Clip: Camera_A_Take03.mov",
-                vec![
-                    PropertyItem::integer("in_frame", "In Point (Frames)", 0, 0, 10000),
-                    PropertyItem::integer("out_frame", "Out Point (Frames)", 240, 0, 10000),
-                    PropertyItem::float("playback_speed", "Speed Multiplier", 1.0, 0.1, 10.0, 0.1),
-                    PropertyItem::float("audio_gain", "Audio Volume (dB)", 0.0, -60.0, 12.0, 0.5),
-                    PropertyItem::float("video_opacity", "Opacity", 1.0, 0.0, 1.0, 0.05),
-                    PropertyItem::boolean("color_lut_enabled", "Apply Rec.709 3D LUT", true),
-                    PropertyItem::enum_choice(
-                        "composite_mode",
-                        "Composite Mode",
-                        0,
-                        vec!["Normal".into(), "Screen".into(), "Multiply".into(), "Overlay".into()],
-                    ),
-                ],
-            );
-            Box::new(InspectorEditor { inspector })
-        });
+        registry.register_factory(
+            "property_inspector",
+            "Clip Properties",
+            "Inspectors",
+            || {
+                let inspector = MetadataPropertyInspector::new(
+                    "Selected Clip: Camera_A_Take03.mov",
+                    vec![
+                        PropertyItem::integer("in_frame", "In Point (Frames)", 0, 0, 10000),
+                        PropertyItem::integer("out_frame", "Out Point (Frames)", 240, 0, 10000),
+                        PropertyItem::float(
+                            "playback_speed",
+                            "Speed Multiplier",
+                            1.0,
+                            0.1,
+                            10.0,
+                            0.1,
+                        ),
+                        PropertyItem::float(
+                            "audio_gain",
+                            "Audio Volume (dB)",
+                            0.0,
+                            -60.0,
+                            12.0,
+                            0.5,
+                        ),
+                        PropertyItem::float("video_opacity", "Opacity", 1.0, 0.0, 1.0, 0.05),
+                        PropertyItem::boolean("color_lut_enabled", "Apply Rec.709 3D LUT", true),
+                        PropertyItem::enum_choice(
+                            "composite_mode",
+                            "Composite Mode",
+                            0,
+                            vec![
+                                "Normal".into(),
+                                "Screen".into(),
+                                "Multiply".into(),
+                                "Overlay".into(),
+                            ],
+                        ),
+                    ],
+                );
+                Box::new(InspectorEditor { inspector })
+            },
+        );
 
         // 4. Media Bin Asset Browser
         registry.register_factory("asset_browser", "Project Media Bin", "Data", || {
@@ -95,7 +119,10 @@ impl VideoEditorApp {
         });
 
         let workspace = WorkspaceHost::with_preset(
-            registry, "ws_video", "Video Editor", WorkspacePreset::VideoEditing,
+            registry,
+            "ws_video",
+            "Video Editor",
+            WorkspacePreset::VideoEditing,
         );
 
         // Application Menu Bar
@@ -107,7 +134,11 @@ impl VideoEditorApp {
                     MenuItem::action("file_import", "Import Footage...", Some("Ctrl+I")),
                     MenuItem::separator(),
                     MenuItem::action("file_save_proj", "Save Sequence", Some("Ctrl+S")),
-                    MenuItem::action("file_export_video", "Render & Export Master...", Some("Ctrl+M")),
+                    MenuItem::action(
+                        "file_export_video",
+                        "Render & Export Master...",
+                        Some("Ctrl+M"),
+                    ),
                 ],
             ),
             Menu::new(
@@ -132,7 +163,10 @@ impl VideoEditorApp {
         ]);
 
         let mut notifications = NotificationHost::new();
-        notifications.info("Timeline Active", "Sequence: 3840x2160 @ 60.00 FPS. Audio: 48kHz Stereo.");
+        notifications.info(
+            "Timeline Active",
+            "Sequence: 3840x2160 @ 60.00 FPS. Audio: 48kHz Stereo.",
+        );
 
         Self {
             workspace,
@@ -173,29 +207,49 @@ impl KathamoApp for VideoEditorApp {
 
         // 1. Menu Bar
         let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
-        self.menu_bar.render(&mut ctx.cmd_buf, menu_rect, &ctx.pointer, &palette);
+        self.menu_bar
+            .render(&mut ctx.cmd_buf, menu_rect, &ctx.pointer, &palette);
 
         // 2. Docked Video Workspace
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.render(&mut ctx.cmd_buf, workspace_rect, &ctx.pointer, &palette);
+        self.workspace
+            .render(&mut ctx.cmd_buf, workspace_rect, &ctx.pointer, &palette);
 
         // 3. Dialogs & Notifications
-        self.dialogs.render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &palette);
-        self.notifications.render(&mut ctx.cmd_buf, bounds, &palette);
+        self.dialogs
+            .render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &palette);
+        self.notifications
+            .render(&mut ctx.cmd_buf, bounds, &palette);
 
         // 4. UI Inspector Snapshot
         if self.inspector_snapshot.is_none() {
             let mut snap = InterfaceInspector::new_snapshot("video_editor_root", bounds);
-            InterfaceInspector::add_dock_tab(&mut snap.root, "menu_bar", "MenuBar", menu_rect, true);
-            InterfaceInspector::add_editor(&mut snap.root, "workspace_host", "WorkspaceHost", workspace_rect);
+            InterfaceInspector::add_dock_tab(
+                &mut snap.root,
+                "menu_bar",
+                "MenuBar",
+                menu_rect,
+                true,
+            );
+            InterfaceInspector::add_editor(
+                &mut snap.root,
+                "workspace_host",
+                "WorkspaceHost",
+                workspace_rect,
+            );
             self.inspector_snapshot = Some(snap);
         }
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
         let bounds = ctx.bounds();
         let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
 
@@ -204,7 +258,8 @@ impl KathamoApp for VideoEditorApp {
                 if action_id == "file_export_video" {
                     self.trigger_export_dialog();
                 } else if action_id == "file_save_proj" {
-                    self.notifications.success("Sequence Saved", "Timeline markers and EDL synced.");
+                    self.notifications
+                        .success("Sequence Saved", "Timeline markers and EDL synced.");
                 }
                 return true;
             }
@@ -213,7 +268,8 @@ impl KathamoApp for VideoEditorApp {
         if self.dialogs.is_open {
             if let Some((_id, action)) = self.dialogs.handle_mouse_down(pos, button, bounds) {
                 if action == DialogAction::Confirm {
-                    self.notifications.success("Render Queued", "Exporting video sequence to disk...");
+                    self.notifications
+                        .success("Render Queued", "Exporting video sequence to disk...");
                 }
                 return true;
             }
@@ -223,17 +279,21 @@ impl KathamoApp for VideoEditorApp {
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.handle_mouse_down(pos, button, workspace_rect, &ctx.pointer)
+        self.workspace
+            .handle_mouse_down(pos, button, workspace_rect, &ctx.pointer)
     }
 
     fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
-        if self.dialogs.is_open { return false; }
+        if self.dialogs.is_open {
+            return false;
+        }
         let bounds = ctx.bounds();
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.handle_mouse_move(pos, delta, workspace_rect, &ctx.pointer)
+        self.workspace
+            .handle_mouse_move(pos, delta, workspace_rect, &ctx.pointer)
     }
 
     fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
@@ -246,7 +306,9 @@ impl KathamoApp for VideoEditorApp {
     }
 
     fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
-        if self.dialogs.is_open { return false; }
+        if self.dialogs.is_open {
+            return false;
+        }
         let bounds = ctx.bounds();
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
@@ -286,10 +348,19 @@ fn main() {
         }
     }
 
-    assert!(runner.app.dialogs.is_open, "Export video dialog should be open");
-    assert!(runner.app.inspector_snapshot.is_some(), "Inspector snapshot captured");
+    assert!(
+        runner.app.dialogs.is_open,
+        "Export video dialog should be open"
+    );
+    assert!(
+        runner.app.inspector_snapshot.is_some(),
+        "Inspector snapshot captured"
+    );
 
     println!("✓ Video Editor simulated successfully.");
     println!("✓ Total commands rendered: {}", last_cmd_count);
-    println!("✓ Workspaces active: {}", runner.app.workspace.workspaces.len());
+    println!(
+        "✓ Workspaces active: {}",
+        runner.app.workspace.workspaces.len()
+    );
 }

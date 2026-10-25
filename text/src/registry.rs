@@ -75,7 +75,8 @@ impl FontRegistry {
 
             // Fallback: try relative assets/fonts path or CARGO_MANIFEST_DIR
             if let Some(file_name) = font_path.file_name() {
-                let manifest_dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts"));
+                let manifest_dir =
+                    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts"));
                 let alt_path = manifest_dir.join(file_name);
                 if alt_path.exists() {
                     if let Ok(bytes) = std::fs::read(&alt_path) {
@@ -332,7 +333,10 @@ mod tests {
     fn system_font_discovery_and_availability() {
         let registry = FontRegistry::new();
         let fonts = registry.available_fonts();
-        assert!(!fonts.is_empty(), "Font list must contain bundled and system fonts");
+        assert!(
+            !fonts.is_empty(),
+            "Font list must contain bundled and system fonts"
+        );
         assert!(fonts.contains(&"Inter".to_string()));
     }
 }

@@ -332,7 +332,11 @@ impl DeviceState {
         });
         let dummy_image = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("kathamo-image-placeholder"),
-            size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -342,13 +346,22 @@ impl DeviceState {
         });
         queue.write_texture(
             wgpu::ImageCopyTexture {
-                texture: &dummy_image, mip_level: 0,
+                texture: &dummy_image,
+                mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             &[255, 255, 255, 255],
-            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
-            wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
         );
         let dummy_view = dummy_image.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -613,35 +626,75 @@ impl GpuBackend {
 
     /// Device and queue used for zero-copy application-owned wgpu viewport textures.
     /// External views must originate from this device; other Vulkan/DX12 devices need an explicit import/copy.
-    pub fn device(&self) -> &wgpu::Device { &self.dev.device }
-    pub fn queue(&self) -> &wgpu::Queue { &self.dev.queue }
+    pub fn device(&self) -> &wgpu::Device {
+        &self.dev.device
+    }
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.dev.queue
+    }
 
     /// Register an existing shader-readable RGBA GPU texture view, without copying its pixels.
     /// Re-register views after a device-loss recovery.
     pub fn register_external_view(&mut self, id: u64, view: wgpu::TextureView) {
         let bind_group = self.make_image_bind_group(&view);
-        self.images.insert(id, GpuImage { _texture: None, _view: view, bind_group, size: (0, 0) });
+        self.images.insert(
+            id,
+            GpuImage {
+                _texture: None,
+                _view: view,
+                bind_group,
+                size: (0, 0),
+            },
+        );
     }
 
     fn make_image_bind_group(&self, view: &wgpu::TextureView) -> wgpu::BindGroup {
-        self.dev.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("kathamo-image-bind-group"),
-            layout: &self.dev.image_layout,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: self.dev.uniform_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&self.dev.atlas_view) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.dev.sampler) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(view) },
-                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&self.dev.image_sampler) },
-            ],
-        })
+        self.dev
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("kathamo-image-bind-group"),
+                layout: &self.dev.image_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.dev.uniform_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&self.dev.atlas_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.dev.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::Sampler(&self.dev.image_sampler),
+                    },
+                ],
+            })
     }
 
     /// Upload an RGBA8 frame (paint layer, decoded image or video preview) to a sampled GPU texture.
     /// Call again with the same ID to update the frame. Does not upload on every UI redraw.
-    pub fn upload_rgba8_image(&mut self, id: u64, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
-        if width == 0 || height == 0 ||
-            (width as usize).checked_mul(height as usize).and_then(|x| x.checked_mul(4)) != Some(rgba.len()) {
+    pub fn upload_rgba8_image(
+        &mut self,
+        id: u64,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+    ) -> Result<(), String> {
+        if width == 0
+            || height == 0
+            || (width as usize)
+                .checked_mul(height as usize)
+                .and_then(|x| x.checked_mul(4))
+                != Some(rgba.len())
+        {
             return Err("RGBA8 image length must be width * height * 4".into());
         }
 
@@ -650,11 +703,23 @@ impl GpuBackend {
             if existing.size == (width, height) {
                 if let Some(texture) = &existing._texture {
                     self.dev.queue.write_texture(
-                        wgpu::ImageCopyTexture { texture, mip_level: 0,
-                            origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                        wgpu::ImageCopyTexture {
+                            texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
                         rgba,
-                        wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: Some(height) },
-                        wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+                        wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(width * 4),
+                            rows_per_image: Some(height),
+                        },
+                        wgpu::Extent3d {
+                            width,
+                            height,
+                            depth_or_array_layers: 1,
+                        },
                     );
                     return Ok(());
                 }
@@ -662,7 +727,11 @@ impl GpuBackend {
         }
         let texture = self.dev.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("kathamo-application-rgba"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -672,16 +741,34 @@ impl GpuBackend {
         });
         self.dev.queue.write_texture(
             wgpu::ImageCopyTexture {
-                texture: &texture, mip_level: 0,
-                origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All,
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
             },
             rgba,
-            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: Some(height) },
-            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let bind_group = self.make_image_bind_group(&view);
-        self.images.insert(id, GpuImage { _texture: Some(texture), _view: view, bind_group, size: (width, height) });
+        self.images.insert(
+            id,
+            GpuImage {
+                _texture: Some(texture),
+                _view: view,
+                bind_group,
+                size: (width, height),
+            },
+        );
         Ok(())
     }
 
@@ -1049,7 +1136,7 @@ impl GpuBackend {
                     } else {
                         self.tess_rect(*rect, *tint, CornerRadius::ZERO, Stroke::NONE);
                     }
-                },
+                }
                 DrawCommand::ClipPush { rect } => {
                     let r = match self.clip_stack.last() {
                         Some(p) => Rect::from_min_max(

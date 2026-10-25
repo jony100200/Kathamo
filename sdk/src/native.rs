@@ -1,7 +1,7 @@
 //! Native window runner for applications using the public Kathamo SDK.
 
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use ui_core::Vec2;
 use ui_platform::{
@@ -73,9 +73,13 @@ impl<A: KathamoApp> NativeAppRunner<A> {
     }
 
     fn upload_frames_gpu(&mut self) -> Result<(), String> {
-        let Some(gpu) = self.gpu.as_mut() else { return Ok(()); };
+        let Some(gpu) = self.gpu.as_mut() else {
+            return Ok(());
+        };
         self.gpu_images_uploaded.retain(|id, _| {
-            if self.ctx.images.contains_key(id) { true } else {
+            if self.ctx.images.contains_key(id) {
+                true
+            } else {
                 gpu.remove_image(*id);
                 false
             }
@@ -91,25 +95,39 @@ impl<A: KathamoApp> NativeAppRunner<A> {
 
     fn upload_frames_cpu(&mut self) -> Result<(), String> {
         self.cpu_images_uploaded.retain(|id, _| {
-            if self.ctx.images.contains_key(id) { true } else {
+            if self.ctx.images.contains_key(id) {
+                true
+            } else {
                 self.cpu.remove_image(*id);
                 false
             }
         });
         for (id, image) in &self.ctx.images {
             if self.cpu_images_uploaded.get(id) != Some(&image.version) {
-                self.cpu.upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
+                self.cpu
+                    .upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
                 self.cpu_images_uploaded.insert(*id, image.version);
             }
         }
         Ok(())
     }
 
-    fn process_window_requests(&mut self, event_loop: &ActiveEventLoop, requests: Vec<WindowRequest>) {
+    fn process_window_requests(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        requests: Vec<WindowRequest>,
+    ) {
         for request in requests {
             match request {
-                WindowRequest::Open { id, title, width, height } => {
-                    if self.children.values().any(|w| w.id == id) { continue; }
+                WindowRequest::Open {
+                    id,
+                    title,
+                    width,
+                    height,
+                } => {
+                    if self.children.values().any(|w| w.id == id) {
+                        continue;
+                    }
                     match SecondaryWindow::new(event_loop, id, title, width, height) {
                         Ok(child) => {
                             child.window.request_redraw();
@@ -119,27 +137,41 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     }
                 }
                 WindowRequest::Close { id } => {
-                    let key = self.children.iter()
-                        .find(|(_, child)| child.id == id).map(|(key, _)| *key);
+                    let key = self
+                        .children
+                        .iter()
+                        .find(|(_, child)| child.id == id)
+                        .map(|(key, _)| *key);
                     if let Some(key) = key {
                         self.children.remove(&key);
                         self.app.window_closed(&id);
-                        if let Some(main) = &self.window { main.request_redraw(); }
+                        if let Some(main) = &self.window {
+                            main.request_redraw();
+                        }
                     }
                 }
             }
         }
     }
 
-    fn secondary_window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+    fn secondary_window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        id: WindowId,
+        event: WindowEvent,
+    ) {
         if matches!(&event, WindowEvent::CloseRequested) {
             if let Some(child) = self.children.remove(&id) {
                 self.app.window_closed(&child.id);
-                if let Some(main) = &self.window { main.request_redraw(); }
+                if let Some(main) = &self.window {
+                    main.request_redraw();
+                }
             }
             return;
         }
-        let Some(child) = self.children.get_mut(&id) else { return; };
+        let Some(child) = self.children.get_mut(&id) else {
+            return;
+        };
         let window = child.window.clone();
         match event {
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
@@ -147,17 +179,24 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                 window.request_redraw();
             }
             WindowEvent::Focused(false) => {
-                for button in [PointerButton::Primary, PointerButton::Secondary, PointerButton::Middle] {
+                for button in [
+                    PointerButton::Primary,
+                    PointerButton::Secondary,
+                    PointerButton::Middle,
+                ] {
                     child.ctx.pointer.on_button_up(button);
                 }
                 child.ctx.focus.clear();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let pos = Vec2::new(position.x as f32 / child.ctx.scale,
-                    position.y as f32 / child.ctx.scale);
+                let pos = Vec2::new(
+                    position.x as f32 / child.ctx.scale,
+                    position.y as f32 / child.ctx.scale,
+                );
                 let delta = pos - child.ctx.pointer.position;
                 child.ctx.pointer.on_move(pos);
-                self.app.handle_window_mouse_move(&child.id, pos, delta, &mut child.ctx);
+                self.app
+                    .handle_window_mouse_move(&child.id, pos, delta, &mut child.ctx);
                 window.request_redraw();
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -166,10 +205,16 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     match state {
                         ElementState::Pressed => {
                             child.ctx.pointer.on_button_down(button);
-                            self.app.handle_window_mouse_down(&child.id, pos, button, &mut child.ctx);
+                            self.app.handle_window_mouse_down(
+                                &child.id,
+                                pos,
+                                button,
+                                &mut child.ctx,
+                            );
                         }
                         ElementState::Released => {
-                            self.app.handle_window_mouse_up(&child.id, pos, button, &mut child.ctx);
+                            self.app
+                                .handle_window_mouse_up(&child.id, pos, button, &mut child.ctx);
                             child.ctx.pointer.on_button_up(button);
                         }
                     }
@@ -178,29 +223,41 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let delta = match delta {
-                    MouseScrollDelta::LineDelta(x,y) => Vec2::new(x,y),
-                    MouseScrollDelta::PixelDelta(p) => Vec2::new(p.x as f32/20.0,p.y as f32/20.0),
+                    MouseScrollDelta::LineDelta(x, y) => Vec2::new(x, y),
+                    MouseScrollDelta::PixelDelta(p) => {
+                        Vec2::new(p.x as f32 / 20.0, p.y as f32 / 20.0)
+                    }
                 };
                 child.ctx.pointer.scroll_delta = delta;
                 let pos = child.ctx.pointer.position;
-                self.app.handle_window_scroll(&child.id, delta, pos, &mut child.ctx);
+                self.app
+                    .handle_window_scroll(&child.id, delta, pos, &mut child.ctx);
                 window.request_redraw();
             }
             WindowEvent::ModifiersChanged(mods) => {
                 let mods = mods.state();
                 child.modifiers = Modifiers {
-                    ctrl: mods.control_key(), shift: mods.shift_key(),
-                    alt: mods.alt_key(), command: mods.super_key(),
+                    ctrl: mods.control_key(),
+                    shift: mods.shift_key(),
+                    alt: mods.alt_key(),
+                    command: mods.super_key(),
                 };
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let key = key_from_winit(&event.logical_key);
-                let handled = self.app.handle_window_key_down(&child.id, key.clone(),
-                    child.modifiers, &mut child.ctx);
-                if !handled && key == Key::Tab { child.ctx.focus.cycle_focus(child.modifiers.shift); }
+                let handled = self.app.handle_window_key_down(
+                    &child.id,
+                    key.clone(),
+                    child.modifiers,
+                    &mut child.ctx,
+                );
+                if !handled && key == Key::Tab {
+                    child.ctx.focus.cycle_focus(child.modifiers.shift);
+                }
                 if let Some(text) = event.text {
                     if !child.modifiers.ctrl && !child.modifiers.command {
-                        self.app.handle_window_text_input(&child.id, text.as_str(), &mut child.ctx);
+                        self.app
+                            .handle_window_text_input(&child.id, text.as_str(), &mut child.ctx);
                     }
                 }
                 window.request_redraw();
@@ -208,7 +265,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             WindowEvent::Ime(ime) => {
                 use ui_platform::ImeEvent;
                 let event = match ime {
-                    Ime::Preedit(text, cursor) => Some(ImeEvent::Preedit(text,cursor)),
+                    Ime::Preedit(text, cursor) => Some(ImeEvent::Preedit(text, cursor)),
                     Ime::Commit(text) => Some(ImeEvent::Commit(text)),
                     Ime::Disabled => Some(ImeEvent::Disabled),
                     Ime::Enabled => None,
@@ -221,14 +278,19 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             WindowEvent::RedrawRequested => {
                 match child.present(&mut self.app) {
                     Ok(()) => {
-                        if !child.revealed && child.ctx.physical_size.0 > 0 && child.ctx.physical_size.1 > 0 {
+                        if !child.revealed
+                            && child.ctx.physical_size.0 > 0
+                            && child.ctx.physical_size.1 > 0
+                        {
                             window.set_visible(true);
                             child.revealed = true;
                         }
                     }
                     Err(error) => eprintln!("Kathamo secondary window frame: {error}"),
                 }
-                if self.app.wants_continuous_redraw() { window.request_redraw(); }
+                if self.app.wants_continuous_redraw() {
+                    window.request_redraw();
+                }
             }
             _ => {}
         }
@@ -277,7 +339,10 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         self.cpu.begin_frame(width, height, self.ctx.theme.canvas);
         self.cpu.submit(&self.ctx.cmd_buf);
         self.cpu.end_frame()?;
-        let presenter = self.presenter.as_mut().ok_or("CPU window presenter unavailable")?;
+        let presenter = self
+            .presenter
+            .as_mut()
+            .ok_or("CPU window presenter unavailable")?;
         presenter.present(self.cpu.pixels(), width, height)?;
         self.ctx.pointer.step_frame();
         Ok(())
@@ -334,7 +399,9 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     Err(err) => eprintln!("Kathamo software presenter unavailable: {err}"),
                 }
                 match GpuBackend::new_for_window(
-                    window.clone(), self.ctx.physical_size.0, self.ctx.physical_size.1,
+                    window.clone(),
+                    self.ctx.physical_size.0,
+                    self.ctx.physical_size.1,
                 ) {
                     Ok(mut gpu) => {
                         gpu.set_scale_factor(self.ctx.scale);
@@ -353,7 +420,9 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
-        let Some(window) = self.window.as_ref().cloned() else { return; };
+        let Some(window) = self.window.as_ref().cloned() else {
+            return;
+        };
         if window.id() != id {
             self.secondary_window_event(event_loop, id, event);
             return;
@@ -404,7 +473,8 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     }
                 };
                 self.ctx.pointer.scroll_delta = delta;
-                self.app.handle_scroll(delta, self.ctx.pointer.position, &mut self.ctx);
+                self.app
+                    .handle_scroll(delta, self.ctx.pointer.position, &mut self.ctx);
                 window.request_redraw();
             }
             WindowEvent::ModifiersChanged(mods) => {
@@ -418,7 +488,9 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let key = key_from_winit(&event.logical_key);
-                let consumed = self.app.handle_key_down(key.clone(), self.modifiers, &mut self.ctx);
+                let consumed = self
+                    .app
+                    .handle_key_down(key.clone(), self.modifiers, &mut self.ctx);
                 if !consumed && key == Key::Tab {
                     self.ctx.focus.cycle_focus(self.modifiers.shift);
                 }
@@ -445,7 +517,10 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
             WindowEvent::RedrawRequested => {
                 match self.present() {
                     Ok(()) => {
-                        if !self.revealed && self.ctx.physical_size.0 > 0 && self.ctx.physical_size.1 > 0 {
+                        if !self.revealed
+                            && self.ctx.physical_size.0 > 0
+                            && self.ctx.physical_size.1 > 0
+                        {
                             window.set_visible(true);
                             self.revealed = true;
                         }
@@ -490,30 +565,47 @@ struct SecondaryWindow {
 }
 
 impl SecondaryWindow {
-    fn new(event_loop: &ActiveEventLoop, id: String, title: String, width: u32, height: u32) -> Result<Self, String> {
-        let window = Arc::new(event_loop.create_window(
-            WindowAttributes::default()
-                .with_title(title)
-                .with_inner_size(LogicalSize::new(width as f64, height as f64))
-                .with_visible(false)
-        ).map_err(|e| e.to_string())?);
+    fn new(
+        event_loop: &ActiveEventLoop,
+        id: String,
+        title: String,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, String> {
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    WindowAttributes::default()
+                        .with_title(title)
+                        .with_inner_size(LogicalSize::new(width as f64, height as f64))
+                        .with_visible(false),
+                )
+                .map_err(|e| e.to_string())?,
+        );
         window.set_ime_allowed(true);
         let scale = window.scale_factor() as f32;
         let size = window.inner_size();
         let mut ctx = AppContext::new(size.width, size.height, scale);
         ctx.window_id = id.clone();
         let presenter = SoftwarePresenter::new(window.clone()).ok();
-        let gpu = GpuBackend::new_for_window(window.clone(), size.width, size.height).ok().map(|mut gpu| {
-            gpu.set_scale_factor(scale);
-            gpu
-        });
+        let gpu = GpuBackend::new_for_window(window.clone(), size.width, size.height)
+            .ok()
+            .map(|mut gpu| {
+                gpu.set_scale_factor(scale);
+                gpu
+            });
         if gpu.is_none() && presenter.is_none() {
             return Err("no renderer available for secondary window".into());
         }
         let mut cpu = CpuBackend::new();
         cpu.set_scale_factor(scale);
         Ok(Self {
-            id, window, ctx, gpu, cpu, presenter,
+            id,
+            window,
+            ctx,
+            gpu,
+            cpu,
+            presenter,
             gpu_images_uploaded: HashMap::new(),
             cpu_images_uploaded: HashMap::new(),
             modifiers: Modifiers::NONE,
@@ -525,13 +617,17 @@ impl SecondaryWindow {
         let scale = self.window.scale_factor() as f32;
         let size = self.window.inner_size();
         self.ctx.resize(size.width, size.height, scale);
-        if let Some(gpu) = &mut self.gpu { gpu.set_scale_factor(scale); }
+        if let Some(gpu) = &mut self.gpu {
+            gpu.set_scale_factor(scale);
+        }
         self.cpu.set_scale_factor(scale);
     }
 
     fn present<A: KathamoApp>(&mut self, app: &mut A) -> Result<(), String> {
         let (width, height) = self.ctx.physical_size;
-        if width == 0 || height == 0 { return Ok(()); }
+        if width == 0 || height == 0 {
+            return Ok(());
+        }
         self.ctx.cmd_buf.clear();
         self.ctx.frame_count = self.ctx.frame_count.wrapping_add(1);
         app.update_window(&self.id, &mut self.ctx);
@@ -559,14 +655,17 @@ impl SecondaryWindow {
         }
         for (id, image) in &self.ctx.images {
             if self.cpu_images_uploaded.get(id) != Some(&image.version) {
-                self.cpu.upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
+                self.cpu
+                    .upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
                 self.cpu_images_uploaded.insert(*id, image.version);
             }
         }
         self.cpu.begin_frame(width, height, self.ctx.theme.canvas);
         self.cpu.submit(&self.ctx.cmd_buf);
         self.cpu.end_frame()?;
-        self.presenter.as_mut().ok_or("secondary window CPU presentation unavailable")?
+        self.presenter
+            .as_mut()
+            .ok_or("secondary window CPU presentation unavailable")?
             .present(self.cpu.pixels(), width, height)?;
         self.ctx.pointer.step_frame();
         Ok(())

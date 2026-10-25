@@ -205,7 +205,9 @@ impl FontManifest {
     /// 2. `./assets/fonts` or `../assets/fonts` relative to Kathamo
     /// 3. Standard fallback roots
     pub fn resolve_font_directory() -> PathBuf {
-        if let Ok(dir) = std::env::var("KATHAMO_FONTS_DIR").or_else(|_| std::env::var("KOLPONA_FONTS_DIR")) {
+        if let Ok(dir) =
+            std::env::var("KATHAMO_FONTS_DIR").or_else(|_| std::env::var("KOLPONA_FONTS_DIR"))
+        {
             let p = PathBuf::from(dir);
             if p.exists() {
                 return p;
@@ -228,7 +230,10 @@ impl FontManifest {
         for root in roots {
             for sub in ["assets/fonts", "Fonts/binaries", "fonts", "Fonts"] {
                 let candidate = root.join(sub);
-                if candidate.exists() && (candidate.join("Inter-Regular.ttf").is_file() || candidate.join("manifest.toml").is_file()) {
+                if candidate.exists()
+                    && (candidate.join("Inter-Regular.ttf").is_file()
+                        || candidate.join("manifest.toml").is_file())
+                {
                     return candidate;
                 }
             }

@@ -16,8 +16,8 @@ use ui_render::CommandBuffer;
 pub enum PresentationMode {
     #[default]
     Create, // Canvas viewport with layers and inspector
-    Split,  // Canvas and Node graph side-by-side
-    Graph,  // Full procedural node graph
+    Split, // Canvas and Node graph side-by-side
+    Graph, // Full procedural node graph
 }
 
 /// A shared, unified creative document data model.
@@ -45,10 +45,24 @@ impl Default for CreativeDocument {
 
         // Initial inspector properties for the active layer
         let props = vec![
-            PropertyItem::float("opacity", "Opacity", 1.0, 0.0, 1.0, 0.02).with_category("Appearance"),
-            PropertyItem::enum_choice("blend", "Blend Mode", 0, vec!["Normal".into(), "Multiply".into(), "Screen".into(), "Overlay".into()]).with_category("Appearance"),
-            PropertyItem::vec2("offset", "Offset", 0.0, 0.0, -1000.0, 1000.0).with_category("Transform"),
-            PropertyItem::color("tint", "Color Tint", Color::rgb(255, 255, 255)).with_category("Appearance"),
+            PropertyItem::float("opacity", "Opacity", 1.0, 0.0, 1.0, 0.02)
+                .with_category("Appearance"),
+            PropertyItem::enum_choice(
+                "blend",
+                "Blend Mode",
+                0,
+                vec![
+                    "Normal".into(),
+                    "Multiply".into(),
+                    "Screen".into(),
+                    "Overlay".into(),
+                ],
+            )
+            .with_category("Appearance"),
+            PropertyItem::vec2("offset", "Offset", 0.0, 0.0, -1000.0, 1000.0)
+                .with_category("Transform"),
+            PropertyItem::color("tint", "Color Tint", Color::rgb(255, 255, 255))
+                .with_category("Appearance"),
             PropertyItem::boolean("visible", "Visible", true).with_category("General"),
         ];
         let inspector = MetadataPropertyInspector::new("Hero Character Properties", props);
@@ -107,26 +121,51 @@ impl WorkspaceHost {
     }
 
     /// Handles pointer down across the active presentation layout.
-    pub fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, viewport: Rect, ptr: &PointerState) {
+    pub fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        ptr: &PointerState,
+    ) {
         match self.document.mode {
             PresentationMode::Create => {
                 let layout = self.document.dock_tree.compute_layout(viewport);
-                if self.document.dock_view.handle_mouse_down(pos, button, &layout, &mut self.document.dock_tree) {
+                if self.document.dock_view.handle_mouse_down(
+                    pos,
+                    button,
+                    &layout,
+                    &mut self.document.dock_tree,
+                ) {
                     return;
                 }
 
                 for leaf in &layout.leaves {
                     if leaf.content_rect.contains(pos) {
-                        let active_tab_id = leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
+                        let active_tab_id =
+                            leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
                         match active_tab_id {
-                            "canvas" => self.document.canvas.handle_mouse_down(pos, button, leaf.content_rect),
+                            "canvas" => self.document.canvas.handle_mouse_down(
+                                pos,
+                                button,
+                                leaf.content_rect,
+                            ),
                             "hierarchy" => {
-                                if let Some(event) = self.document.hierarchy.handle_mouse_down(pos, button, leaf.content_rect, ptr) {
+                                if let Some(event) = self.document.hierarchy.handle_mouse_down(
+                                    pos,
+                                    button,
+                                    leaf.content_rect,
+                                    ptr,
+                                ) {
                                     self.sync_hierarchy_event(event);
                                 }
                             }
                             "inspector" => {
-                                if let Some(change) = self.document.inspector.handle_mouse_down(pos, button, leaf.content_rect) {
+                                if let Some(change) = self.document.inspector.handle_mouse_down(
+                                    pos,
+                                    button,
+                                    leaf.content_rect,
+                                ) {
                                     self.sync_property_change(change);
                                 }
                             }
@@ -137,13 +176,21 @@ impl WorkspaceHost {
             }
             PresentationMode::Split => {
                 let half_w = viewport.width() * 0.5;
-                let canvas_rect = Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
-                let graph_rect = Rect::from_min_size(Vec2::new(viewport.min.x + half_w, viewport.min.y), Vec2::new(half_w, viewport.height()));
+                let canvas_rect =
+                    Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
+                let graph_rect = Rect::from_min_size(
+                    Vec2::new(viewport.min.x + half_w, viewport.min.y),
+                    Vec2::new(half_w, viewport.height()),
+                );
 
                 if canvas_rect.contains(pos) {
-                    self.document.canvas.handle_mouse_down(pos, button, canvas_rect);
+                    self.document
+                        .canvas
+                        .handle_mouse_down(pos, button, canvas_rect);
                 } else if graph_rect.contains(pos) {
-                    self.document.graph.handle_mouse_down(pos, button, graph_rect);
+                    self.document
+                        .graph
+                        .handle_mouse_down(pos, button, graph_rect);
                 }
             }
             PresentationMode::Graph => {
@@ -153,18 +200,38 @@ impl WorkspaceHost {
     }
 
     /// Handles pointer movement across the active presentation layout.
-    pub fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, viewport: Rect, ptr: &PointerState) {
+    pub fn handle_mouse_move(
+        &mut self,
+        pos: Vec2,
+        delta: Vec2,
+        viewport: Rect,
+        ptr: &PointerState,
+    ) {
         match self.document.mode {
             PresentationMode::Create => {
                 let layout = self.document.dock_tree.compute_layout(viewport);
-                self.document.dock_view.handle_mouse_move(pos, delta, viewport, &mut self.document.dock_tree, ptr);
+                self.document.dock_view.handle_mouse_move(
+                    pos,
+                    delta,
+                    viewport,
+                    &mut self.document.dock_tree,
+                    ptr,
+                );
 
                 for leaf in &layout.leaves {
-                    let active_tab_id = leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
+                    let active_tab_id =
+                        leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
                     match active_tab_id {
-                        "canvas" => self.document.canvas.handle_mouse_move(pos, delta, leaf.content_rect, ptr),
+                        "canvas" => self.document.canvas.handle_mouse_move(
+                            pos,
+                            delta,
+                            leaf.content_rect,
+                            ptr,
+                        ),
                         "inspector" => {
-                            if let Some(change) = self.document.inspector.handle_mouse_move(pos, delta, ptr) {
+                            if let Some(change) =
+                                self.document.inspector.handle_mouse_move(pos, delta, ptr)
+                            {
                                 self.sync_property_change(change);
                             }
                         }
@@ -174,14 +241,22 @@ impl WorkspaceHost {
             }
             PresentationMode::Split => {
                 let half_w = viewport.width() * 0.5;
-                let canvas_rect = Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
-                let graph_rect = Rect::from_min_size(Vec2::new(viewport.min.x + half_w, viewport.min.y), Vec2::new(half_w, viewport.height()));
+                let canvas_rect =
+                    Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
+                let graph_rect = Rect::from_min_size(
+                    Vec2::new(viewport.min.x + half_w, viewport.min.y),
+                    Vec2::new(half_w, viewport.height()),
+                );
 
                 if canvas_rect.contains(pos) || ptr.primary_down {
-                    self.document.canvas.handle_mouse_move(pos, delta, canvas_rect, ptr);
+                    self.document
+                        .canvas
+                        .handle_mouse_move(pos, delta, canvas_rect, ptr);
                 }
                 if graph_rect.contains(pos) || ptr.primary_down {
-                    self.document.graph.handle_mouse_move(pos, delta, graph_rect);
+                    self.document
+                        .graph
+                        .handle_mouse_move(pos, delta, graph_rect);
                 }
             }
             PresentationMode::Graph => {
@@ -195,10 +270,16 @@ impl WorkspaceHost {
         match self.document.mode {
             PresentationMode::Create => {
                 let layout = self.document.dock_tree.compute_layout(viewport);
-                self.document.dock_view.handle_mouse_up(pos, button, &layout, &mut self.document.dock_tree);
+                self.document.dock_view.handle_mouse_up(
+                    pos,
+                    button,
+                    &layout,
+                    &mut self.document.dock_tree,
+                );
 
                 for leaf in &layout.leaves {
-                    let active_tab_id = leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
+                    let active_tab_id =
+                        leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
                     match active_tab_id {
                         "canvas" => self.document.canvas.handle_mouse_up(pos, button),
                         "inspector" => self.document.inspector.handle_mouse_up(pos, button),
@@ -208,7 +289,10 @@ impl WorkspaceHost {
             }
             PresentationMode::Split => {
                 let half_w = viewport.width() * 0.5;
-                let graph_rect = Rect::from_min_size(Vec2::new(viewport.min.x + half_w, viewport.min.y), Vec2::new(half_w, viewport.height()));
+                let graph_rect = Rect::from_min_size(
+                    Vec2::new(viewport.min.x + half_w, viewport.min.y),
+                    Vec2::new(half_w, viewport.height()),
+                );
                 self.document.canvas.handle_mouse_up(pos, button);
                 self.document.graph.handle_mouse_up(pos, button, graph_rect);
             }
@@ -225,17 +309,24 @@ impl WorkspaceHost {
                 let layout = self.document.dock_tree.compute_layout(viewport);
                 for leaf in &layout.leaves {
                     if leaf.content_rect.contains(pos) {
-                        let active_tab_id = leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
+                        let active_tab_id =
+                            leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
                         if active_tab_id == "canvas" {
-                            self.document.canvas.handle_scroll(delta, pos, leaf.content_rect);
+                            self.document
+                                .canvas
+                                .handle_scroll(delta, pos, leaf.content_rect);
                         }
                     }
                 }
             }
             PresentationMode::Split => {
                 let half_w = viewport.width() * 0.5;
-                let canvas_rect = Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
-                let graph_rect = Rect::from_min_size(Vec2::new(viewport.min.x + half_w, viewport.min.y), Vec2::new(half_w, viewport.height()));
+                let canvas_rect =
+                    Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
+                let graph_rect = Rect::from_min_size(
+                    Vec2::new(viewport.min.x + half_w, viewport.min.y),
+                    Vec2::new(half_w, viewport.height()),
+                );
 
                 if canvas_rect.contains(pos) {
                     self.document.canvas.handle_scroll(delta, pos, canvas_rect);
@@ -254,11 +345,15 @@ impl WorkspaceHost {
         if let HierarchyEvent::Selected(_id) = event {
             if let Some(item) = self.document.hierarchy.selected_item() {
                 let props = vec![
-                    PropertyItem::float("opacity", "Opacity", item.opacity, 0.0, 1.0, 0.02).with_category("Appearance"),
-                    PropertyItem::boolean("visible", "Visible", item.visible).with_category("General"),
+                    PropertyItem::float("opacity", "Opacity", item.opacity, 0.0, 1.0, 0.02)
+                        .with_category("Appearance"),
+                    PropertyItem::boolean("visible", "Visible", item.visible)
+                        .with_category("General"),
                     PropertyItem::boolean("locked", "Locked", item.locked).with_category("General"),
                 ];
-                self.document.inspector.set_properties(format!("{} Properties", item.name), props);
+                self.document
+                    .inspector
+                    .set_properties(format!("{} Properties", item.name), props);
             }
         }
     }
@@ -288,29 +383,54 @@ impl WorkspaceHost {
     }
 
     /// Renders the current presentation mode into the command buffer.
-    pub fn render(&self, buf: &mut CommandBuffer, viewport: Rect, ptr: &PointerState, palette: &ThemePalette) {
+    pub fn render(
+        &self,
+        buf: &mut CommandBuffer,
+        viewport: Rect,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+    ) {
         match self.document.mode {
             PresentationMode::Create => {
                 let layout = self.document.dock_tree.compute_layout(viewport);
 
                 // Render leaf contents
                 for leaf in &layout.leaves {
-                    let active_tab_id = leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
+                    let active_tab_id =
+                        leaf.tabs.get(leaf.active_tab).map_or("", |t| t.id.as_str());
                     match active_tab_id {
                         "canvas" => self.document.canvas.render(buf, leaf.content_rect, palette),
-                        "hierarchy" => self.document.hierarchy.render(buf, leaf.content_rect, palette),
-                        "inspector" => self.document.inspector.render(buf, leaf.content_rect, palette),
+                        "hierarchy" => {
+                            self.document
+                                .hierarchy
+                                .render(buf, leaf.content_rect, palette)
+                        }
+                        "inspector" => {
+                            self.document
+                                .inspector
+                                .render(buf, leaf.content_rect, palette)
+                        }
                         _ => {}
                     }
                 }
 
                 // Render dock chrome (headers, tabs, splitters, drop guides)
-                self.document.dock_view.render(buf, &layout, &self.document.dock_tree, palette, ptr);
+                self.document.dock_view.render(
+                    buf,
+                    &layout,
+                    &self.document.dock_tree,
+                    palette,
+                    ptr,
+                );
             }
             PresentationMode::Split => {
                 let half_w = viewport.width() * 0.5;
-                let canvas_rect = Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
-                let graph_rect = Rect::from_min_size(Vec2::new(viewport.min.x + half_w, viewport.min.y), Vec2::new(half_w, viewport.height()));
+                let canvas_rect =
+                    Rect::from_min_size(viewport.min, Vec2::new(half_w, viewport.height()));
+                let graph_rect = Rect::from_min_size(
+                    Vec2::new(viewport.min.x + half_w, viewport.min.y),
+                    Vec2::new(half_w, viewport.height()),
+                );
 
                 self.document.canvas.render(buf, canvas_rect, palette);
                 self.document.graph.render(buf, graph_rect, palette);
@@ -346,13 +466,25 @@ mod tests {
         host.switch_mode(PresentationMode::Split);
         assert_eq!(host.document.mode, PresentationMode::Split);
         assert_eq!(host.document.hierarchy.items.len(), 4);
-        assert!(host.document.hierarchy.items.iter().any(|i| i.id == new_layer_id));
-        assert_eq!(host.document.canvas.active_tool, crate::canvas_host::CanvasTool::Brush);
+        assert!(host
+            .document
+            .hierarchy
+            .items
+            .iter()
+            .any(|i| i.id == new_layer_id));
+        assert_eq!(
+            host.document.canvas.active_tool,
+            crate::canvas_host::CanvasTool::Brush
+        );
 
         // Switch to Graph mode
         host.switch_mode(PresentationMode::Graph);
         assert_eq!(host.document.mode, PresentationMode::Graph);
-        assert_eq!(host.document.graph.nodes.len(), 5, "Initial graph should have 5 sample nodes");
+        assert_eq!(
+            host.document.graph.nodes.len(),
+            5,
+            "Initial graph should have 5 sample nodes"
+        );
 
         // Switch back to Create mode: zero state loss
         host.switch_mode(PresentationMode::Create);

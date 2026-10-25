@@ -4,15 +4,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ui_core::{Color, CornerRadius, Rect, Stroke, TextEditBuffer, Vec2};
+use ui_core::{CornerRadius, Rect, Stroke, TextEditBuffer, Vec2};
 use ui_platform::{ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::ThemePalette;
-use ui_widgets::{
-    CanvasHost, HierarchyTree, NodeEditor, Timeline, MarkdownView, ChatTranscript,
-};
 use ui_widgets::controls::{render_button, ButtonStyle};
 use ui_widgets::input::{render_text_input, render_toggle};
+use ui_widgets::{CanvasHost, ChatTranscript, HierarchyTree, MarkdownView, NodeEditor, Timeline};
 
 use crate::components::{AssetBrowser, ConsoleView};
 use crate::designer::{DesignDocument, DesignElement, DesignKind, DesignPlacement};
@@ -41,15 +39,38 @@ pub struct UiEvent {
 /// Consumers can supply a real widget implementation for a built-in kind or specific ID.
 /// Coordinates are logical window coordinates and the runtime clips to the component bounds.
 pub trait DesignWidget {
-    fn render(&mut self, buf: &mut CommandBuffer, rect: Rect,
-              ptr: &PointerState, palette: &ThemePalette);
-    fn pointer_down(&mut self, _pos: Vec2, _button: PointerButton, _rect: Rect,
-                    _ptr: &PointerState) -> Option<UiEventKind> { None }
+    fn render(
+        &mut self,
+        buf: &mut CommandBuffer,
+        rect: Rect,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+    );
+    fn pointer_down(
+        &mut self,
+        _pos: Vec2,
+        _button: PointerButton,
+        _rect: Rect,
+        _ptr: &PointerState,
+    ) -> Option<UiEventKind> {
+        None
+    }
     fn pointer_move(&mut self, _pos: Vec2, _delta: Vec2, _rect: Rect) {}
-    fn pointer_up(&mut self, _pos: Vec2, _button: PointerButton, _rect: Rect) -> Option<UiEventKind> { None }
+    fn pointer_up(
+        &mut self,
+        _pos: Vec2,
+        _button: PointerButton,
+        _rect: Rect,
+    ) -> Option<UiEventKind> {
+        None
+    }
     fn scroll(&mut self, _delta: Vec2, _pos: Vec2, _rect: Rect) {}
-    fn key(&mut self, _key: Key, _modifiers: Modifiers) -> Option<UiEventKind> { None }
-    fn text(&mut self, _text: &str) -> Option<UiEventKind> { None }
+    fn key(&mut self, _key: Key, _modifiers: Modifiers) -> Option<UiEventKind> {
+        None
+    }
+    fn text(&mut self, _text: &str) -> Option<UiEventKind> {
+        None
+    }
 }
 
 type WidgetFactory = Arc<dyn Fn() -> Box<dyn DesignWidget> + Send + Sync>;
@@ -62,20 +83,28 @@ pub struct ComponentRegistry {
 }
 
 impl ComponentRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn register_kind<F>(&mut self, kind: DesignKind, factory: F)
-    where F: Fn() -> Box<dyn DesignWidget> + Send + Sync + 'static {
+    where
+        F: Fn() -> Box<dyn DesignWidget> + Send + Sync + 'static,
+    {
         self.by_kind.insert(kind, Arc::new(factory));
     }
 
     pub fn register_id<F>(&mut self, id: impl Into<String>, factory: F)
-    where F: Fn() -> Box<dyn DesignWidget> + Send + Sync + 'static {
+    where
+        F: Fn() -> Box<dyn DesignWidget> + Send + Sync + 'static,
+    {
         self.by_id.insert(id.into(), Arc::new(factory));
     }
 
     fn factory(&self, node: &DesignElement) -> Option<&WidgetFactory> {
-        self.by_id.get(&node.id).or_else(|| self.by_kind.get(&node.kind))
+        self.by_id
+            .get(&node.id)
+            .or_else(|| self.by_kind.get(&node.kind))
     }
 }
 
@@ -85,10 +114,18 @@ impl ComponentRegistry {
 pub enum ResponsiveRule {
     Absolute,
     /// Keep distances to the chosen edges in document units.
-    Anchored { left: bool, right: bool, top: bool, bottom: bool,
-               min_size: Vec2, max_size: Option<Vec2> },
+    Anchored {
+        left: bool,
+        right: bool,
+        top: bool,
+        bottom: bool,
+        min_size: Vec2,
+        max_size: Option<Vec2>,
+    },
     /// Fill the parent, excluding an inset on all sides.
-    Fill { inset: f32 },
+    Fill {
+        inset: f32,
+    },
 }
 
 enum Instance {
@@ -124,8 +161,13 @@ impl Instance {
         }
     }
 
-    fn render(&mut self, buf: &mut CommandBuffer, rect: Rect,
-              ptr: &PointerState, pal: &ThemePalette) {
+    fn render(
+        &mut self,
+        buf: &mut CommandBuffer,
+        rect: Rect,
+        ptr: &PointerState,
+        pal: &ThemePalette,
+    ) {
         match self {
             Self::Custom(w) => w.render(buf, rect, ptr, pal),
             Self::Graph(w) => w.render(buf, rect, pal),
@@ -139,21 +181,39 @@ impl Instance {
         }
     }
 
-    fn down(&mut self, pos: Vec2, button: PointerButton,
-            rect: Rect, ptr: &PointerState) -> Option<UiEventKind> {
+    fn down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        rect: Rect,
+        ptr: &PointerState,
+    ) -> Option<UiEventKind> {
         match self {
             Self::Custom(w) => w.pointer_down(pos, button, rect, ptr),
-            Self::Graph(w) => { w.handle_mouse_down(pos, button, rect); None }
-            Self::Hierarchy(w) => w.handle_mouse_down(pos, button, rect, ptr)
+            Self::Graph(w) => {
+                w.handle_mouse_down(pos, button, rect);
+                None
+            }
+            Self::Hierarchy(w) => w
+                .handle_mouse_down(pos, button, rect, ptr)
                 .map(|v| UiEventKind::Selected(format!("{v:?}"))),
-            Self::Assets(w) => w.handle_mouse_down(pos, button, rect).map(UiEventKind::Selected),
-            Self::Canvas(w) => { w.handle_mouse_down(pos, button, rect); None }
+            Self::Assets(w) => w
+                .handle_mouse_down(pos, button, rect)
+                .map(UiEventKind::Selected),
+            Self::Canvas(w) => {
+                w.handle_mouse_down(pos, button, rect);
+                None
+            }
             Self::Timeline(w) if button == PointerButton::Primary => {
                 if pos.y <= rect.min.y + 28.0 {
                     let value = ((pos.x - rect.min.x) / rect.width()).clamp(0.0, 1.0);
                     w.scrub_to((value * w.total_frames as f32) as u32);
-                    Some(UiEventKind::Changed(UiValue::Number(w.current_frame as f32)))
-                } else { None }
+                    Some(UiEventKind::Changed(UiValue::Number(
+                        w.current_frame as f32,
+                    )))
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -164,7 +224,10 @@ impl Instance {
             Self::Custom(w) => w.pointer_move(pos, delta, rect),
             Self::Graph(w) => w.handle_mouse_move(pos, delta, rect),
             Self::Canvas(w) => {
-                let ptr = PointerState { primary_down: true, ..PointerState::default() };
+                let ptr = PointerState {
+                    primary_down: true,
+                    ..PointerState::default()
+                };
                 w.handle_mouse_move(pos, delta, rect, &ptr);
             }
             _ => {}
@@ -174,8 +237,14 @@ impl Instance {
     fn up(&mut self, pos: Vec2, button: PointerButton, rect: Rect) -> Option<UiEventKind> {
         match self {
             Self::Custom(w) => w.pointer_up(pos, button, rect),
-            Self::Graph(w) => { w.handle_mouse_up(pos, button, rect); None }
-            Self::Canvas(w) => { w.handle_mouse_up(pos, button); None }
+            Self::Graph(w) => {
+                w.handle_mouse_up(pos, button, rect);
+                None
+            }
+            Self::Canvas(w) => {
+                w.handle_mouse_up(pos, button);
+                None
+            }
             _ => None,
         }
     }
@@ -184,9 +253,15 @@ impl Instance {
         match self {
             Self::Custom(w) => w.scroll(delta, pos, rect),
             Self::Graph(w) => w.handle_scroll(delta, pos, rect),
-            Self::Canvas(w) => { w.handle_scroll(delta, pos, rect); }
-            Self::Markdown(w) => { w.scroll_y = (w.scroll_y - delta.y * 20.0).max(0.0); }
-            Self::Chat(w) => { w.scroll_y = (w.scroll_y - delta.y * 20.0).max(0.0); }
+            Self::Canvas(w) => {
+                w.handle_scroll(delta, pos, rect);
+            }
+            Self::Markdown(w) => {
+                w.scroll_y = (w.scroll_y - delta.y * 20.0).max(0.0);
+            }
+            Self::Chat(w) => {
+                w.scroll_y = (w.scroll_y - delta.y * 20.0).max(0.0);
+            }
             _ => {}
         }
     }
@@ -194,7 +269,10 @@ impl Instance {
     fn key(&mut self, key: Key, modifiers: Modifiers) -> Option<UiEventKind> {
         match self {
             Self::Custom(w) => w.key(key, modifiers),
-            Self::Graph(w) => { w.handle_key_down(key); None }
+            Self::Graph(w) => {
+                w.handle_key_down(key);
+                None
+            }
             _ => None,
         }
     }
@@ -229,17 +307,25 @@ pub struct DesignRuntime {
 }
 
 impl Default for DesignRuntime {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DesignRuntime {
     pub fn new() -> Self {
         Self {
-            registry: ComponentRegistry::new(), values: HashMap::new(),
-            bindings: HashMap::new(), actions: HashMap::new(),
-            responsive: HashMap::new(), focused: None, instances: HashMap::new(),
-            text_inputs: HashMap::new(), composition: None,
-            pressed: None, events: Vec::new(),
+            registry: ComponentRegistry::new(),
+            values: HashMap::new(),
+            bindings: HashMap::new(),
+            actions: HashMap::new(),
+            responsive: HashMap::new(),
+            focused: None,
+            instances: HashMap::new(),
+            text_inputs: HashMap::new(),
+            composition: None,
+            pressed: None,
+            events: Vec::new(),
             computed: HashMap::new(),
             bounds: Rect::from_min_size(Vec2::ZERO, Vec2::new(1200.0, 760.0)),
             root_scale: Vec2::new(1.0, 1.0),
@@ -262,14 +348,20 @@ impl DesignRuntime {
         self.values.insert(key.into(), value);
     }
 
-    pub fn get(&self, key: &str) -> Option<&UiValue> { self.values.get(key) }
-    pub fn take_events(&mut self) -> Vec<UiEvent> { std::mem::take(&mut self.events) }
+    pub fn get(&self, key: &str) -> Option<&UiValue> {
+        self.values.get(key)
+    }
+    pub fn take_events(&mut self) -> Vec<UiEvent> {
+        std::mem::take(&mut self.events)
+    }
 
     /// Deterministic, ID-addressed interface operation for agents and tests.
     /// Application permission checks still apply when consuming the emitted action.
     pub fn activate(&mut self, doc: &DesignDocument, id: &str) -> Result<(), String> {
         let node = doc.find(id).ok_or("unknown component ID")?;
-        if !node.visible { return Err("component is hidden".into()); }
+        if !node.visible {
+            return Err("component is hidden".into());
+        }
         match node.kind {
             DesignKind::Button | DesignKind::TextInput => {
                 self.emit(id, UiEventKind::Activated);
@@ -287,15 +379,21 @@ impl DesignRuntime {
     }
 
     /// Set input through the same state/event channel as human typing.
-    pub fn set_text_by_id(&mut self, doc: &DesignDocument,
-                          id: &str, text: &str) -> Result<(), String> {
+    pub fn set_text_by_id(
+        &mut self,
+        doc: &DesignDocument,
+        id: &str,
+        text: &str,
+    ) -> Result<(), String> {
         let node = doc.find(id).ok_or("unknown component ID")?;
         if !node.visible || node.kind != DesignKind::TextInput {
             return Err("component is not a visible text field".into());
         }
         let key = self.state_key(id).to_owned();
-        self.text_inputs.entry(id.to_owned())
-            .or_insert_with(|| TextEditBuffer::new("")).set_text(text);
+        self.text_inputs
+            .entry(id.to_owned())
+            .or_insert_with(|| TextEditBuffer::new(""))
+            .set_text(text);
         let value = UiValue::Text(text.to_owned());
         self.values.insert(key, value.clone());
         self.emit(id, UiEventKind::Changed(value));
@@ -305,65 +403,82 @@ impl DesignRuntime {
     /// Return mutable real widgets for data population by consuming applications.
     pub fn graph(&mut self, id: &str) -> Option<&mut NodeEditor> {
         match self.instances.get_mut(id) {
-            Some((_, Instance::Graph(graph))) => Some(graph), _ => None,
+            Some((_, Instance::Graph(graph))) => Some(graph),
+            _ => None,
         }
     }
 
     pub fn hierarchy(&mut self, id: &str) -> Option<&mut HierarchyTree> {
         match self.instances.get_mut(id) {
-            Some((_, Instance::Hierarchy(tree))) => Some(tree), _ => None,
+            Some((_, Instance::Hierarchy(tree))) => Some(tree),
+            _ => None,
         }
     }
 
     pub fn assets(&mut self, id: &str) -> Option<&mut AssetBrowser> {
         match self.instances.get_mut(id) {
-            Some((_, Instance::Assets(browser))) => Some(browser), _ => None,
+            Some((_, Instance::Assets(browser))) => Some(browser),
+            _ => None,
         }
     }
 
     pub fn chat(&mut self, id: &str) -> Option<&mut ChatTranscript> {
         match self.instances.get_mut(id) {
-            Some((_, Instance::Chat(chat))) => Some(chat), _ => None,
+            Some((_, Instance::Chat(chat))) => Some(chat),
+            _ => None,
         }
     }
 
     pub fn markdown(&mut self, id: &str) -> Option<&mut MarkdownView> {
         match self.instances.get_mut(id) {
-            Some((_, Instance::Markdown(markdown))) => Some(markdown), _ => None,
+            Some((_, Instance::Markdown(markdown))) => Some(markdown),
+            _ => None,
         }
     }
 
     pub fn canvas(&mut self, id: &str) -> Option<&mut CanvasHost> {
         match self.instances.get_mut(id) {
-            Some((_, Instance::Canvas(canvas))) => Some(canvas), _ => None,
+            Some((_, Instance::Canvas(canvas))) => Some(canvas),
+            _ => None,
         }
     }
 
     pub fn sync(&mut self, doc: &DesignDocument) {
         // Explicit consumer bindings take precedence; document defaults are applied once.
         for (id, key) in &doc.state_bindings {
-            self.bindings.entry(id.clone()).or_insert_with(|| key.clone());
+            self.bindings
+                .entry(id.clone())
+                .or_insert_with(|| key.clone());
         }
         for (id, action) in &doc.action_bindings {
-            self.actions.entry(id.clone()).or_insert_with(|| action.clone());
+            self.actions
+                .entry(id.clone())
+                .or_insert_with(|| action.clone());
         }
         self.instances.retain(|id, _| doc.find(id).is_some());
         self.text_inputs.retain(|id, _| doc.find(id).is_some());
         for node in &doc.elements {
-            let recreate = self.instances.get(&node.id)
+            let recreate = self
+                .instances
+                .get(&node.id)
                 .is_some_and(|(kind, _)| *kind != node.kind);
-            if recreate { self.instances.remove(&node.id); }
+            if recreate {
+                self.instances.remove(&node.id);
+            }
             if !self.instances.contains_key(&node.id) {
-                let instance = self.registry.factory(node).map(|f| Instance::Custom(f()))
+                let instance = self
+                    .registry
+                    .factory(node)
+                    .map(|f| Instance::Custom(f()))
                     .or_else(|| Instance::from_kind(node.kind, &node.label));
                 if let Some(value) = instance {
                     self.instances.insert(node.id.clone(), (node.kind, value));
                 }
             }
             if node.kind == DesignKind::TextInput {
-                self.text_inputs.entry(node.id.clone()).or_insert_with(|| {
-                    TextEditBuffer::new("")
-                });
+                self.text_inputs
+                    .entry(node.id.clone())
+                    .or_insert_with(|| TextEditBuffer::new(""));
             }
         }
     }
@@ -375,7 +490,8 @@ impl DesignRuntime {
         // Uniform DPI-safe document scale leaves any extra width/height available
         // for anchored or fill-constrained components rather than stretching fonts.
         let scale = (bounds.width() / doc.width.max(1.0))
-            .min(bounds.height() / doc.height.max(1.0)).max(0.01);
+            .min(bounds.height() / doc.height.max(1.0))
+            .max(0.01);
         self.root_scale = Vec2::splat(scale);
         self.computed.clear();
         // Parent ordering is not required for loading, so resolve recursively.
@@ -385,44 +501,68 @@ impl DesignRuntime {
     }
 
     fn resolve(&mut self, doc: &DesignDocument, id: &str, depth: usize) -> Option<Rect> {
-        if let Some(r) = self.computed.get(id) { return Some(*r); }
-        if depth > doc.elements.len() { return None; }
+        if let Some(r) = self.computed.get(id) {
+            return Some(*r);
+        }
+        if depth > doc.elements.len() {
+            return None;
+        }
         let node = doc.find(id)?;
         let parent = if let Some(parent_id) = &node.parent {
             self.resolve(doc, parent_id, depth + 1)?
-        } else { self.bounds };
+        } else {
+            self.bounds
+        };
         let authored_parent = if let Some(parent_id) = &node.parent {
             doc.find(parent_id)?.bounds.size()
-        } else { Vec2::new(doc.width, doc.height) };
+        } else {
+            Vec2::new(doc.width, doc.height)
+        };
         let authored = node.bounds;
-        let scaled = Vec2::new(authored.width() * self.root_scale.x,
-                               authored.height() * self.root_scale.y);
+        let scaled = Vec2::new(
+            authored.width() * self.root_scale.x,
+            authored.height() * self.root_scale.y,
+        );
         let parent_authored_size = Vec2::new(
-            authored_parent.x * self.root_scale.x, authored_parent.y * self.root_scale.y);
+            authored_parent.x * self.root_scale.x,
+            authored_parent.y * self.root_scale.y,
+        );
         let size_delta = parent.size() - parent_authored_size;
-        let mut pos = parent.min + Vec2::new(
-            authored.min.x * self.root_scale.x, authored.min.y * self.root_scale.y);
+        let mut pos = parent.min
+            + Vec2::new(
+                authored.min.x * self.root_scale.x,
+                authored.min.y * self.root_scale.y,
+            );
         let mut size = scaled;
-        let placement = self.responsive.get(id).copied()
-            .or_else(|| doc.layout_rules.get(id).map(|p| match p {
-                DesignPlacement::Absolute => ResponsiveRule::Absolute,
-                DesignPlacement::Fill => ResponsiveRule::Fill { inset: 0.0 },
-                other => {
-                    let (left, right, top, bottom) = match other {
-                        DesignPlacement::StretchX => (true, true, true, false),
-                        DesignPlacement::StretchY => (true, false, true, true),
-                        DesignPlacement::StretchBoth => (true, true, true, true),
-                        DesignPlacement::Right => (false, true, true, false),
-                        DesignPlacement::Bottom => (true, false, false, true),
-                        DesignPlacement::BottomRight => (false, true, false, true),
-                        _ => (true, false, true, false),
-                    };
-                    ResponsiveRule::Anchored {
-                        left, right, top, bottom,
-                        min_size: Vec2::splat(1.0), max_size: None,
+        let placement = self
+            .responsive
+            .get(id)
+            .copied()
+            .or_else(|| {
+                doc.layout_rules.get(id).map(|p| match p {
+                    DesignPlacement::Absolute => ResponsiveRule::Absolute,
+                    DesignPlacement::Fill => ResponsiveRule::Fill { inset: 0.0 },
+                    other => {
+                        let (left, right, top, bottom) = match other {
+                            DesignPlacement::StretchX => (true, true, true, false),
+                            DesignPlacement::StretchY => (true, false, true, true),
+                            DesignPlacement::StretchBoth => (true, true, true, true),
+                            DesignPlacement::Right => (false, true, true, false),
+                            DesignPlacement::Bottom => (true, false, false, true),
+                            DesignPlacement::BottomRight => (false, true, false, true),
+                            _ => (true, false, true, false),
+                        };
+                        ResponsiveRule::Anchored {
+                            left,
+                            right,
+                            top,
+                            bottom,
+                            min_size: Vec2::splat(1.0),
+                            max_size: None,
+                        }
                     }
-                }
-            }))
+                })
+            })
             .unwrap_or(ResponsiveRule::Absolute);
         match placement {
             ResponsiveRule::Absolute => {}
@@ -430,14 +570,29 @@ impl DesignRuntime {
                 let inset = inset.max(0.0);
                 let scaled = Vec2::new(inset * self.root_scale.x, inset * self.root_scale.y);
                 pos = parent.min + scaled;
-                size = Vec2::new((parent.width() - scaled.x * 2.0).max(1.0),
-                                 (parent.height() - scaled.y * 2.0).max(1.0));
+                size = Vec2::new(
+                    (parent.width() - scaled.x * 2.0).max(1.0),
+                    (parent.height() - scaled.y * 2.0).max(1.0),
+                );
             }
-            ResponsiveRule::Anchored { left, right, top, bottom, min_size, max_size } => {
-                if left && right { size.x += size_delta.x; }
-                else if right { pos.x += size_delta.x; }
-                if top && bottom { size.y += size_delta.y; }
-                else if bottom { pos.y += size_delta.y; }
+            ResponsiveRule::Anchored {
+                left,
+                right,
+                top,
+                bottom,
+                min_size,
+                max_size,
+            } => {
+                if left && right {
+                    size.x += size_delta.x;
+                } else if right {
+                    pos.x += size_delta.x;
+                }
+                if top && bottom {
+                    size.y += size_delta.y;
+                } else if bottom {
+                    pos.y += size_delta.y;
+                }
                 size.x = size.x.max(min_size.x * self.root_scale.x).max(1.0);
                 size.y = size.y.max(min_size.y * self.root_scale.y).max(1.0);
                 if let Some(max) = max_size {
@@ -451,40 +606,78 @@ impl DesignRuntime {
         Some(rect)
     }
 
-    pub fn component_bounds(&self, id: &str) -> Option<Rect> { self.computed.get(id).copied() }
+    pub fn component_bounds(&self, id: &str) -> Option<Rect> {
+        self.computed.get(id).copied()
+    }
 
     /// Render actual registered widgets and standard interactive controls, not Designer mock shapes.
-    pub fn render(&mut self, doc: &DesignDocument, buf: &mut CommandBuffer,
-                  bounds: Rect, ptr: &PointerState, pal: &ThemePalette) {
+    pub fn render(
+        &mut self,
+        doc: &DesignDocument,
+        buf: &mut CommandBuffer,
+        bounds: Rect,
+        ptr: &PointerState,
+        pal: &ThemePalette,
+    ) {
         self.sync(doc);
         self.relayout(doc, bounds);
         buf.push(DrawCommand::ClipPush { rect: bounds });
         for node in &doc.elements {
-            if !node.visible { continue; }
-            let Some(rect) = self.component_bounds(&node.id) else { continue };
-            if !rect.intersects(bounds) { continue; }
+            if !node.visible {
+                continue;
+            }
+            let Some(rect) = self.component_bounds(&node.id) else {
+                continue;
+            };
+            if !rect.intersects(bounds) {
+                continue;
+            }
             buf.push(DrawCommand::ClipPush { rect });
             if let Some((_, instance)) = self.instances.get_mut(&node.id) {
                 instance.render(buf, rect, ptr, pal);
             } else {
-                let value = self.values.get(self.bindings.get(&node.id).map(String::as_str)
-                    .unwrap_or(&node.id));
+                let value = self.values.get(
+                    self.bindings
+                        .get(&node.id)
+                        .map(String::as_str)
+                        .unwrap_or(&node.id),
+                );
                 match node.kind {
-                    DesignKind::Button => render_button(buf, rect, &node.label, ButtonStyle::Secondary,
-                                                        rect.contains(ptr.position), pal),
-                    DesignKind::Toggle => render_toggle(buf,
+                    DesignKind::Button => render_button(
+                        buf,
+                        rect,
+                        &node.label,
+                        ButtonStyle::Secondary,
+                        rect.contains(ptr.position),
+                        pal,
+                    ),
+                    DesignKind::Toggle => render_toggle(
+                        buf,
                         matches!(value, Some(UiValue::Bool(true))),
-                        rect.contains(ptr.position), &node.label, rect, pal),
+                        rect.contains(ptr.position),
+                        &node.label,
+                        rect,
+                        pal,
+                    ),
                     DesignKind::TextInput => {
                         let mut shown = match value {
-                            Some(UiValue::Text(s)) => s.clone(), _ => String::new()
+                            Some(UiValue::Text(s)) => s.clone(),
+                            _ => String::new(),
                         };
                         if let Some((id, composing)) = &self.composition {
-                            if id == &node.id { shown.push_str(composing); }
+                            if id == &node.id {
+                                shown.push_str(composing);
+                            }
                         }
-                        render_text_input(buf, &shown, &node.label, rect,
+                        render_text_input(
+                            buf,
+                            &shown,
+                            &node.label,
+                            rect,
                             self.focused.as_deref() == Some(node.id.as_str()),
-                            rect.contains(ptr.position), pal);
+                            rect.contains(ptr.position),
+                            pal,
+                        );
                     }
                     DesignKind::Label => {
                         let label = match value {
@@ -494,17 +687,27 @@ impl DesignRuntime {
                             _ => node.label.clone(),
                         };
                         buf.push(DrawCommand::Text {
-                            text: label, pos: rect.min + Vec2::new(8.0, 7.0),
-                            size: 13.0, color: node.foreground, strong: false,
+                            text: label,
+                            pos: rect.min + Vec2::new(8.0, 7.0),
+                            size: 13.0,
+                            color: node.foreground,
+                            strong: false,
                         });
                     }
                     _ => {
-                        buf.push(DrawCommand::Rect { rect, fill: node.background,
+                        buf.push(DrawCommand::Rect {
+                            rect,
+                            fill: node.background,
                             radius: CornerRadius::same(3.0),
-                            stroke: Stroke::new(1.0, pal.border) });
-                        buf.push(DrawCommand::Text { text: node.label.clone(),
-                            pos: rect.min + Vec2::new(8.0, 7.0), size: 12.0,
-                            color: node.foreground, strong: true });
+                            stroke: Stroke::new(1.0, pal.border),
+                        });
+                        buf.push(DrawCommand::Text {
+                            text: node.label.clone(),
+                            pos: rect.min + Vec2::new(8.0, 7.0),
+                            size: 12.0,
+                            color: node.foreground,
+                            strong: true,
+                        });
                     }
                 }
             }
@@ -515,17 +718,30 @@ impl DesignRuntime {
 
     /// Topmost focusable component; nearest children take precedence when nested.
     fn hit<'a>(&self, doc: &'a DesignDocument, pos: Vec2) -> Option<&'a DesignElement> {
-        doc.elements.iter().rev().find(|node| node.visible &&
-            self.component_bounds(&node.id).is_some_and(|r| r.contains(pos)))
+        doc.elements.iter().rev().find(|node| {
+            node.visible
+                && self
+                    .component_bounds(&node.id)
+                    .is_some_and(|r| r.contains(pos))
+        })
     }
 
     fn emit(&mut self, id: &str, kind: UiEventKind) {
         let action_id = self.actions.get(id).cloned().unwrap_or_else(|| id.into());
-        self.events.push(UiEvent { component_id: id.into(), action_id, kind });
+        self.events.push(UiEvent {
+            component_id: id.into(),
+            action_id,
+            kind,
+        });
     }
 
-    pub fn pointer_down(&mut self, doc: &DesignDocument, pos: Vec2,
-                        button: PointerButton, ptr: &PointerState) -> bool {
+    pub fn pointer_down(
+        &mut self,
+        doc: &DesignDocument,
+        pos: Vec2,
+        button: PointerButton,
+        ptr: &PointerState,
+    ) -> bool {
         let Some(node) = self.hit(doc, pos) else {
             self.focused = None;
             self.pressed = None;
@@ -549,17 +765,24 @@ impl DesignRuntime {
     pub fn pointer_move(&mut self, pos: Vec2, delta: Vec2) {
         if let Some(id) = self.pressed.clone() {
             if let (Some(rect), Some((_, instance))) =
-                (self.component_bounds(&id), self.instances.get_mut(&id)) {
+                (self.component_bounds(&id), self.instances.get_mut(&id))
+            {
                 instance.moving(pos, delta, rect);
             }
         }
     }
 
     pub fn pointer_up(&mut self, doc: &DesignDocument, pos: Vec2, button: PointerButton) -> bool {
-        let Some(id) = self.pressed.take() else { return false; };
-        let Some(rect) = self.component_bounds(&id) else { return false; };
+        let Some(id) = self.pressed.take() else {
+            return false;
+        };
+        let Some(rect) = self.component_bounds(&id) else {
+            return false;
+        };
         if let Some((_, instance)) = self.instances.get_mut(&id) {
-            if let Some(event) = instance.up(pos, button, rect) { self.emit(&id, event); }
+            if let Some(event) = instance.up(pos, button, rect) {
+                self.emit(&id, event);
+            }
         } else if button == PointerButton::Primary && rect.contains(pos) {
             match doc.find(&id).map(|n| n.kind) {
                 Some(DesignKind::Button) => self.emit(&id, UiEventKind::Activated),
@@ -576,9 +799,12 @@ impl DesignRuntime {
     }
 
     pub fn scroll(&mut self, doc: &DesignDocument, delta: Vec2, pos: Vec2) -> bool {
-        let Some(id) = self.hit(doc, pos).map(|n| n.id.clone()) else { return false; };
+        let Some(id) = self.hit(doc, pos).map(|n| n.id.clone()) else {
+            return false;
+        };
         if let (Some(rect), Some((_, instance))) =
-            (self.component_bounds(&id), self.instances.get_mut(&id)) {
+            (self.component_bounds(&id), self.instances.get_mut(&id))
+        {
             instance.wheel(delta, pos, rect);
             return true;
         }
@@ -587,21 +813,41 @@ impl DesignRuntime {
 
     pub fn key_down(&mut self, doc: &DesignDocument, key: Key, modifiers: Modifiers) -> bool {
         if key == Key::Tab {
-            let controls: Vec<&str> = doc.elements.iter()
-                .filter(|n| n.visible && matches!(n.kind,
-                    DesignKind::Button | DesignKind::Toggle | DesignKind::TextInput))
-                .map(|n| n.id.as_str()).collect();
-            if controls.is_empty() { return false; }
-            let index = self.focused.as_ref()
+            let controls: Vec<&str> = doc
+                .elements
+                .iter()
+                .filter(|n| {
+                    n.visible
+                        && matches!(
+                            n.kind,
+                            DesignKind::Button | DesignKind::Toggle | DesignKind::TextInput
+                        )
+                })
+                .map(|n| n.id.as_str())
+                .collect();
+            if controls.is_empty() {
+                return false;
+            }
+            let index = self
+                .focused
+                .as_ref()
                 .and_then(|id| controls.iter().position(|x| *x == id))
-                .unwrap_or(if modifiers.shift { 0 } else { controls.len() - 1 });
+                .unwrap_or(if modifiers.shift {
+                    0
+                } else {
+                    controls.len() - 1
+                });
             let next = if modifiers.shift {
                 (index + controls.len() - 1) % controls.len()
-            } else { (index + 1) % controls.len() };
+            } else {
+                (index + 1) % controls.len()
+            };
             self.focused = Some(controls[next].to_owned());
             return true;
         }
-        let Some(id) = self.focused.clone() else { return false; };
+        let Some(id) = self.focused.clone() else {
+            return false;
+        };
         if let Some((_, instance)) = self.instances.get_mut(&id) {
             if let Some(event) = instance.key(key.clone(), modifiers) {
                 self.emit(&id, event);
@@ -610,8 +856,9 @@ impl DesignRuntime {
         }
         let kind = doc.find(&id).map(|n| n.kind);
         match (kind, &key) {
-            (Some(DesignKind::Button), Key::Enter | Key::Space) =>
-                self.emit(&id, UiEventKind::Activated),
+            (Some(DesignKind::Button), Key::Enter | Key::Space) => {
+                self.emit(&id, UiEventKind::Activated)
+            }
             (Some(DesignKind::TextInput), Key::Enter) => {
                 // Applications can bind Enter to a submit action without embedding
                 // any application-specific logic in the framework.
@@ -623,18 +870,30 @@ impl DesignRuntime {
                 self.values.insert(k, UiValue::Bool(checked));
                 self.emit(&id, UiEventKind::Changed(UiValue::Bool(checked)));
             }
-            (Some(DesignKind::TextInput), Key::Backspace | Key::Delete |
-                 Key::ArrowLeft | Key::ArrowRight) => {
+            (
+                Some(DesignKind::TextInput),
+                Key::Backspace | Key::Delete | Key::ArrowLeft | Key::ArrowRight,
+            ) => {
                 let k = self.state_key(&id).to_owned();
-                let initial = match self.values.get(&k) { Some(UiValue::Text(v)) => v.clone(),
-                    _ => String::new() };
-                let editor = self.text_inputs.entry(id.clone())
+                let initial = match self.values.get(&k) {
+                    Some(UiValue::Text(v)) => v.clone(),
+                    _ => String::new(),
+                };
+                let editor = self
+                    .text_inputs
+                    .entry(id.clone())
                     .or_insert_with(|| TextEditBuffer::new(""));
-                if editor.as_str() != initial { editor.set_text(initial); }
+                if editor.as_str() != initial {
+                    editor.set_text(initial);
+                }
                 // TextEditBuffer keeps cursor/selection on Unicode scalar boundaries.
                 match key {
-                    Key::Backspace => { editor.backspace(); }
-                    Key::Delete => { editor.delete(); }
+                    Key::Backspace => {
+                        editor.backspace();
+                    }
+                    Key::Delete => {
+                        editor.delete();
+                    }
                     Key::ArrowLeft => editor.move_left(modifiers.shift),
                     Key::ArrowRight => editor.move_right(modifiers.shift),
                     _ => {}
@@ -649,19 +908,30 @@ impl DesignRuntime {
     }
 
     pub fn text_input(&mut self, doc: &DesignDocument, text: &str) -> bool {
-        let Some(id) = self.focused.clone() else { return false; };
+        let Some(id) = self.focused.clone() else {
+            return false;
+        };
         if let Some((_, instance)) = self.instances.get_mut(&id) {
-            if let Some(event) = instance.text(text) { self.emit(&id, event); return true; }
+            if let Some(event) = instance.text(text) {
+                self.emit(&id, event);
+                return true;
+            }
         }
         if doc.find(&id).map(|n| n.kind) != Some(DesignKind::TextInput) {
             return false;
         }
         let k = self.state_key(&id).to_owned();
-        let initial = match self.values.get(&k) { Some(UiValue::Text(v)) => v.clone(),
-            _ => String::new() };
-        let editor = self.text_inputs.entry(id.clone())
+        let initial = match self.values.get(&k) {
+            Some(UiValue::Text(v)) => v.clone(),
+            _ => String::new(),
+        };
+        let editor = self
+            .text_inputs
+            .entry(id.clone())
             .or_insert_with(|| TextEditBuffer::new(""));
-        if editor.as_str() != initial { editor.set_text(initial); }
+        if editor.as_str() != initial {
+            editor.set_text(initial);
+        }
         editor.insert_str(text);
         let changed = UiValue::Text(editor.as_str().to_owned());
         self.values.insert(k, changed.clone());
@@ -672,7 +942,9 @@ impl DesignRuntime {
     /// IME composition is displayed without committing partial Bengali/other
     /// script input. Only Commit updates state and emits a Changed event.
     pub fn ime(&mut self, doc: &DesignDocument, event: ImeEvent) -> bool {
-        let Some(id) = self.focused.clone() else { return false; };
+        let Some(id) = self.focused.clone() else {
+            return false;
+        };
         if doc.find(&id).map(|n| n.kind) != Some(DesignKind::TextInput) {
             return false;
         }
@@ -689,10 +961,19 @@ impl DesignRuntime {
 
     /// Semantic, screen-position based component inspection for UI agents.
     pub fn inspect(&self, doc: &DesignDocument) -> Vec<(String, DesignKind, Rect, bool)> {
-        doc.elements.iter().filter_map(|n|
-            self.component_bounds(&n.id).map(|r|
-                (n.id.clone(), n.kind, r, self.focused.as_deref() == Some(n.id.as_str()))
-            )).collect()
+        doc.elements
+            .iter()
+            .filter_map(|n| {
+                self.component_bounds(&n.id).map(|r| {
+                    (
+                        n.id.clone(),
+                        n.kind,
+                        r,
+                        self.focused.as_deref() == Some(n.id.as_str()),
+                    )
+                })
+            })
+            .collect()
     }
 }
 
@@ -714,10 +995,20 @@ mod tests {
         runtime.bind(&toggle, "prefs.enabled");
         runtime.relayout(&doc, rect(0.0, 0.0, 800.0, 600.0));
         let pointer = PointerState::default();
-        assert!(runtime.pointer_down(&doc, Vec2::new(20.0, 20.0), PointerButton::Primary, &pointer));
+        assert!(runtime.pointer_down(
+            &doc,
+            Vec2::new(20.0, 20.0),
+            PointerButton::Primary,
+            &pointer
+        ));
         runtime.pointer_up(&doc, Vec2::new(20.0, 20.0), PointerButton::Primary);
         assert_eq!(runtime.take_events()[0].action_id, "command.run");
-        runtime.pointer_down(&doc, Vec2::new(20.0, 90.0), PointerButton::Primary, &pointer);
+        runtime.pointer_down(
+            &doc,
+            Vec2::new(20.0, 90.0),
+            PointerButton::Primary,
+            &pointer,
+        );
         runtime.pointer_up(&doc, Vec2::new(20.0, 90.0), PointerButton::Primary);
         assert_eq!(runtime.get("prefs.enabled"), Some(&UiValue::Bool(true)));
     }
@@ -725,12 +1016,23 @@ mod tests {
     #[test]
     fn responsive_rule_and_keyboard_text() {
         let mut doc = DesignDocument::new("Test", 800.0, 600.0);
-        let id = doc.add(DesignKind::TextInput, "Prompt", rect(50.0, 30.0, 400.0, 30.0));
+        let id = doc.add(
+            DesignKind::TextInput,
+            "Prompt",
+            rect(50.0, 30.0, 400.0, 30.0),
+        );
         let mut rt = DesignRuntime::new();
-        rt.responsive.insert(id.clone(), ResponsiveRule::Anchored {
-            left: true, right: true, top: true, bottom: false,
-            min_size: Vec2::new(120.0, 30.0), max_size: None,
-        });
+        rt.responsive.insert(
+            id.clone(),
+            ResponsiveRule::Anchored {
+                left: true,
+                right: true,
+                top: true,
+                bottom: false,
+                min_size: Vec2::new(120.0, 30.0),
+                max_size: None,
+            },
+        );
         rt.relayout(&doc, rect(0.0, 0.0, 1000.0, 600.0));
         assert_eq!(rt.component_bounds(&id).unwrap().width(), 600.0);
         rt.focused = Some(id.clone());
@@ -740,7 +1042,11 @@ mod tests {
     #[test]
     fn same_agent_and_mouse_event_channel_with_ime() {
         let mut doc = DesignDocument::new("Test", 800.0, 600.0);
-        let id = doc.add(DesignKind::TextInput, "Prompt", rect(12.0, 12.0, 320.0, 32.0));
+        let id = doc.add(
+            DesignKind::TextInput,
+            "Prompt",
+            rect(12.0, 12.0, 320.0, 32.0),
+        );
         doc.action_bindings.insert(id.clone(), "form.submit".into());
         let mut rt = DesignRuntime::new();
         rt.sync(&doc);
@@ -755,5 +1061,4 @@ mod tests {
         rt.set_text_by_id(&doc, &id, "done").unwrap();
         assert_eq!(rt.get(&id), Some(&UiValue::Text("done".into())));
     }
-
 }

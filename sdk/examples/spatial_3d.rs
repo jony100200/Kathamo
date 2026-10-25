@@ -31,7 +31,8 @@ impl Spatial3dEditorApp {
 
         // 2. Customized Scene Graph Hierarchy Outliner
         registry.register_factory("hierarchy_tree", "Scene Outliner", "Structure", || {
-            let mut hero_item = HierarchyItem::new("actor_hero", "Character_Model_LOD0").with_depth(0);
+            let mut hero_item =
+                HierarchyItem::new("actor_hero", "Character_Model_LOD0").with_depth(0);
             hero_item.selected = true;
 
             let tree = HierarchyTree {
@@ -52,25 +53,44 @@ impl Spatial3dEditorApp {
         });
 
         // 3. Customized 3D Transform & PBR Material Inspector
-        registry.register_factory("property_inspector", "Transform & Material", "Inspectors", || {
-            let inspector = MetadataPropertyInspector::new(
-                "Selected: Character_Model_LOD0",
-                vec![
-                    // Transform Section
-                    PropertyItem::vec2("trans_pos", "Position (X, Y)", 0.0, 1.25, -100.0, 100.0),
-                    PropertyItem::vec2("trans_rot", "Rotation (Pitch, Yaw)", 0.0, 45.0, -180.0, 180.0),
-                    PropertyItem::vec2("trans_scale", "Scale (X, Y)", 1.0, 1.0, 0.01, 10.0),
-                    // Material PBR Section
-                    PropertyItem::color("mat_albedo", "Albedo Tint", Color::rgb(212, 163, 115)),
-                    PropertyItem::float("mat_metallic", "Metallic", 0.85, 0.0, 1.0, 0.01),
-                    PropertyItem::float("mat_roughness", "Roughness", 0.24, 0.0, 1.0, 0.01),
-                    PropertyItem::float("mat_ao", "Ambient Occlusion", 1.0, 0.0, 1.0, 0.05),
-                    PropertyItem::boolean("cast_shadows", "Cast Dynamic Shadows", true),
-                    PropertyItem::boolean("receive_shadows", "Receive Shadows", true),
-                ],
-            );
-            Box::new(InspectorEditor { inspector })
-        });
+        registry.register_factory(
+            "property_inspector",
+            "Transform & Material",
+            "Inspectors",
+            || {
+                let inspector = MetadataPropertyInspector::new(
+                    "Selected: Character_Model_LOD0",
+                    vec![
+                        // Transform Section
+                        PropertyItem::vec2(
+                            "trans_pos",
+                            "Position (X, Y)",
+                            0.0,
+                            1.25,
+                            -100.0,
+                            100.0,
+                        ),
+                        PropertyItem::vec2(
+                            "trans_rot",
+                            "Rotation (Pitch, Yaw)",
+                            0.0,
+                            45.0,
+                            -180.0,
+                            180.0,
+                        ),
+                        PropertyItem::vec2("trans_scale", "Scale (X, Y)", 1.0, 1.0, 0.01, 10.0),
+                        // Material PBR Section
+                        PropertyItem::color("mat_albedo", "Albedo Tint", Color::rgb(212, 163, 115)),
+                        PropertyItem::float("mat_metallic", "Metallic", 0.85, 0.0, 1.0, 0.01),
+                        PropertyItem::float("mat_roughness", "Roughness", 0.24, 0.0, 1.0, 0.01),
+                        PropertyItem::float("mat_ao", "Ambient Occlusion", 1.0, 0.0, 1.0, 0.05),
+                        PropertyItem::boolean("cast_shadows", "Cast Dynamic Shadows", true),
+                        PropertyItem::boolean("receive_shadows", "Receive Shadows", true),
+                    ],
+                );
+                Box::new(InspectorEditor { inspector })
+            },
+        );
 
         // 4. Asset Browser pre-populated with 3D project assets
         registry.register_factory("asset_browser", "Project Assets", "Data", || {
@@ -89,7 +109,10 @@ impl Spatial3dEditorApp {
         });
 
         let workspace = WorkspaceHost::with_preset(
-            registry, "ws_3d", "3D Viewport", WorkspacePreset::Spatial3D,
+            registry,
+            "ws_3d",
+            "3D Viewport",
+            WorkspacePreset::Spatial3D,
         );
 
         // Application Menu Bar
@@ -101,7 +124,11 @@ impl Spatial3dEditorApp {
                     MenuItem::action("file_open_scene", "Open Scene...", Some("Ctrl+O")),
                     MenuItem::separator(),
                     MenuItem::action("file_save_scene", "Save Scene", Some("Ctrl+S")),
-                    MenuItem::action("file_build", "Build & Package Application...", Some("Ctrl+Shift+B")),
+                    MenuItem::action(
+                        "file_build",
+                        "Build & Package Application...",
+                        Some("Ctrl+Shift+B"),
+                    ),
                 ],
             ),
             Menu::new(
@@ -134,7 +161,10 @@ impl Spatial3dEditorApp {
         ]);
 
         let mut notifications = NotificationHost::new();
-        notifications.info("Viewport UI", "Example frame preview; application renderer supplied separately.");
+        notifications.info(
+            "Viewport UI",
+            "Example frame preview; application renderer supplied separately.",
+        );
 
         Self {
             workspace,
@@ -184,36 +214,57 @@ impl KathamoApp for Spatial3dEditorApp {
                     rgba[i + 3] = 255;
                 }
             }
-            ctx.set_image_rgba8(2001, width as u32, height as u32, rgba).expect("valid RGBA preview");
+            ctx.set_image_rgba8(2001, width as u32, height as u32, rgba)
+                .expect("valid RGBA preview");
         }
         let palette = ctx.theme;
         let bounds = ctx.bounds();
 
         // 1. Menu Bar
         let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
-        self.menu_bar.render(&mut ctx.cmd_buf, menu_rect, &ctx.pointer, &palette);
+        self.menu_bar
+            .render(&mut ctx.cmd_buf, menu_rect, &ctx.pointer, &palette);
 
         // 2. 3D Docked Workspace
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.render(&mut ctx.cmd_buf, workspace_rect, &ctx.pointer, &palette);
+        self.workspace
+            .render(&mut ctx.cmd_buf, workspace_rect, &ctx.pointer, &palette);
 
         // 3. Dialogs & Notifications
-        self.dialogs.render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &palette);
-        self.notifications.render(&mut ctx.cmd_buf, bounds, &palette);
+        self.dialogs
+            .render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &palette);
+        self.notifications
+            .render(&mut ctx.cmd_buf, bounds, &palette);
 
         // 4. UI Inspector Snapshot
         if self.inspector_snapshot.is_none() {
             let mut snap = InterfaceInspector::new_snapshot("spatial_3d_root", bounds);
-            InterfaceInspector::add_dock_tab(&mut snap.root, "menu_bar", "MenuBar", menu_rect, true);
-            InterfaceInspector::add_editor(&mut snap.root, "workspace_host", "WorkspaceHost", workspace_rect);
+            InterfaceInspector::add_dock_tab(
+                &mut snap.root,
+                "menu_bar",
+                "MenuBar",
+                menu_rect,
+                true,
+            );
+            InterfaceInspector::add_editor(
+                &mut snap.root,
+                "workspace_host",
+                "WorkspaceHost",
+                workspace_rect,
+            );
             self.inspector_snapshot = Some(snap);
         }
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
         let bounds = ctx.bounds();
         let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
 
@@ -222,7 +273,8 @@ impl KathamoApp for Spatial3dEditorApp {
                 if action_id == "file_build" {
                     self.trigger_build_dialog();
                 } else if action_id == "file_save_scene" {
-                    self.notifications.success("Scene Saved", "All 3D actor transforms committed to disk.");
+                    self.notifications
+                        .success("Scene Saved", "All 3D actor transforms committed to disk.");
                 }
                 return true;
             }
@@ -231,7 +283,8 @@ impl KathamoApp for Spatial3dEditorApp {
         if self.dialogs.is_open {
             if let Some((_id, action)) = self.dialogs.handle_mouse_down(pos, button, bounds) {
                 if action == DialogAction::Confirm {
-                    self.notifications.success("Build Started", "Packaging release binary...");
+                    self.notifications
+                        .success("Build Started", "Packaging release binary...");
                 }
                 return true;
             }
@@ -241,17 +294,21 @@ impl KathamoApp for Spatial3dEditorApp {
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.handle_mouse_down(pos, button, workspace_rect, &ctx.pointer)
+        self.workspace
+            .handle_mouse_down(pos, button, workspace_rect, &ctx.pointer)
     }
 
     fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
-        if self.dialogs.is_open { return false; }
+        if self.dialogs.is_open {
+            return false;
+        }
         let bounds = ctx.bounds();
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.handle_mouse_move(pos, delta, workspace_rect, &ctx.pointer)
+        self.workspace
+            .handle_mouse_move(pos, delta, workspace_rect, &ctx.pointer)
     }
 
     fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
@@ -270,7 +327,9 @@ impl KathamoApp for Spatial3dEditorApp {
     }
 
     fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
-        if self.dialogs.is_open { return false; }
+        if self.dialogs.is_open {
+            return false;
+        }
         let bounds = ctx.bounds();
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
@@ -280,8 +339,14 @@ impl KathamoApp for Spatial3dEditorApp {
     }
 
     fn handle_key_down(&mut self, key: Key, modifiers: Modifiers, ctx: &mut AppContext) -> bool {
-        if modifiers.ctrl && modifiers.shift && matches!(key, Key::Character('d') | Key::Character('D')) {
-            if let Some(panel) = self.workspace.detach_to_window("viewport_3d", ctx, 920, 580) {
+        if modifiers.ctrl
+            && modifiers.shift
+            && matches!(key, Key::Character('d') | Key::Character('D'))
+        {
+            if let Some(panel) = self
+                .workspace
+                .detach_to_window("viewport_3d", ctx, 920, 580)
+            {
                 self.detached.insert(panel.tab.id.clone(), panel);
             }
             return true;
@@ -299,41 +364,97 @@ impl KathamoApp for Spatial3dEditorApp {
 
     fn update_window(&mut self, id: &str, ctx: &mut AppContext) {
         if !ctx.images.contains_key(&2001) {
-            ctx.set_image_rgba8(2001, 2, 2, vec![
-                50, 100, 210, 255, 130, 180, 230, 255,
-                70, 140, 220, 255, 150, 200, 240, 255,
-            ]).expect("valid detached viewport image");
+            ctx.set_image_rgba8(
+                2001,
+                2,
+                2,
+                vec![
+                    50, 100, 210, 255, 130, 180, 230, 255, 70, 140, 220, 255, 150, 200, 240, 255,
+                ],
+            )
+            .expect("valid detached viewport image");
         }
-        if let Some(panel) = self.detached.get_mut(id) { panel.render(ctx); }
+        if let Some(panel) = self.detached.get_mut(id) {
+            panel.render(ctx);
+        }
     }
 
-    fn handle_window_mouse_down(&mut self, id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
-        self.detached.get_mut(id).is_some_and(|panel| panel.handle_mouse_down(pos, button, ctx))
+    fn handle_window_mouse_down(
+        &mut self,
+        id: &str,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
+        self.detached
+            .get_mut(id)
+            .is_some_and(|panel| panel.handle_mouse_down(pos, button, ctx))
     }
-    fn handle_window_mouse_move(&mut self, id: &str, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
-        self.detached.get_mut(id).is_some_and(|panel| panel.handle_mouse_move(pos, delta, ctx))
+    fn handle_window_mouse_move(
+        &mut self,
+        id: &str,
+        pos: Vec2,
+        delta: Vec2,
+        ctx: &mut AppContext,
+    ) -> bool {
+        self.detached
+            .get_mut(id)
+            .is_some_and(|panel| panel.handle_mouse_move(pos, delta, ctx))
     }
-    fn handle_window_mouse_up(&mut self, id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
-        self.detached.get_mut(id).is_some_and(|panel| panel.handle_mouse_up(pos, button, ctx))
+    fn handle_window_mouse_up(
+        &mut self,
+        id: &str,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
+        self.detached
+            .get_mut(id)
+            .is_some_and(|panel| panel.handle_mouse_up(pos, button, ctx))
     }
-    fn handle_window_scroll(&mut self, id: &str, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
-        self.detached.get_mut(id).is_some_and(|panel| panel.handle_scroll(delta, pos, ctx))
+    fn handle_window_scroll(
+        &mut self,
+        id: &str,
+        delta: Vec2,
+        pos: Vec2,
+        ctx: &mut AppContext,
+    ) -> bool {
+        self.detached
+            .get_mut(id)
+            .is_some_and(|panel| panel.handle_scroll(delta, pos, ctx))
     }
-    fn handle_window_key_down(&mut self, id: &str, key: Key, modifiers: Modifiers, _ctx: &mut AppContext) -> bool {
-        self.detached.get_mut(id).is_some_and(|panel| panel.handle_key_down(key, modifiers))
+    fn handle_window_key_down(
+        &mut self,
+        id: &str,
+        key: Key,
+        modifiers: Modifiers,
+        _ctx: &mut AppContext,
+    ) -> bool {
+        self.detached
+            .get_mut(id)
+            .is_some_and(|panel| panel.handle_key_down(key, modifiers))
     }
     fn handle_window_text_input(&mut self, id: &str, text: &str, _ctx: &mut AppContext) -> bool {
-        self.detached.get_mut(id).is_some_and(|panel| panel.handle_text_input(text))
+        self.detached
+            .get_mut(id)
+            .is_some_and(|panel| panel.handle_text_input(text))
     }
     fn handle_window_ime(&mut self, id: &str, event: ImeEvent, _ctx: &mut AppContext) -> bool {
-        self.detached.get_mut(id).is_some_and(|panel| panel.handle_ime(event))
+        self.detached
+            .get_mut(id)
+            .is_some_and(|panel| panel.handle_ime(event))
     }
 
     fn window_closed(&mut self, id: &str) {
         if let Some(panel) = self.detached.remove(id) {
-            let target = self.workspace.active_workspace().dock_tree.compute_layout(
-                Rect::from_min_size(Vec2::ZERO, Vec2::new(1280.0, 720.0))
-            ).leaves.first().map(|leaf| leaf.id.clone());
+            let target = self
+                .workspace
+                .active_workspace()
+                .dock_tree
+                .compute_layout(Rect::from_min_size(Vec2::ZERO, Vec2::new(1280.0, 720.0)))
+                .leaves
+                .first()
+                .map(|leaf| leaf.id.clone());
             if let Some(leaf_id) = target {
                 let _ = self.workspace.attach_panel(&leaf_id, panel);
             }
@@ -353,16 +474,28 @@ fn main() {
     let mut last_cmd_count = 0;
     for frame_idx in 0..10 {
         last_cmd_count = runner.step_frame();
-        assert!(last_cmd_count > 0, "3D Workspace must generate render commands");
+        assert!(
+            last_cmd_count > 0,
+            "3D Workspace must generate render commands"
+        );
         if frame_idx == 4 {
             runner.app.trigger_build_dialog();
         }
     }
 
-    assert!(runner.app.dialogs.is_open, "Build settings dialog should be open");
-    assert!(runner.app.inspector_snapshot.is_some(), "Inspector snapshot captured");
+    assert!(
+        runner.app.dialogs.is_open,
+        "Build settings dialog should be open"
+    );
+    assert!(
+        runner.app.inspector_snapshot.is_some(),
+        "Inspector snapshot captured"
+    );
 
     println!("✓ 3D Spatial DCC Editor simulated successfully.");
     println!("✓ Total commands rendered: {}", last_cmd_count);
-    println!("✓ Workspaces active: {}", runner.app.workspace.workspaces.len());
+    println!(
+        "✓ Workspaces active: {}",
+        runner.app.workspace.workspaces.len()
+    );
 }

@@ -505,10 +505,16 @@ impl UiLabApp {
                 }
             }
             LabTab::CreativeWorkspace => {
-                crate::tabs::creative_workspace::handle_creative_workspace_mouse_down(self, pos, button, content_rect);
+                crate::tabs::creative_workspace::handle_creative_workspace_mouse_down(
+                    self,
+                    pos,
+                    button,
+                    content_rect,
+                );
             }
             LabTab::NodeEditor => {
-                self.node_editor.handle_mouse_down(pos, button, content_rect);
+                self.node_editor
+                    .handle_mouse_down(pos, button, content_rect);
             }
             _ => {}
         }
@@ -527,10 +533,14 @@ impl UiLabApp {
         if self.current_tab == LabTab::CreativeWorkspace {
             let workspace_rect = Rect::from_min_size(
                 Vec2::new(content_rect.min.x, content_rect.min.y + 44.0),
-                Vec2::new(content_rect.width(), (content_rect.height() - 44.0).max(50.0)),
+                Vec2::new(
+                    content_rect.width(),
+                    (content_rect.height() - 44.0).max(50.0),
+                ),
             );
             let ptr_copy = self.pointer.clone();
-            self.creative_workspace.handle_mouse_move(pos, delta, workspace_rect, &ptr_copy);
+            self.creative_workspace
+                .handle_mouse_move(pos, delta, workspace_rect, &ptr_copy);
             return;
         }
 
@@ -578,9 +588,13 @@ impl UiLabApp {
             );
             let workspace_rect = Rect::from_min_size(
                 Vec2::new(content_rect.min.x, content_rect.min.y + 44.0),
-                Vec2::new(content_rect.width(), (content_rect.height() - 44.0).max(50.0)),
+                Vec2::new(
+                    content_rect.width(),
+                    (content_rect.height() - 44.0).max(50.0),
+                ),
             );
-            self.creative_workspace.handle_mouse_up(pos, button, workspace_rect);
+            self.creative_workspace
+                .handle_mouse_up(pos, button, workspace_rect);
         }
 
         if self.current_tab == LabTab::NodeEditor {
@@ -604,9 +618,13 @@ impl UiLabApp {
             LabTab::CreativeWorkspace => {
                 let workspace_rect = Rect::from_min_size(
                     Vec2::new(content_rect.min.x, content_rect.min.y + 44.0),
-                    Vec2::new(content_rect.width(), (content_rect.height() - 44.0).max(50.0)),
+                    Vec2::new(
+                        content_rect.width(),
+                        (content_rect.height() - 44.0).max(50.0),
+                    ),
                 );
-                self.creative_workspace.handle_scroll(delta, self.pointer.position, workspace_rect);
+                self.creative_workspace
+                    .handle_scroll(delta, self.pointer.position, workspace_rect);
             }
             LabTab::NodeEditor => {
                 self.node_editor

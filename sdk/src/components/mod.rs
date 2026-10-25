@@ -90,7 +90,12 @@ impl MenuBar {
         }
     }
 
-    pub fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, bounds: Rect) -> Option<String> {
+    pub fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        bounds: Rect,
+    ) -> Option<String> {
         if button != PointerButton::Primary {
             return None;
         }
@@ -100,7 +105,10 @@ impl MenuBar {
             let mut x = bounds.min.x + 8.0;
             let item_width = 54.0;
             for (idx, _menu) in self.menus.iter().enumerate() {
-                let rect = Rect::from_min_size(Vec2::new(x, bounds.min.y), Vec2::new(item_width, bounds.height()));
+                let rect = Rect::from_min_size(
+                    Vec2::new(x, bounds.min.y),
+                    Vec2::new(item_width, bounds.height()),
+                );
                 if rect.contains(pos) {
                     if self.open_menu_idx == Some(idx) {
                         self.open_menu_idx = None;
@@ -159,14 +167,21 @@ impl MenuBar {
         let item_width = 54.0;
 
         for (idx, menu) in self.menus.iter().enumerate() {
-            let item_rect = Rect::from_min_size(Vec2::new(x, bounds.min.y + 2.0), Vec2::new(item_width, bounds.height() - 4.0));
+            let item_rect = Rect::from_min_size(
+                Vec2::new(x, bounds.min.y + 2.0),
+                Vec2::new(item_width, bounds.height() - 4.0),
+            );
             let is_open = self.open_menu_idx == Some(idx);
             let is_hovered = item_rect.contains(ptr.position);
 
             if is_open || is_hovered {
                 cmd_buf.push(DrawCommand::Rect {
                     rect: item_rect,
-                    fill: if is_open { palette.elevated_high } else { palette.elevated },
+                    fill: if is_open {
+                        palette.elevated_high
+                    } else {
+                        palette.elevated
+                    },
                     radius: CornerRadius::same(3.0),
                     stroke: Stroke::NONE,
                 });
@@ -208,7 +223,10 @@ impl MenuBar {
 
                 let mut item_y = dropdown_rect.min.y + 4.0;
                 for item in &menu.items {
-                    let r = Rect::from_min_size(Vec2::new(dropdown_rect.min.x + 4.0, item_y), Vec2::new(dropdown_rect.width() - 8.0, 24.0));
+                    let r = Rect::from_min_size(
+                        Vec2::new(dropdown_rect.min.x + 4.0, item_y),
+                        Vec2::new(dropdown_rect.width() - 8.0, 24.0),
+                    );
                     let is_hov = r.contains(ptr.position) && item.enabled;
 
                     if is_hov {
@@ -224,7 +242,11 @@ impl MenuBar {
                         text: item.label.clone(),
                         pos: Vec2::new(r.min.x + 8.0, r.min.y + 5.0),
                         size: 11.5,
-                        color: if item.enabled { palette.text } else { palette.text_muted.with_alpha(120) },
+                        color: if item.enabled {
+                            palette.text
+                        } else {
+                            palette.text_muted.with_alpha(120)
+                        },
                         strong: false,
                     });
 
@@ -326,7 +348,10 @@ impl ContextMenu {
 
         let mut item_y = b.min.y + 4.0;
         for item in &self.items {
-            let r = Rect::from_min_size(Vec2::new(b.min.x + 4.0, item_y), Vec2::new(b.width() - 8.0, 24.0));
+            let r = Rect::from_min_size(
+                Vec2::new(b.min.x + 4.0, item_y),
+                Vec2::new(b.width() - 8.0, 24.0),
+            );
             let is_hov = r.contains(ptr.position) && item.enabled;
 
             if is_hov {
@@ -342,7 +367,11 @@ impl ContextMenu {
                 text: item.label.clone(),
                 pos: Vec2::new(r.min.x + 8.0, r.min.y + 5.0),
                 size: 11.5,
-                color: if item.enabled { palette.text } else { palette.text_muted.with_alpha(120) },
+                color: if item.enabled {
+                    palette.text
+                } else {
+                    palette.text_muted.with_alpha(120)
+                },
                 strong: false,
             });
 
@@ -395,7 +424,12 @@ impl DialogHost {
         }
     }
 
-    pub fn open(&mut self, dialog_id: impl Into<String>, title: impl Into<String>, message: impl Into<String>) {
+    pub fn open(
+        &mut self,
+        dialog_id: impl Into<String>,
+        title: impl Into<String>,
+        message: impl Into<String>,
+    ) {
         self.dialog_id = dialog_id.into();
         self.title = title.into();
         self.message = message.into();
@@ -406,7 +440,12 @@ impl DialogHost {
         self.is_open = false;
     }
 
-    pub fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, screen_bounds: Rect) -> Option<(String, DialogAction)> {
+    pub fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        screen_bounds: Rect,
+    ) -> Option<(String, DialogAction)> {
         if !self.is_open || button != PointerButton::Primary {
             return None;
         }
@@ -414,12 +453,21 @@ impl DialogHost {
         let modal_w = 420.0;
         let modal_h = 180.0;
         let center = screen_bounds.center();
-        let modal_rect = Rect::from_min_size(Vec2::new(center.x - modal_w * 0.5, center.y - modal_h * 0.5), Vec2::new(modal_w, modal_h));
+        let modal_rect = Rect::from_min_size(
+            Vec2::new(center.x - modal_w * 0.5, center.y - modal_h * 0.5),
+            Vec2::new(modal_w, modal_h),
+        );
 
         let btn_w = 80.0;
         let btn_h = 28.0;
-        let cancel_rect = Rect::from_min_size(Vec2::new(modal_rect.max.x - 180.0, modal_rect.max.y - 40.0), Vec2::new(btn_w, btn_h));
-        let confirm_rect = Rect::from_min_size(Vec2::new(modal_rect.max.x - 90.0, modal_rect.max.y - 40.0), Vec2::new(btn_w, btn_h));
+        let cancel_rect = Rect::from_min_size(
+            Vec2::new(modal_rect.max.x - 180.0, modal_rect.max.y - 40.0),
+            Vec2::new(btn_w, btn_h),
+        );
+        let confirm_rect = Rect::from_min_size(
+            Vec2::new(modal_rect.max.x - 90.0, modal_rect.max.y - 40.0),
+            Vec2::new(btn_w, btn_h),
+        );
 
         if confirm_rect.contains(pos) {
             let id = self.dialog_id.clone();
@@ -436,7 +484,13 @@ impl DialogHost {
         None
     }
 
-    pub fn render(&self, cmd_buf: &mut CommandBuffer, screen_bounds: Rect, ptr: &PointerState, palette: &ThemePalette) {
+    pub fn render(
+        &self,
+        cmd_buf: &mut CommandBuffer,
+        screen_bounds: Rect,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+    ) {
         if !self.is_open {
             return;
         }
@@ -453,7 +507,10 @@ impl DialogHost {
         let modal_w = 420.0;
         let modal_h = 180.0;
         let center = screen_bounds.center();
-        let modal_rect = Rect::from_min_size(Vec2::new(center.x - modal_w * 0.5, center.y - modal_h * 0.5), Vec2::new(modal_w, modal_h));
+        let modal_rect = Rect::from_min_size(
+            Vec2::new(center.x - modal_w * 0.5, center.y - modal_h * 0.5),
+            Vec2::new(modal_w, modal_h),
+        );
 
         cmd_buf.push(DrawCommand::Rect {
             rect: modal_rect,
@@ -483,11 +540,18 @@ impl DialogHost {
         // Cancel Button
         let btn_w = 80.0;
         let btn_h = 28.0;
-        let cancel_rect = Rect::from_min_size(Vec2::new(modal_rect.max.x - 180.0, modal_rect.max.y - 40.0), Vec2::new(btn_w, btn_h));
+        let cancel_rect = Rect::from_min_size(
+            Vec2::new(modal_rect.max.x - 180.0, modal_rect.max.y - 40.0),
+            Vec2::new(btn_w, btn_h),
+        );
         let cancel_hov = cancel_rect.contains(ptr.position);
         cmd_buf.push(DrawCommand::Rect {
             rect: cancel_rect,
-            fill: if cancel_hov { palette.elevated } else { palette.surface },
+            fill: if cancel_hov {
+                palette.elevated
+            } else {
+                palette.surface
+            },
             radius: CornerRadius::same(4.0),
             stroke: Stroke::new(1.0, palette.border),
         });
@@ -500,11 +564,18 @@ impl DialogHost {
         });
 
         // Confirm Button (Accent)
-        let confirm_rect = Rect::from_min_size(Vec2::new(modal_rect.max.x - 90.0, modal_rect.max.y - 40.0), Vec2::new(btn_w, btn_h));
+        let confirm_rect = Rect::from_min_size(
+            Vec2::new(modal_rect.max.x - 90.0, modal_rect.max.y - 40.0),
+            Vec2::new(btn_w, btn_h),
+        );
         let confirm_hov = confirm_rect.contains(ptr.position);
         cmd_buf.push(DrawCommand::Rect {
             rect: confirm_rect,
-            fill: if confirm_hov { palette.accent.with_alpha(220) } else { palette.accent },
+            fill: if confirm_hov {
+                palette.accent.with_alpha(220)
+            } else {
+                palette.accent
+            },
             radius: CornerRadius::same(4.0),
             stroke: Stroke::NONE,
         });
@@ -550,7 +621,13 @@ impl NotificationHost {
         Self::default()
     }
 
-    pub fn push(&mut self, id: impl Into<String>, title: impl Into<String>, message: impl Into<String>, level: NotificationLevel) {
+    pub fn push(
+        &mut self,
+        id: impl Into<String>,
+        title: impl Into<String>,
+        message: impl Into<String>,
+        level: NotificationLevel,
+    ) {
         self.notifications.push(NotificationToast {
             id: id.into(),
             title: title.into(),
@@ -588,7 +665,8 @@ impl NotificationHost {
         self.current_frame += 1;
         let cur = self.current_frame;
         // Auto-dismiss after 300 frames (~5 seconds at 60fps)
-        self.notifications.retain(|n| cur.saturating_sub(n.created_frame) < 300);
+        self.notifications
+            .retain(|n| cur.saturating_sub(n.created_frame) < 300);
     }
 
     pub fn render(&self, cmd_buf: &mut CommandBuffer, screen_bounds: Rect, palette: &ThemePalette) {
@@ -597,7 +675,10 @@ impl NotificationHost {
         let mut y = screen_bounds.min.y + 40.0;
 
         for n in self.notifications.iter().rev().take(4) {
-            let toast_rect = Rect::from_min_size(Vec2::new(screen_bounds.max.x - toast_w - 16.0, y), Vec2::new(toast_w, toast_h));
+            let toast_rect = Rect::from_min_size(
+                Vec2::new(screen_bounds.max.x - toast_w - 16.0, y),
+                Vec2::new(toast_w, toast_h),
+            );
 
             // Shadow
             cmd_buf.push(DrawCommand::Rect {
@@ -666,7 +747,11 @@ pub struct AssetItem {
 }
 
 impl AssetItem {
-    pub fn new(id: impl Into<String>, name: impl Into<String>, category: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        category: impl Into<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
@@ -737,7 +822,12 @@ impl AssetBrowser {
                 if self.active_category != "All" && i.category != self.active_category {
                     return false;
                 }
-                if !self.search_query.is_empty() && !i.name.to_lowercase().contains(&self.search_query.to_lowercase()) {
+                if !self.search_query.is_empty()
+                    && !i
+                        .name
+                        .to_lowercase()
+                        .contains(&self.search_query.to_lowercase())
+                {
                     return false;
                 }
                 true
@@ -745,13 +835,21 @@ impl AssetBrowser {
             .collect()
     }
 
-    pub fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, bounds: Rect) -> Option<String> {
+    pub fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        bounds: Rect,
+    ) -> Option<String> {
         if button != PointerButton::Primary {
             return None;
         }
 
         let header_h = 36.0;
-        let content_rect = Rect::from_min_size(Vec2::new(bounds.min.x, bounds.min.y + header_h), Vec2::new(bounds.width(), bounds.height() - header_h));
+        let content_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x, bounds.min.y + header_h),
+            Vec2::new(bounds.width(), bounds.height() - header_h),
+        );
 
         if content_rect.contains(pos) {
             let hit_id = match self.view_mode {
@@ -759,14 +857,17 @@ impl AssetBrowser {
                     let card_w = 110.0;
                     let card_h = 120.0;
                     let padding = 10.0;
-                    let cols = ((content_rect.width() - padding) / (card_w + padding)).floor().max(1.0) as usize;
+                    let cols = ((content_rect.width() - padding) / (card_w + padding))
+                        .floor()
+                        .max(1.0) as usize;
                     let mut found = None;
 
                     for (idx, item) in self.filtered_items().iter().enumerate() {
                         let col = idx % cols;
                         let row = idx / cols;
                         let x = content_rect.min.x + padding + (col as f32 * (card_w + padding));
-                        let y = content_rect.min.y + padding + (row as f32 * (card_h + padding)) - self.scroll_offset;
+                        let y = content_rect.min.y + padding + (row as f32 * (card_h + padding))
+                            - self.scroll_offset;
                         let r = Rect::from_min_size(Vec2::new(x, y), Vec2::new(card_w, card_h));
                         if r.contains(pos) {
                             found = Some(item.id.clone());
@@ -779,8 +880,12 @@ impl AssetBrowser {
                     let row_h = 28.0;
                     let mut found = None;
                     for (idx, item) in self.filtered_items().iter().enumerate() {
-                        let y = content_rect.min.y + 4.0 + (idx as f32 * row_h) - self.scroll_offset;
-                        let r = Rect::from_min_size(Vec2::new(content_rect.min.x + 8.0, y), Vec2::new(content_rect.width() - 16.0, row_h - 2.0));
+                        let y =
+                            content_rect.min.y + 4.0 + (idx as f32 * row_h) - self.scroll_offset;
+                        let r = Rect::from_min_size(
+                            Vec2::new(content_rect.min.x + 8.0, y),
+                            Vec2::new(content_rect.width() - 16.0, row_h - 2.0),
+                        );
                         if r.contains(pos) {
                             found = Some(item.id.clone());
                             break;
@@ -799,7 +904,13 @@ impl AssetBrowser {
         None
     }
 
-    pub fn render(&self, cmd_buf: &mut CommandBuffer, bounds: Rect, ptr: &PointerState, palette: &ThemePalette) {
+    pub fn render(
+        &self,
+        cmd_buf: &mut CommandBuffer,
+        bounds: Rect,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+    ) {
         // Container background
         cmd_buf.push(DrawCommand::Rect {
             rect: bounds,
@@ -823,19 +934,34 @@ impl AssetBrowser {
         for cat in self.categories() {
             let is_sel = self.active_category == cat;
             let pill_w = cat.len() as f32 * 7.0 + 16.0;
-            let pill_r = Rect::from_min_size(Vec2::new(cat_x, header_rect.min.y + 6.0), Vec2::new(pill_w, 24.0));
+            let pill_r = Rect::from_min_size(
+                Vec2::new(cat_x, header_rect.min.y + 6.0),
+                Vec2::new(pill_w, 24.0),
+            );
 
             cmd_buf.push(DrawCommand::Rect {
                 rect: pill_r,
-                fill: if is_sel { palette.accent } else { palette.surface },
+                fill: if is_sel {
+                    palette.accent
+                } else {
+                    palette.surface
+                },
                 radius: CornerRadius::same(12.0),
-                stroke: if is_sel { Stroke::NONE } else { Stroke::new(1.0, palette.border) },
+                stroke: if is_sel {
+                    Stroke::NONE
+                } else {
+                    Stroke::new(1.0, palette.border)
+                },
             });
             cmd_buf.push(DrawCommand::Text {
                 text: cat.clone(),
                 pos: Vec2::new(pill_r.min.x + 8.0, pill_r.min.y + 5.0),
                 size: 11.0,
-                color: if is_sel { Color::WHITE } else { palette.text_muted },
+                color: if is_sel {
+                    Color::WHITE
+                } else {
+                    palette.text_muted
+                },
                 strong: is_sel,
             });
 
@@ -843,7 +969,10 @@ impl AssetBrowser {
         }
 
         // Render Items
-        let content_rect = Rect::from_min_size(Vec2::new(bounds.min.x, bounds.min.y + header_h), Vec2::new(bounds.width(), bounds.height() - header_h));
+        let content_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x, bounds.min.y + header_h),
+            Vec2::new(bounds.width(), bounds.height() - header_h),
+        );
         let filtered = self.filtered_items();
 
         match self.view_mode {
@@ -851,13 +980,16 @@ impl AssetBrowser {
                 let card_w = 110.0;
                 let card_h = 120.0;
                 let padding = 10.0;
-                let cols = ((content_rect.width() - padding) / (card_w + padding)).floor().max(1.0) as usize;
+                let cols = ((content_rect.width() - padding) / (card_w + padding))
+                    .floor()
+                    .max(1.0) as usize;
 
                 for (idx, item) in filtered.iter().enumerate() {
                     let col = idx % cols;
                     let row = idx / cols;
                     let x = content_rect.min.x + padding + (col as f32 * (card_w + padding));
-                    let y = content_rect.min.y + padding + (row as f32 * (card_h + padding)) - self.scroll_offset;
+                    let y = content_rect.min.y + padding + (row as f32 * (card_h + padding))
+                        - self.scroll_offset;
                     let r = Rect::from_min_size(Vec2::new(x, y), Vec2::new(card_w, card_h));
 
                     if r.max.y < content_rect.min.y || r.min.y > content_rect.max.y {
@@ -870,13 +1002,26 @@ impl AssetBrowser {
                     // Card body
                     cmd_buf.push(DrawCommand::Rect {
                         rect: r,
-                        fill: if is_sel { palette.accent.with_alpha(40) } else if is_hov { palette.elevated } else { palette.surface },
+                        fill: if is_sel {
+                            palette.accent.with_alpha(40)
+                        } else if is_hov {
+                            palette.elevated
+                        } else {
+                            palette.surface
+                        },
                         radius: CornerRadius::same(6.0),
-                        stroke: if is_sel { Stroke::new(1.5, palette.accent) } else { Stroke::new(1.0, palette.border) },
+                        stroke: if is_sel {
+                            Stroke::new(1.5, palette.accent)
+                        } else {
+                            Stroke::new(1.0, palette.border)
+                        },
                     });
 
                     // Thumbnail preview block
-                    let thumb_r = Rect::from_min_size(Vec2::new(r.min.x + 6.0, r.min.y + 6.0), Vec2::new(r.width() - 12.0, 70.0));
+                    let thumb_r = Rect::from_min_size(
+                        Vec2::new(r.min.x + 6.0, r.min.y + 6.0),
+                        Vec2::new(r.width() - 12.0, 70.0),
+                    );
                     if let Some(tex_id) = item.texture_id {
                         cmd_buf.push(DrawCommand::Image {
                             rect: thumb_r,
@@ -923,7 +1068,10 @@ impl AssetBrowser {
                 let row_h = 28.0;
                 for (idx, item) in filtered.iter().enumerate() {
                     let y = content_rect.min.y + 4.0 + (idx as f32 * row_h) - self.scroll_offset;
-                    let r = Rect::from_min_size(Vec2::new(content_rect.min.x + 8.0, y), Vec2::new(content_rect.width() - 16.0, row_h - 2.0));
+                    let r = Rect::from_min_size(
+                        Vec2::new(content_rect.min.x + 8.0, y),
+                        Vec2::new(content_rect.width() - 16.0, row_h - 2.0),
+                    );
 
                     if r.max.y < content_rect.min.y || r.min.y > content_rect.max.y {
                         continue;
@@ -934,9 +1082,19 @@ impl AssetBrowser {
 
                     cmd_buf.push(DrawCommand::Rect {
                         rect: r,
-                        fill: if is_sel { palette.accent.with_alpha(45) } else if is_hov { palette.elevated } else { Color::TRANSPARENT },
+                        fill: if is_sel {
+                            palette.accent.with_alpha(45)
+                        } else if is_hov {
+                            palette.elevated
+                        } else {
+                            Color::TRANSPARENT
+                        },
                         radius: CornerRadius::same(3.0),
-                        stroke: if is_sel { Stroke::new(1.0, palette.accent) } else { Stroke::NONE },
+                        stroke: if is_sel {
+                            Stroke::new(1.0, palette.accent)
+                        } else {
+                            Stroke::NONE
+                        },
                     });
 
                     cmd_buf.push(DrawCommand::Text {
@@ -997,7 +1155,12 @@ impl ConsoleView {
         }
     }
 
-    pub fn log(&mut self, level: ConsoleLogLevel, tag: impl Into<String>, message: impl Into<String>) {
+    pub fn log(
+        &mut self,
+        level: ConsoleLogLevel,
+        tag: impl Into<String>,
+        message: impl Into<String>,
+    ) {
         self.entries.push(ConsoleLogEntry {
             level,
             tag: tag.into(),
@@ -1055,7 +1218,10 @@ impl ConsoleView {
         }
 
         // Bottom prompt separator
-        let prompt_rect = Rect::from_min_size(Vec2::new(bounds.min.x, bounds.max.y - 28.0), Vec2::new(bounds.width(), 28.0));
+        let prompt_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x, bounds.max.y - 28.0),
+            Vec2::new(bounds.width(), 28.0),
+        );
         cmd_buf.push(DrawCommand::Rect {
             rect: prompt_rect,
             fill: palette.surface,
@@ -1064,10 +1230,21 @@ impl ConsoleView {
         });
 
         cmd_buf.push(DrawCommand::Text {
-            text: format!("> {}_", if self.input_buffer.is_empty() { "Type command..." } else { &self.input_buffer }),
+            text: format!(
+                "> {}_",
+                if self.input_buffer.is_empty() {
+                    "Type command..."
+                } else {
+                    &self.input_buffer
+                }
+            ),
             pos: Vec2::new(prompt_rect.min.x + 10.0, prompt_rect.min.y + 7.0),
             size: 11.0,
-            color: if self.input_buffer.is_empty() { palette.text_muted } else { palette.text },
+            color: if self.input_buffer.is_empty() {
+                palette.text_muted
+            } else {
+                palette.text
+            },
             strong: false,
         });
     }
@@ -1079,10 +1256,13 @@ mod tests {
 
     #[test]
     fn test_menu_bar_and_context_menu() {
-        let menu = Menu::new("File", vec![
-            MenuItem::new("file_new", "New").with_shortcut("Ctrl+N"),
-            MenuItem::new("file_open", "Open").with_shortcut("Ctrl+O"),
-        ]);
+        let menu = Menu::new(
+            "File",
+            vec![
+                MenuItem::new("file_new", "New").with_shortcut("Ctrl+N"),
+                MenuItem::new("file_open", "Open").with_shortcut("Ctrl+O"),
+            ],
+        );
         let mut bar = MenuBar::new(vec![menu]);
 
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 30.0));
@@ -1114,7 +1294,12 @@ mod tests {
     #[test]
     fn test_notification_host() {
         let mut host = NotificationHost::new();
-        host.push("n1", "Build Finished", "Artifact ready in 0.4s", NotificationLevel::Success);
+        host.push(
+            "n1",
+            "Build Finished",
+            "Artifact ready in 0.4s",
+            NotificationLevel::Success,
+        );
         assert_eq!(host.notifications.len(), 1);
 
         host.dismiss("n1");

@@ -157,7 +157,10 @@ impl Rect {
         let max_x = self.max.x.min(other.max.x);
         let max_y = self.max.y.min(other.max.y);
         if min_x <= max_x && min_y <= max_y {
-            Some(Self::from_min_max(Vec2::new(min_x, min_y), Vec2::new(max_x, max_y)))
+            Some(Self::from_min_max(
+                Vec2::new(min_x, min_y),
+                Vec2::new(max_x, max_y),
+            ))
         } else {
             None
         }

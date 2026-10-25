@@ -37,11 +37,11 @@ pub enum PresetNode {
 #[inline]
 pub fn pin_type_color(pin_type: &str, palette: &ThemePalette) -> Color {
     match pin_type {
-        "Image" => Color::rgb(245, 158, 11),       // Amber / Gold (ComfyUI Image pin)
-        "Mask" => Color::rgb(168, 85, 247),        // Violet (ComfyUI Mask pin)
-        "Float" => Color::rgb(16, 185, 129),       // Emerald Green (Values/QA Score)
+        "Image" => Color::rgb(245, 158, 11), // Amber / Gold (ComfyUI Image pin)
+        "Mask" => Color::rgb(168, 85, 247),  // Violet (ComfyUI Mask pin)
+        "Float" => Color::rgb(16, 185, 129), // Emerald Green (Values/QA Score)
         "PBR" | "Material" => Color::rgb(59, 130, 246), // Electric Blue (Material pin)
-        "Media" => Color::rgb(244, 63, 94),        // Rose / Pink (Turntable Video pin)
+        "Media" => Color::rgb(244, 63, 94),  // Rose / Pink (Turntable Video pin)
         _ => palette.accent,
     }
 }
@@ -357,7 +357,10 @@ impl NodeEditor {
     // -------------------------------------------------------------------------
 
     pub fn input_pin_world_pos(&self, node: &GraphNode, pin_idx: usize) -> Vec2 {
-        Vec2::new(node.pos.x, node.pos.y + 40.0 + (pin_idx as f32) * 24.0 + 4.0)
+        Vec2::new(
+            node.pos.x,
+            node.pos.y + 40.0 + (pin_idx as f32) * 24.0 + 4.0,
+        )
     }
 
     pub fn output_pin_world_pos(&self, node: &GraphNode, pin_idx: usize) -> Vec2 {
@@ -414,11 +417,7 @@ impl NodeEditor {
         world_pos: Vec2,
     ) -> String {
         let cat_str: String = category.into();
-        let id = format!(
-            "node_{}_{}",
-            cat_str.to_lowercase(),
-            self.nodes.len() + 1
-        );
+        let id = format!("node_{}_{}", cat_str.to_lowercase(), self.nodes.len() + 1);
         let max_pins = inputs.len().max(outputs.len()).max(1);
         let height = 48.0 + (max_pins as f32) * 24.0;
         let node = GraphNode {
@@ -1138,9 +1137,13 @@ impl NodeEditor {
             for (idx, in_pin) in node.inputs.iter().enumerate() {
                 let pin_world = self.input_pin_world_pos(node, idx);
                 let pin_screen = self.world_to_screen(pin_world, viewport.min);
-                let is_hovered = self.hovered_pin.as_ref()
-                    == Some(&(node.id.clone(), in_pin.id.clone(), false));
-                let pin_radius = if is_hovered { 5.5 * self.zoom } else { 4.0 * self.zoom };
+                let is_hovered =
+                    self.hovered_pin.as_ref() == Some(&(node.id.clone(), in_pin.id.clone(), false));
+                let pin_radius = if is_hovered {
+                    5.5 * self.zoom
+                } else {
+                    4.0 * self.zoom
+                };
                 let pin_color = pin_type_color(&in_pin.pin_type, palette);
 
                 // Socket Circle
@@ -1161,7 +1164,10 @@ impl NodeEditor {
                 // Pin Label
                 buf.push(DrawCommand::Text {
                     text: in_pin.name.clone(),
-                    pos: Vec2::new(pin_screen.x + 10.0 * self.zoom, pin_screen.y - 6.0 * self.zoom),
+                    pos: Vec2::new(
+                        pin_screen.x + 10.0 * self.zoom,
+                        pin_screen.y - 6.0 * self.zoom,
+                    ),
                     size: (11.0 * self.zoom).clamp(8.0, 16.0),
                     color: if is_hovered {
                         palette.text
@@ -1176,9 +1182,13 @@ impl NodeEditor {
             for (idx, out_pin) in node.outputs.iter().enumerate() {
                 let pin_world = self.output_pin_world_pos(node, idx);
                 let pin_screen = self.world_to_screen(pin_world, viewport.min);
-                let is_hovered = self.hovered_pin.as_ref()
-                    == Some(&(node.id.clone(), out_pin.id.clone(), true));
-                let pin_radius = if is_hovered { 5.5 * self.zoom } else { 4.0 * self.zoom };
+                let is_hovered =
+                    self.hovered_pin.as_ref() == Some(&(node.id.clone(), out_pin.id.clone(), true));
+                let pin_radius = if is_hovered {
+                    5.5 * self.zoom
+                } else {
+                    4.0 * self.zoom
+                };
                 let pin_color = pin_type_color(&out_pin.pin_type, palette);
 
                 // Socket Circle
@@ -1356,7 +1366,11 @@ mod tests {
         assert!(editor.pending_wire.is_some());
 
         // Drag to input pin of node_stylize (in_img) in screen space
-        let stylize_node = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap();
+        let stylize_node = editor
+            .nodes
+            .iter()
+            .find(|n| n.id == "node_stylize")
+            .unwrap();
         let in_pin_world = editor.input_pin_world_pos(stylize_node, 0);
         let in_pin_screen = editor.world_to_screen(in_pin_world, viewport.min);
 
@@ -1385,7 +1399,11 @@ mod tests {
         editor.connections.clear();
 
         // out_score is "Float" from node_seamless (index 1)
-        let seamless_node = editor.nodes.iter().find(|n| n.id == "node_seamless").unwrap();
+        let seamless_node = editor
+            .nodes
+            .iter()
+            .find(|n| n.id == "node_seamless")
+            .unwrap();
         let score_pin_world = editor.output_pin_world_pos(seamless_node, 1);
         let score_pin_screen = editor.world_to_screen(score_pin_world, viewport.min);
 
@@ -1448,4 +1466,3 @@ mod tests {
         assert_ne!(editor.pan, orig_pan);
     }
 }
-

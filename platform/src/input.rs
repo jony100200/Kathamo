@@ -478,4 +478,3 @@ mod tests {
         assert!(ptr.double_clicked);
     }
 }
-

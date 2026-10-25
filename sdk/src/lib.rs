@@ -47,10 +47,10 @@ pub mod workspace;
 pub use ui_core as core;
 pub use ui_platform as platform;
 pub use ui_render as render;
-pub use ui_themes as themes;
-pub use ui_text as text;
-pub use ui_widgets as widgets;
 pub use ui_testkit as testkit;
+pub use ui_text as text;
+pub use ui_themes as themes;
+pub use ui_widgets as widgets;
 
 // Top-level re-exports from prelude
 pub use prelude::*;

@@ -160,7 +160,15 @@ impl NavigationRail {
                 Vec2::new(bounds.min.x + 4.0, top_y),
                 Vec2::new(item_width, item_height),
             );
-            if self.render_item(cmd_buf, icon_atlas, item, item_rect, pointer_pos, is_clicked, palette) {
+            if self.render_item(
+                cmd_buf,
+                icon_atlas,
+                item,
+                item_rect,
+                pointer_pos,
+                is_clicked,
+                palette,
+            ) {
                 clicked_id = Some(item.id);
             }
             top_y += item_height + 4.0;
@@ -174,7 +182,15 @@ impl NavigationRail {
                 Vec2::new(bounds.min.x + 4.0, bottom_y),
                 Vec2::new(item_width, item_height),
             );
-            if self.render_item(cmd_buf, icon_atlas, item, item_rect, pointer_pos, is_clicked, palette) {
+            if self.render_item(
+                cmd_buf,
+                icon_atlas,
+                item,
+                item_rect,
+                pointer_pos,
+                is_clicked,
+                palette,
+            ) {
                 clicked_id = Some(item.id);
             }
             bottom_y -= 4.0;
@@ -185,7 +201,9 @@ impl NavigationRail {
         let total_main_height = self.main_items.len() as f32 * (item_height + 4.0);
         let mut main_y = match self.alignment {
             RailAlignment::Top => top_y + 4.0,
-            RailAlignment::Center => top_y + (main_available_height - total_main_height).max(0.0) * 0.5,
+            RailAlignment::Center => {
+                top_y + (main_available_height - total_main_height).max(0.0) * 0.5
+            }
             RailAlignment::Bottom => bottom_y - total_main_height,
         };
 
@@ -194,7 +212,15 @@ impl NavigationRail {
                 Vec2::new(bounds.min.x + 4.0, main_y),
                 Vec2::new(item_width, item_height),
             );
-            if self.render_item(cmd_buf, icon_atlas, item, item_rect, pointer_pos, is_clicked, palette) {
+            if self.render_item(
+                cmd_buf,
+                icon_atlas,
+                item,
+                item_rect,
+                pointer_pos,
+                is_clicked,
+                palette,
+            ) {
                 clicked_id = Some(item.id);
             }
             main_y += item_height + 4.0;
@@ -250,7 +276,8 @@ impl NavigationRail {
             _ => rect.min.y + (rect.height() - icon_size) * 0.5,
         };
         let icon_x = rect.min.x + (rect.width() - icon_size) * 0.5;
-        let icon_rect = Rect::from_min_size(Vec2::new(icon_x, icon_y), Vec2::new(icon_size, icon_size));
+        let icon_rect =
+            Rect::from_min_size(Vec2::new(icon_x, icon_y), Vec2::new(icon_size, icon_size));
         icon_atlas.render(cmd_buf, item.icon, icon_rect, icon_color);
 
         // Label if enabled
@@ -289,7 +316,11 @@ impl NavigationRail {
                     radius: CornerRadius::same(badge_radius),
                     stroke: Stroke::new(1.5, palette.surface),
                 });
-                let badge_text = if count > 99 { "99+".to_string() } else { count.to_string() };
+                let badge_text = if count > 99 {
+                    "99+".to_string()
+                } else {
+                    count.to_string()
+                };
                 cmd_buf.push(DrawCommand::Text {
                     pos: Vec2::new(badge_center.x - 3.5, badge_center.y - 4.5),
                     text: badge_text,
@@ -316,9 +347,17 @@ mod tests {
 
         let rail = NavigationRail::new()
             .with_selected("canvas")
-            .add_main(NavigationRailItem::new("canvas", StudioIcon::Sparkles, "Canvas"))
+            .add_main(NavigationRailItem::new(
+                "canvas",
+                StudioIcon::Sparkles,
+                "Canvas",
+            ))
             .add_main(NavigationRailItem::new("nodes", StudioIcon::Sparkles, "Nodes").with_badge(3))
-            .add_trailing(NavigationRailItem::new("settings", StudioIcon::Sparkles, "Settings"));
+            .add_trailing(NavigationRailItem::new(
+                "settings",
+                StudioIcon::Sparkles,
+                "Settings",
+            ));
 
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(48.0, 600.0));
         let clicked = rail.render(

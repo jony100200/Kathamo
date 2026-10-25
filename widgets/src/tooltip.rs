@@ -47,7 +47,8 @@ impl<'a> TooltipOverlay<'a> {
         let tooltip_height = self.font_size + self.padding.y * 2.0;
 
         // Preferred position: below the target rect centered horizontally
-        let mut tooltip_x = self.target_rect.min.x + (self.target_rect.width() - tooltip_width) * 0.5;
+        let mut tooltip_x =
+            self.target_rect.min.x + (self.target_rect.width() - tooltip_width) * 0.5;
         let mut tooltip_y = self.target_rect.max.y + self.offset_y;
 
         // If tooltip exceeds bottom viewport boundary, flip above target rect
@@ -103,10 +104,10 @@ impl<'a> TooltipOverlay<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::icon_cache::IconAtlas;
     use ui_platform::input::PointerState;
     use ui_render::CommandBuffer;
     use ui_themes::ThemePalette;
-    use crate::icon_cache::IconAtlas;
 
     #[test]
     fn test_tooltip_clamping() {
@@ -116,13 +117,7 @@ mod tests {
         let pointer = PointerState::default();
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 300.0));
 
-        let mut ui = KolponaUi::new(
-            &mut cmd_buf,
-            &mut icon_atlas,
-            &palette,
-            bounds,
-            pointer,
-        );
+        let mut ui = KolponaUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer);
 
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 300.0));
         let target = Rect::from_min_size(Vec2::new(380.0, 290.0), Vec2::new(20.0, 20.0));

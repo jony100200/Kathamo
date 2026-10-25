@@ -28,12 +28,14 @@ impl Creative2dEditorApp {
 
         // 2. Customized 2D Layers Hierarchy
         registry.register_factory("hierarchy_tree", "Layers", "Structure", || {
-            let mut color_layer = HierarchyItem::new("layer_color", "Layer 3: Flat Colors & Shading").with_depth(0);
+            let mut color_layer =
+                HierarchyItem::new("layer_color", "Layer 3: Flat Colors & Shading").with_depth(0);
             color_layer.selected = true;
 
             let tree = HierarchyTree {
                 items: vec![
-                    HierarchyItem::new("layer_highlights", "Layer 4: Highlights & FX").with_depth(0),
+                    HierarchyItem::new("layer_highlights", "Layer 4: Highlights & FX")
+                        .with_depth(0),
                     color_layer,
                     HierarchyItem::new("layer_inks", "Layer 2: Clean Line Art").with_depth(0),
                     HierarchyItem::new("layer_sketch", "Layer 1: Rough Underdrawing").with_depth(0),
@@ -45,29 +47,50 @@ impl Creative2dEditorApp {
         });
 
         // 3. Customized 2D Brush & Document Inspector
-        registry.register_factory("property_inspector", "Brush & Tool Settings", "Inspectors", || {
-            let inspector = MetadataPropertyInspector::new(
-                "Inking Brush Properties",
-                vec![
-                    PropertyItem::float("brush_size", "Size (px)", 18.0, 1.0, 500.0, 1.0),
-                    PropertyItem::float("brush_opacity", "Opacity", 1.0, 0.0, 1.0, 0.05),
-                    PropertyItem::float("stabilizer", "Streamline Smoothing", 0.65, 0.0, 1.0, 0.05),
-                    PropertyItem::boolean("pressure_dynamics", "Pen Pressure Dynamics", true),
-                    PropertyItem::enum_choice(
-                        "blend_mode",
-                        "Blending Mode",
-                        0,
-                        vec!["Normal".into(), "Multiply".into(), "Screen".into(), "Overlay".into(), "Color Dodge".into()],
-                    ),
-                    PropertyItem::color("primary_color", "Active Inking Color", Color::rgb(30, 41, 59)),
-                ],
-            );
-            Box::new(InspectorEditor { inspector })
-        });
-
-        let workspace = WorkspaceHost::with_preset(
-            registry, "ws_2d", "2D Canvas", WorkspacePreset::Creative2D,
+        registry.register_factory(
+            "property_inspector",
+            "Brush & Tool Settings",
+            "Inspectors",
+            || {
+                let inspector = MetadataPropertyInspector::new(
+                    "Inking Brush Properties",
+                    vec![
+                        PropertyItem::float("brush_size", "Size (px)", 18.0, 1.0, 500.0, 1.0),
+                        PropertyItem::float("brush_opacity", "Opacity", 1.0, 0.0, 1.0, 0.05),
+                        PropertyItem::float(
+                            "stabilizer",
+                            "Streamline Smoothing",
+                            0.65,
+                            0.0,
+                            1.0,
+                            0.05,
+                        ),
+                        PropertyItem::boolean("pressure_dynamics", "Pen Pressure Dynamics", true),
+                        PropertyItem::enum_choice(
+                            "blend_mode",
+                            "Blending Mode",
+                            0,
+                            vec![
+                                "Normal".into(),
+                                "Multiply".into(),
+                                "Screen".into(),
+                                "Overlay".into(),
+                                "Color Dodge".into(),
+                            ],
+                        ),
+                        PropertyItem::color(
+                            "primary_color",
+                            "Active Inking Color",
+                            Color::rgb(30, 41, 59),
+                        ),
+                    ],
+                );
+                Box::new(InspectorEditor { inspector })
+            },
         );
+
+        let workspace =
+            WorkspaceHost::with_preset(registry, "ws_2d", "2D Canvas", WorkspacePreset::Creative2D);
 
         // Setup Application Menu Bar
         let menu_bar = MenuBar::new(vec![
@@ -78,7 +101,11 @@ impl Creative2dEditorApp {
                     MenuItem::action("file_open", "Open Project...", Some("Ctrl+O")),
                     MenuItem::separator(),
                     MenuItem::action("file_save", "Save Artwork", Some("Ctrl+S")),
-                    MenuItem::action("file_export", "Export Canvas (PNG/PSD)...", Some("Ctrl+Shift+E")),
+                    MenuItem::action(
+                        "file_export",
+                        "Export Canvas (PNG/PSD)...",
+                        Some("Ctrl+Shift+E"),
+                    ),
                 ],
             ),
             Menu::new(
@@ -109,7 +136,10 @@ impl Creative2dEditorApp {
         ]);
 
         let mut notifications = NotificationHost::new();
-        notifications.info("Ready", "2D Creative Workstation ready. Resolution: 3840x2160 (600 DPI).");
+        notifications.info(
+            "Ready",
+            "2D Creative Workstation ready. Resolution: 3840x2160 (600 DPI).",
+        );
 
         Self {
             workspace,
@@ -151,31 +181,51 @@ impl KathamoApp for Creative2dEditorApp {
 
         // 1. Top Menu Bar (height: 28px)
         let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
-        self.menu_bar.render(&mut ctx.cmd_buf, menu_rect, &ctx.pointer, &palette);
+        self.menu_bar
+            .render(&mut ctx.cmd_buf, menu_rect, &ctx.pointer, &palette);
 
         // 2. Docked Workspace Canvas & Panels
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.render(&mut ctx.cmd_buf, workspace_rect, &ctx.pointer, &palette);
+        self.workspace
+            .render(&mut ctx.cmd_buf, workspace_rect, &ctx.pointer, &palette);
 
         // 3. Modal Dialogs (if open)
-        self.dialogs.render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &palette);
+        self.dialogs
+            .render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &palette);
 
         // 4. Floating Notifications
-        self.notifications.render(&mut ctx.cmd_buf, bounds, &palette);
+        self.notifications
+            .render(&mut ctx.cmd_buf, bounds, &palette);
 
         // 5. Periodic Inspector Snapshot
         if self.inspector_snapshot.is_none() {
             let mut snap = InterfaceInspector::new_snapshot("app_root", bounds);
-            InterfaceInspector::add_dock_tab(&mut snap.root, "menu_bar", "MenuBar", menu_rect, true);
-            InterfaceInspector::add_editor(&mut snap.root, "workspace_host", "WorkspaceHost", workspace_rect);
+            InterfaceInspector::add_dock_tab(
+                &mut snap.root,
+                "menu_bar",
+                "MenuBar",
+                menu_rect,
+                true,
+            );
+            InterfaceInspector::add_editor(
+                &mut snap.root,
+                "workspace_host",
+                "WorkspaceHost",
+                workspace_rect,
+            );
             self.inspector_snapshot = Some(snap);
         }
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
         let bounds = ctx.bounds();
         let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
 
@@ -184,7 +234,8 @@ impl KathamoApp for Creative2dEditorApp {
                 if action_id == "file_export" {
                     self.trigger_export_dialog();
                 } else if action_id == "file_save" {
-                    self.notifications.success("Saved", "Project saved successfully.");
+                    self.notifications
+                        .success("Saved", "Project saved successfully.");
                 }
                 return true;
             }
@@ -193,7 +244,10 @@ impl KathamoApp for Creative2dEditorApp {
         if self.dialogs.is_open {
             if let Some((_id, action)) = self.dialogs.handle_mouse_down(pos, button, bounds) {
                 if action == DialogAction::Confirm {
-                    self.notifications.success("Export Complete", "Artwork exported as high-resolution PNG.");
+                    self.notifications.success(
+                        "Export Complete",
+                        "Artwork exported as high-resolution PNG.",
+                    );
                 }
                 return true;
             }
@@ -203,17 +257,21 @@ impl KathamoApp for Creative2dEditorApp {
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.handle_mouse_down(pos, button, workspace_rect, &ctx.pointer)
+        self.workspace
+            .handle_mouse_down(pos, button, workspace_rect, &ctx.pointer)
     }
 
     fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
-        if self.dialogs.is_open { return false; }
+        if self.dialogs.is_open {
+            return false;
+        }
         let bounds = ctx.bounds();
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
             Vec2::new(bounds.width(), bounds.height() - 28.0),
         );
-        self.workspace.handle_mouse_move(pos, delta, workspace_rect, &ctx.pointer)
+        self.workspace
+            .handle_mouse_move(pos, delta, workspace_rect, &ctx.pointer)
     }
 
     fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
@@ -226,7 +284,9 @@ impl KathamoApp for Creative2dEditorApp {
     }
 
     fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
-        if self.dialogs.is_open { return false; }
+        if self.dialogs.is_open {
+            return false;
+        }
         let bounds = ctx.bounds();
         let workspace_rect = Rect::from_min_size(
             Vec2::new(bounds.min.x, bounds.min.y + 28.0),
@@ -268,10 +328,19 @@ fn main() {
         }
     }
 
-    assert!(runner.app.dialogs.is_open, "Export modal dialog should be open");
-    assert!(runner.app.inspector_snapshot.is_some(), "Inspector snapshot must be captured");
+    assert!(
+        runner.app.dialogs.is_open,
+        "Export modal dialog should be open"
+    );
+    assert!(
+        runner.app.inspector_snapshot.is_some(),
+        "Inspector snapshot must be captured"
+    );
 
     println!("✓ 2D Creative Editor simulated successfully.");
     println!("✓ Total commands rendered: {}", last_cmd_count);
-    println!("✓ Workspaces active: {}", runner.app.workspace.workspaces.len());
+    println!(
+        "✓ Workspaces active: {}",
+        runner.app.workspace.workspaces.len()
+    );
 }

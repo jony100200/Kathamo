@@ -38,7 +38,7 @@ pub use navigation_rail::{
     NavigationRail, NavigationRailItem, RailAlignment, RailAnchor, RailLabelMode,
 };
 pub use range_slider::RangeSlider;
-pub use rich_text::{MarkdownView, ChatMessage, ChatRole, ChatTranscript};
+pub use rich_text::{ChatMessage, ChatRole, ChatTranscript, MarkdownView};
 pub use tooltip::TooltipOverlay;
 pub use ui::{KathamoUi, KolponaUi, Response};
 

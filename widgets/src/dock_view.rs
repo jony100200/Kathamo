@@ -158,8 +158,10 @@ impl DockTreeView {
                         }
                         let success = match zone {
                             DockDropZone::Center => next.add_tab(&leaf.id, dragging.panel),
-                            DockDropZone::Left | DockDropZone::Right |
-                            DockDropZone::Top | DockDropZone::Bottom => {
+                            DockDropZone::Left
+                            | DockDropZone::Right
+                            | DockDropZone::Top
+                            | DockDropZone::Bottom => {
                                 let (axis, ratio) = match zone {
                                     DockDropZone::Left => (SplitAxis::Horizontal, 0.3),
                                     DockDropZone::Right => (SplitAxis::Horizontal, 0.7),
@@ -171,7 +173,9 @@ impl DockTreeView {
                                     &leaf.id,
                                     format!("split_{}_{}", leaf.id, dragging.panel.id),
                                     format!("leaf_{}", dragging.panel.id),
-                                    axis, ratio, dragging.panel,
+                                    axis,
+                                    ratio,
+                                    dragging.panel,
                                 )
                             }
                         };
@@ -261,7 +265,11 @@ impl DockTreeView {
                     text: tab.title.clone(),
                     pos: Vec2::new(tab_rect.min.x + 8.0, tab_rect.min.y + 5.0),
                     size: 11.5,
-                    color: if is_active { palette.text } else { palette.text_muted },
+                    color: if is_active {
+                        palette.text
+                    } else {
+                        palette.text_muted
+                    },
                     strong: is_active,
                 });
 
@@ -296,7 +304,10 @@ impl DockTreeView {
 
         // 2. Render Interactive Splitters
         for sp in &layout.splitters {
-            let is_dragged = self.active_splitter_drag.as_ref().is_some_and(|(id, ..)| id == &sp.split_id);
+            let is_dragged = self
+                .active_splitter_drag
+                .as_ref()
+                .is_some_and(|(id, ..)| id == &sp.split_id);
             let is_hovered = sp.handle_rect.expand(2.0).contains(ptr.position);
 
             let fill = if is_dragged {
@@ -388,7 +399,12 @@ mod tests {
 
         // Hit test splitter
         let splitter_pos = layout.splitters[0].handle_rect.center();
-        let hit = dock_view.handle_mouse_down(splitter_pos, PointerButton::Primary, &layout, &mut dock_tree);
+        let hit = dock_view.handle_mouse_down(
+            splitter_pos,
+            PointerButton::Primary,
+            &layout,
+            &mut dock_tree,
+        );
         assert!(hit, "Clicking splitter should activate drag");
         assert!(dock_view.active_splitter_drag.is_some());
 
@@ -397,9 +413,20 @@ mod tests {
             primary_down: true,
             ..Default::default()
         };
-        dock_view.handle_mouse_move(splitter_pos + Vec2::new(50.0, 0.0), Vec2::new(50.0, 0.0), bounds, &mut dock_tree, &ptr);
+        dock_view.handle_mouse_move(
+            splitter_pos + Vec2::new(50.0, 0.0),
+            Vec2::new(50.0, 0.0),
+            bounds,
+            &mut dock_tree,
+            &ptr,
+        );
 
-        dock_view.handle_mouse_up(splitter_pos, PointerButton::Primary, &layout, &mut dock_tree);
+        dock_view.handle_mouse_up(
+            splitter_pos,
+            PointerButton::Primary,
+            &layout,
+            &mut dock_tree,
+        );
         assert!(dock_view.active_splitter_drag.is_none());
     }
 

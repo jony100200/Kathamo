@@ -49,7 +49,14 @@ pub struct PropertyItem {
 }
 
 impl PropertyItem {
-    pub fn float(id: impl Into<String>, label: impl Into<String>, val: f32, min: f32, max: f32, step: f32) -> Self {
+    pub fn float(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        val: f32,
+        min: f32,
+        max: f32,
+        step: f32,
+    ) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
@@ -85,7 +92,12 @@ impl PropertyItem {
         }
     }
 
-    pub fn enum_choice(id: impl Into<String>, label: impl Into<String>, selected: usize, options: Vec<String>) -> Self {
+    pub fn enum_choice(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        selected: usize,
+        options: Vec<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
@@ -95,7 +107,14 @@ impl PropertyItem {
         }
     }
 
-    pub fn vec2(id: impl Into<String>, label: impl Into<String>, x: f32, y: f32, min: f32, max: f32) -> Self {
+    pub fn vec2(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        x: f32,
+        y: f32,
+        min: f32,
+        max: f32,
+    ) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
@@ -111,12 +130,22 @@ impl PropertyItem {
         }
     }
 
-    pub fn integer(id: impl Into<String>, label: impl Into<String>, val: i32, min: i32, max: i32) -> Self {
+    pub fn integer(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        val: i32,
+        min: i32,
+        max: i32,
+    ) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
             category: "General".into(),
-            value: PropertyValue::Int { value: val, min, max },
+            value: PropertyValue::Int {
+                value: val,
+                min,
+                max,
+            },
             tooltip: None,
         }
     }
@@ -181,24 +210,33 @@ impl MetadataPropertyInspector {
     }
 
     pub fn get_float(&self, id: &str) -> Option<f32> {
-        self.properties.iter().find(|p| p.id == id).and_then(|p| match p.value {
-            PropertyValue::Float { value, .. } => Some(value),
-            _ => None,
-        })
+        self.properties
+            .iter()
+            .find(|p| p.id == id)
+            .and_then(|p| match p.value {
+                PropertyValue::Float { value, .. } => Some(value),
+                _ => None,
+            })
     }
 
     pub fn get_bool(&self, id: &str) -> Option<bool> {
-        self.properties.iter().find(|p| p.id == id).and_then(|p| match p.value {
-            PropertyValue::Bool(b) => Some(b),
-            _ => None,
-        })
+        self.properties
+            .iter()
+            .find(|p| p.id == id)
+            .and_then(|p| match p.value {
+                PropertyValue::Bool(b) => Some(b),
+                _ => None,
+            })
     }
 
     pub fn get_color(&self, id: &str) -> Option<Color> {
-        self.properties.iter().find(|p| p.id == id).and_then(|p| match p.value {
-            PropertyValue::Color(c) => Some(c),
-            _ => None,
-        })
+        self.properties
+            .iter()
+            .find(|p| p.id == id)
+            .and_then(|p| match p.value {
+                PropertyValue::Color(c) => Some(c),
+                _ => None,
+            })
     }
 
     /// Handles pointer mouse down.
@@ -216,8 +254,14 @@ impl MetadataPropertyInspector {
         let row_h = 32.0;
 
         for prop in &mut self.properties {
-            let row_rect = Rect::from_min_size(Vec2::new(viewport.min.x + 8.0, y), Vec2::new(viewport.width() - 16.0, row_h));
-            let val_rect = Rect::from_min_size(Vec2::new(row_rect.min.x + 100.0, row_rect.min.y + 2.0), Vec2::new(row_rect.width() - 104.0, row_h - 4.0));
+            let row_rect = Rect::from_min_size(
+                Vec2::new(viewport.min.x + 8.0, y),
+                Vec2::new(viewport.width() - 16.0, row_h),
+            );
+            let val_rect = Rect::from_min_size(
+                Vec2::new(row_rect.min.x + 100.0, row_rect.min.y + 2.0),
+                Vec2::new(row_rect.width() - 104.0, row_h - 4.0),
+            );
 
             if val_rect.contains(pos) {
                 match &mut prop.value {
@@ -268,7 +312,12 @@ impl MetadataPropertyInspector {
     }
 
     /// Handles pointer dragging for numeric scrubbers.
-    pub fn handle_mouse_move(&mut self, _pos: Vec2, delta: Vec2, ptr: &PointerState) -> Option<PropertyChangedEvent> {
+    pub fn handle_mouse_move(
+        &mut self,
+        _pos: Vec2,
+        delta: Vec2,
+        ptr: &PointerState,
+    ) -> Option<PropertyChangedEvent> {
         if !ptr.primary_down {
             self.active_scrubber_id = None;
             return None;
@@ -277,7 +326,13 @@ impl MetadataPropertyInspector {
         if let Some((ref prop_id, is_y)) = self.active_scrubber_id.clone() {
             if let Some(prop) = self.properties.iter_mut().find(|p| p.id == *prop_id) {
                 match &mut prop.value {
-                    PropertyValue::Float { value, min, max, step, .. } => {
+                    PropertyValue::Float {
+                        value,
+                        min,
+                        max,
+                        step,
+                        ..
+                    } => {
                         let change = delta.x * *step;
                         *value = (*value + change).clamp(*min, *max);
                         return Some(PropertyChangedEvent {
@@ -285,7 +340,13 @@ impl MetadataPropertyInspector {
                             new_value: prop.value.clone(),
                         });
                     }
-                    PropertyValue::Vec2 { x, y, min, max, step } => {
+                    PropertyValue::Vec2 {
+                        x,
+                        y,
+                        min,
+                        max,
+                        step,
+                    } => {
                         let change = delta.x * *step;
                         if is_y {
                             *y = (*y + change).clamp(*min, *max);
@@ -345,8 +406,14 @@ impl MetadataPropertyInspector {
         let row_h = 28.0;
 
         for prop in &self.properties {
-            let row_rect = Rect::from_min_size(Vec2::new(viewport.min.x + 8.0, y), Vec2::new(viewport.width() - 16.0, row_h));
-            let val_rect = Rect::from_min_size(Vec2::new(row_rect.min.x + 95.0, row_rect.min.y), Vec2::new(row_rect.width() - 95.0, row_h));
+            let row_rect = Rect::from_min_size(
+                Vec2::new(viewport.min.x + 8.0, y),
+                Vec2::new(viewport.width() - 16.0, row_h),
+            );
+            let val_rect = Rect::from_min_size(
+                Vec2::new(row_rect.min.x + 95.0, row_rect.min.y),
+                Vec2::new(row_rect.width() - 95.0, row_h),
+            );
 
             // Property Label
             buf.push(DrawCommand::Text {
@@ -360,7 +427,10 @@ impl MetadataPropertyInspector {
             // Property Value Editor
             match &prop.value {
                 PropertyValue::Float { value, unit, .. } => {
-                    let is_active = self.active_scrubber_id.as_ref().is_some_and(|(id, _)| id == &prop.id);
+                    let is_active = self
+                        .active_scrubber_id
+                        .as_ref()
+                        .is_some_and(|(id, _)| id == &prop.id);
                     buf.push(DrawCommand::Rect {
                         rect: val_rect,
                         fill: palette.canvas,
@@ -380,7 +450,10 @@ impl MetadataPropertyInspector {
                     });
                 }
                 PropertyValue::Bool(b) => {
-                    let check_box = Rect::from_min_size(Vec2::new(val_rect.min.x, val_rect.min.y + 4.0), Vec2::new(20.0, 20.0));
+                    let check_box = Rect::from_min_size(
+                        Vec2::new(val_rect.min.x, val_rect.min.y + 4.0),
+                        Vec2::new(20.0, 20.0),
+                    );
                     buf.push(DrawCommand::Rect {
                         rect: check_box,
                         fill: if *b { palette.accent } else { palette.canvas },
@@ -398,7 +471,10 @@ impl MetadataPropertyInspector {
                     }
                 }
                 PropertyValue::Color(c) => {
-                    let swatch_rect = Rect::from_min_size(Vec2::new(val_rect.min.x, val_rect.min.y + 2.0), Vec2::new(row_h - 4.0, row_h - 4.0));
+                    let swatch_rect = Rect::from_min_size(
+                        Vec2::new(val_rect.min.x, val_rect.min.y + 2.0),
+                        Vec2::new(row_h - 4.0, row_h - 4.0),
+                    );
                     buf.push(DrawCommand::Rect {
                         rect: swatch_rect,
                         fill: *c,
@@ -431,8 +507,12 @@ impl MetadataPropertyInspector {
                 }
                 PropertyValue::Vec2 { x, y, .. } => {
                     let half_w = (val_rect.width() - 4.0) * 0.5;
-                    let x_rect = Rect::from_min_size(val_rect.min, Vec2::new(half_w, val_rect.height()));
-                    let y_rect = Rect::from_min_size(Vec2::new(val_rect.min.x + half_w + 4.0, val_rect.min.y), Vec2::new(half_w, val_rect.height()));
+                    let x_rect =
+                        Rect::from_min_size(val_rect.min, Vec2::new(half_w, val_rect.height()));
+                    let y_rect = Rect::from_min_size(
+                        Vec2::new(val_rect.min.x + half_w + 4.0, val_rect.min.y),
+                        Vec2::new(half_w, val_rect.height()),
+                    );
 
                     buf.push(DrawCommand::Rect {
                         rect: x_rect,
@@ -500,7 +580,8 @@ mod tests {
             PropertyItem::integer("seed", "Seed", 42, 0, 9999).with_category("Generation"),
             PropertyItem::boolean("hdr", "HDR Output", true).with_category("Render"),
             PropertyItem::color("tint", "Tint Color", Color::WHITE).with_category("Appearance"),
-            PropertyItem::vec2("offset", "Offset", 10.0, 20.0, -100.0, 100.0).with_category("Transform"),
+            PropertyItem::vec2("offset", "Offset", 10.0, 20.0, -100.0, 100.0)
+                .with_category("Transform"),
             PropertyItem::text("name", "Layer Name", "Background").with_category("General"),
         ];
 
@@ -513,9 +594,17 @@ mod tests {
     #[test]
     fn test_scrubber_drag_modifies_float() {
         let mut inspector = MetadataPropertyInspector::new("Test", Vec::new());
-        inspector.set_properties("Test", vec![
-            PropertyItem::float("roughness", "Roughness", 0.5, 0.0, 1.0, 0.05),
-        ]);
+        inspector.set_properties(
+            "Test",
+            vec![PropertyItem::float(
+                "roughness",
+                "Roughness",
+                0.5,
+                0.0,
+                1.0,
+                0.05,
+            )],
+        );
 
         let mut ptr = PointerState {
             position: Vec2::new(180.0, 50.0),
@@ -524,13 +613,18 @@ mod tests {
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(300.0, 400.0));
 
         // Click to start scrub
-        let _event = inspector.handle_mouse_down(Vec2::new(180.0, 50.0), PointerButton::Primary, viewport);
+        let _event =
+            inspector.handle_mouse_down(Vec2::new(180.0, 50.0), PointerButton::Primary, viewport);
         assert!(inspector.active_scrubber_id.is_some());
-        assert_eq!(inspector.active_scrubber_id.as_ref().unwrap().0, "roughness");
+        assert_eq!(
+            inspector.active_scrubber_id.as_ref().unwrap().0,
+            "roughness"
+        );
 
         // Drag right with primary down
         ptr.primary_down = true;
-        let change_event = inspector.handle_mouse_move(Vec2::new(190.0, 50.0), Vec2::new(2.0, 0.0), &ptr);
+        let change_event =
+            inspector.handle_mouse_move(Vec2::new(190.0, 50.0), Vec2::new(2.0, 0.0), &ptr);
         assert!(change_event.is_some());
         let ev = change_event.unwrap();
         assert_eq!(ev.id, "roughness");
@@ -544,10 +638,13 @@ mod tests {
     #[test]
     fn test_property_inspector_rendering_emits_commands() {
         let mut inspector = MetadataPropertyInspector::new("Inspect", Vec::new());
-        inspector.set_properties("Inspect", vec![
-            PropertyItem::boolean("active", "Active", true),
-            PropertyItem::color("base", "Base Color", Color::rgb(255, 0, 0)),
-        ]);
+        inspector.set_properties(
+            "Inspect",
+            vec![
+                PropertyItem::boolean("active", "Active", true),
+                PropertyItem::color("base", "Base Color", Color::rgb(255, 0, 0)),
+            ],
+        );
 
         let mut buf = CommandBuffer::new();
         let palette = ThemePalette::dark();

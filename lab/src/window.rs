@@ -167,11 +167,14 @@ impl ApplicationHandler for LabWindowApp {
                 self.app.handle_scroll(scroll_vec, self.viewport);
                 window.request_redraw();
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
                 if key_event.state == ElementState::Pressed {
                     use ui_platform::winit::keyboard::{Key as WinitKey, NamedKey};
                     match key_event.logical_key {
-                        WinitKey::Named(NamedKey::Delete) | WinitKey::Named(NamedKey::Backspace) => {
+                        WinitKey::Named(NamedKey::Delete)
+                        | WinitKey::Named(NamedKey::Backspace) => {
                             if self.app.current_tab == LabTab::NodeEditor {
                                 self.app.node_editor.delete_selected();
                                 window.request_redraw();

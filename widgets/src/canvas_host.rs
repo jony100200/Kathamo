@@ -138,7 +138,11 @@ impl CanvasHost {
 
     /// Clears all strokes on a 2D canvas.
     pub fn clear_strokes(&mut self) {
-        if let CanvasHostKind::Creative2D { strokes, active_stroke } = &mut self.kind {
+        if let CanvasHostKind::Creative2D {
+            strokes,
+            active_stroke,
+        } = &mut self.kind
+        {
             strokes.clear();
             *active_stroke = None;
         }
@@ -150,7 +154,9 @@ impl CanvasHost {
             return;
         }
 
-        if button == PointerButton::Middle || (button == PointerButton::Primary && self.active_tool == CanvasTool::Pan) {
+        if button == PointerButton::Middle
+            || (button == PointerButton::Primary && self.active_tool == CanvasTool::Pan)
+        {
             self.is_panning = true;
             return;
         }
@@ -178,17 +184,32 @@ impl CanvasHost {
     }
 
     /// Handles pointer movement and active drawing/panning.
-    pub fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, viewport: Rect, ptr: &PointerState) {
-        if self.is_panning || ptr.middle_down || (ptr.primary_down && self.active_tool == CanvasTool::Pan) {
+    pub fn handle_mouse_move(
+        &mut self,
+        pos: Vec2,
+        delta: Vec2,
+        viewport: Rect,
+        ptr: &PointerState,
+    ) {
+        if self.is_panning
+            || ptr.middle_down
+            || (ptr.primary_down && self.active_tool == CanvasTool::Pan)
+        {
             self.pan_by(delta);
             return;
         }
 
-        if ptr.primary_down && (self.active_tool == CanvasTool::Brush || self.active_tool == CanvasTool::Eraser) {
+        if ptr.primary_down
+            && (self.active_tool == CanvasTool::Brush || self.active_tool == CanvasTool::Eraser)
+        {
             let world_pos = self.screen_to_world(pos, viewport.min);
             if let CanvasHostKind::Creative2D { active_stroke, .. } = &mut self.kind {
                 if let Some(stroke) = active_stroke {
-                    if stroke.points.last().map_or(true, |&last| (last - world_pos).length() > 2.0) {
+                    if stroke
+                        .points
+                        .last()
+                        .map_or(true, |&last| (last - world_pos).length() > 2.0)
+                    {
                         stroke.points.push(world_pos);
                     }
                 }
@@ -203,7 +224,11 @@ impl CanvasHost {
         }
 
         if button == PointerButton::Primary {
-            if let CanvasHostKind::Creative2D { strokes, active_stroke } = &mut self.kind {
+            if let CanvasHostKind::Creative2D {
+                strokes,
+                active_stroke,
+            } = &mut self.kind
+            {
                 if let Some(stroke) = active_stroke.take() {
                     if stroke.points.len() >= 2 {
                         strokes.push(stroke);
@@ -253,10 +278,8 @@ impl CanvasHost {
                 let mut col_even = row_even;
                 while x < viewport.max.x {
                     if col_even {
-                        let check_rect = Rect::from_min_size(
-                            Vec2::new(x, y),
-                            Vec2::new(check_size, check_size),
-                        );
+                        let check_rect =
+                            Rect::from_min_size(Vec2::new(x, y), Vec2::new(check_size, check_size));
                         if let Some(clipped) = check_rect.intersect(viewport) {
                             buf.push(DrawCommand::Rect {
                                 rect: clipped,
@@ -306,7 +329,10 @@ impl CanvasHost {
 
         // Render hosted content
         match &self.kind {
-            CanvasHostKind::Creative2D { strokes, active_stroke } => {
+            CanvasHostKind::Creative2D {
+                strokes,
+                active_stroke,
+            } => {
                 // Committed strokes
                 for stroke in strokes {
                     self.render_stroke(buf, stroke, viewport.min);
@@ -316,11 +342,16 @@ impl CanvasHost {
                     self.render_stroke(buf, stroke, viewport.min);
                 }
             }
-            CanvasHostKind::ExternalTexture { texture_id, resolution, uv_rect } => {
+            CanvasHostKind::ExternalTexture {
+                texture_id,
+                resolution,
+                uv_rect,
+            } => {
                 // Fit the actual image/video aspect ratio into the dock pane.
                 let source = Vec2::new(resolution.0.max(1) as f32, resolution.1.max(1) as f32);
                 let fit = (viewport.width().max(1.0) / source.x)
-                    .min(viewport.height().max(1.0) / source.y) * 0.96;
+                    .min(viewport.height().max(1.0) / source.y)
+                    * 0.96;
                 let half = source * (fit * self.zoom * 0.5);
                 let center = viewport.center() + self.pan * self.zoom;
                 let quad = Rect::from_min_max(center - half, center + half);
@@ -418,10 +449,20 @@ mod tests {
         let ptr = PointerState::default();
 
         // Pan delta
-        host.handle_mouse_move(Vec2::new(100.0, 100.0), Vec2::new(10.0, -5.0), viewport, &ptr);
+        host.handle_mouse_move(
+            Vec2::new(100.0, 100.0),
+            Vec2::new(10.0, -5.0),
+            viewport,
+            &ptr,
+        );
         // Pan only changes if space is down or middle click is dragging
         host.is_panning = true;
-        host.handle_mouse_move(Vec2::new(100.0, 100.0), Vec2::new(10.0, -5.0), viewport, &ptr);
+        host.handle_mouse_move(
+            Vec2::new(100.0, 100.0),
+            Vec2::new(10.0, -5.0),
+            viewport,
+            &ptr,
+        );
         assert_eq!(host.pan, Vec2::new(130.0, 115.0));
 
         // Zoom at point
@@ -437,7 +478,10 @@ mod tests {
         let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(600.0, 400.0));
 
         host.handle_mouse_down(Vec2::new(100.0, 100.0), PointerButton::Primary, viewport);
-        if let CanvasHostKind::Creative2D { ref active_stroke, .. } = host.kind {
+        if let CanvasHostKind::Creative2D {
+            ref active_stroke, ..
+        } = host.kind
+        {
             assert!(active_stroke.is_some());
         }
 
@@ -445,13 +489,25 @@ mod tests {
             primary_down: true,
             ..Default::default()
         };
-        host.handle_mouse_move(Vec2::new(110.0, 105.0), Vec2::new(10.0, 5.0), viewport, &ptr);
-        if let CanvasHostKind::Creative2D { ref active_stroke, .. } = host.kind {
+        host.handle_mouse_move(
+            Vec2::new(110.0, 105.0),
+            Vec2::new(10.0, 5.0),
+            viewport,
+            &ptr,
+        );
+        if let CanvasHostKind::Creative2D {
+            ref active_stroke, ..
+        } = host.kind
+        {
             assert_eq!(active_stroke.as_ref().unwrap().points.len(), 2);
         }
 
         host.handle_mouse_up(Vec2::new(110.0, 105.0), PointerButton::Primary);
-        if let CanvasHostKind::Creative2D { ref strokes, ref active_stroke } = host.kind {
+        if let CanvasHostKind::Creative2D {
+            ref strokes,
+            ref active_stroke,
+        } = host.kind
+        {
             assert!(active_stroke.is_none());
             assert_eq!(strokes.len(), 1);
             assert_eq!(strokes[0].points.len(), 2);
@@ -468,7 +524,13 @@ mod tests {
         host.render(&mut buf, viewport, &palette);
         assert!(!buf.commands().is_empty());
 
-        let has_image = buf.commands().iter().any(|cmd| matches!(cmd, DrawCommand::Image { texture_id: 42, .. }));
-        assert!(has_image, "CanvasHost texture kind must emit DrawCommand::Image");
+        let has_image = buf
+            .commands()
+            .iter()
+            .any(|cmd| matches!(cmd, DrawCommand::Image { texture_id: 42, .. }));
+        assert!(
+            has_image,
+            "CanvasHost texture kind must emit DrawCommand::Image"
+        );
     }
 }

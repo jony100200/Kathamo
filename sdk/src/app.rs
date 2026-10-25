@@ -1,11 +1,11 @@
 //! Standard Application Lifecycle, Context, and Runner for Kathamo SDK.
 
-use ui_core::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ui_render::{CpuBackend, GpuBackend, RenderBackend};
+use ui_core::*;
 use ui_platform::{FocusManager, ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::CommandBuffer;
+use ui_render::{CpuBackend, GpuBackend, RenderBackend};
 use ui_themes::ThemePalette;
 
 /// An RGBA8 frame supplied by the consuming application (4 bytes per pixel).
@@ -18,8 +18,15 @@ pub struct ImageFrame {
 
 /// Secondary OS-window lifecycle request, processed by NativeAppRunner.
 pub enum WindowRequest {
-    Open { id: String, title: String, width: u32, height: u32 },
-    Close { id: String },
+    Open {
+        id: String,
+        title: String,
+        width: u32,
+        height: u32,
+    },
+    Close {
+        id: String,
+    },
 }
 
 /// Unified runtime context provided to applications on each frame.
@@ -66,14 +73,33 @@ impl AppContext {
 
     /// Register or update an RGBA8 image for use with DrawCommand::Image.
     /// CPU-safe-mode and GPU rendering both consume this same image.
-    pub fn set_image_rgba8(&mut self, id: u64, width: u32, height: u32, rgba: impl Into<Arc<[u8]>>) -> Result<(), String> {
+    pub fn set_image_rgba8(
+        &mut self,
+        id: u64,
+        width: u32,
+        height: u32,
+        rgba: impl Into<Arc<[u8]>>,
+    ) -> Result<(), String> {
         let rgba = rgba.into();
-        if width == 0 || height == 0 ||
-            (width as usize).checked_mul(height as usize).and_then(|v| v.checked_mul(4)) != Some(rgba.len()) {
+        if width == 0
+            || height == 0
+            || (width as usize)
+                .checked_mul(height as usize)
+                .and_then(|v| v.checked_mul(4))
+                != Some(rgba.len())
+        {
             return Err("invalid RGBA8 image dimensions or byte count".into());
         }
         self.next_image_version = self.next_image_version.wrapping_add(1);
-        self.images.insert(id, ImageFrame { width, height, rgba, version: self.next_image_version });
+        self.images.insert(
+            id,
+            ImageFrame {
+                width,
+                height,
+                rgba,
+                version: self.next_image_version,
+            },
+        );
         Ok(())
     }
 
@@ -85,14 +111,18 @@ impl AppContext {
     pub fn open_window(&mut self, id: &str, title: &str, width: u32, height: u32) {
         if id != "main" && !id.is_empty() {
             self.window_requests.push(WindowRequest::Open {
-                id: id.into(), title: title.into(), width: width.max(240), height: height.max(180),
+                id: id.into(),
+                title: title.into(),
+                width: width.max(240),
+                height: height.max(180),
             });
         }
     }
 
     pub fn close_window(&mut self, id: &str) {
         if id != "main" {
-            self.window_requests.push(WindowRequest::Close { id: id.into() });
+            self.window_requests
+                .push(WindowRequest::Close { id: id.into() });
         }
     }
 
@@ -136,7 +166,12 @@ pub trait KathamoApp: 'static {
     fn update(&mut self, ctx: &mut AppContext);
 
     /// Optional pointer input hook.
-    fn handle_mouse_down(&mut self, _pos: Vec2, _button: PointerButton, _ctx: &mut AppContext) -> bool {
+    fn handle_mouse_down(
+        &mut self,
+        _pos: Vec2,
+        _button: PointerButton,
+        _ctx: &mut AppContext,
+    ) -> bool {
         false
     }
 
@@ -145,7 +180,12 @@ pub trait KathamoApp: 'static {
         false
     }
 
-    fn handle_mouse_up(&mut self, _pos: Vec2, _button: PointerButton, _ctx: &mut AppContext) -> bool {
+    fn handle_mouse_up(
+        &mut self,
+        _pos: Vec2,
+        _button: PointerButton,
+        _ctx: &mut AppContext,
+    ) -> bool {
         false
     }
 
@@ -172,19 +212,49 @@ pub trait KathamoApp: 'static {
     }
 
     /// The default routes window-specific input to the normal app hooks.
-    fn handle_window_mouse_down(&mut self, _id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+    fn handle_window_mouse_down(
+        &mut self,
+        _id: &str,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
         self.handle_mouse_down(pos, button, ctx)
     }
-    fn handle_window_mouse_move(&mut self, _id: &str, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
+    fn handle_window_mouse_move(
+        &mut self,
+        _id: &str,
+        pos: Vec2,
+        delta: Vec2,
+        ctx: &mut AppContext,
+    ) -> bool {
         self.handle_mouse_move(pos, delta, ctx)
     }
-    fn handle_window_mouse_up(&mut self, _id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+    fn handle_window_mouse_up(
+        &mut self,
+        _id: &str,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
         self.handle_mouse_up(pos, button, ctx)
     }
-    fn handle_window_scroll(&mut self, _id: &str, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
+    fn handle_window_scroll(
+        &mut self,
+        _id: &str,
+        delta: Vec2,
+        pos: Vec2,
+        ctx: &mut AppContext,
+    ) -> bool {
         self.handle_scroll(delta, pos, ctx)
     }
-    fn handle_window_key_down(&mut self, _id: &str, key: Key, modifiers: Modifiers, ctx: &mut AppContext) -> bool {
+    fn handle_window_key_down(
+        &mut self,
+        _id: &str,
+        key: Key,
+        modifiers: Modifiers,
+        ctx: &mut AppContext,
+    ) -> bool {
         self.handle_key_down(key, modifiers, ctx)
     }
     fn handle_window_text_input(&mut self, _id: &str, text: &str, ctx: &mut AppContext) -> bool {
@@ -242,7 +312,9 @@ impl<A: KathamoApp> HeadlessAppRunner<A> {
     /// Call step_frame() first, or call this after click_at().
     pub fn capture_pixels(&self) -> Result<Vec<u32>, String> {
         let (width, height) = self.ctx.physical_size;
-        if width == 0 || height == 0 { return Err("empty viewport".into()); }
+        if width == 0 || height == 0 {
+            return Err("empty viewport".into());
+        }
         let mut cpu = CpuBackend::new();
         cpu.set_scale_factor(self.ctx.scale);
         for (id, image) in &self.ctx.images {

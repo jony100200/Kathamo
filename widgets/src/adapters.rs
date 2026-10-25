@@ -50,7 +50,8 @@ impl ToolConfigAdapter {
         for (tool, label) in tools {
             let is_sel = self.active_tool == tool;
             let btn_w = 64.0;
-            let btn_rect = Rect::from_min_size(Vec2::new(x, bounds.min.y + 4.0), Vec2::new(btn_w, btn_h));
+            let btn_rect =
+                Rect::from_min_size(Vec2::new(x, bounds.min.y + 4.0), Vec2::new(btn_w, btn_h));
 
             buf.push(DrawCommand::Rect {
                 rect: btn_rect,
@@ -98,7 +99,8 @@ impl ToolConfigAdapter {
         let btn_h = bounds.height() - 8.0;
         for (tool, _) in tools {
             let btn_w = 64.0;
-            let btn_rect = Rect::from_min_size(Vec2::new(x, bounds.min.y + 4.0), Vec2::new(btn_w, btn_h));
+            let btn_rect =
+                Rect::from_min_size(Vec2::new(x, bounds.min.y + 4.0), Vec2::new(btn_w, btn_h));
             if btn_rect.contains(pos) {
                 self.active_tool = tool;
                 return Some(tool);
@@ -130,7 +132,11 @@ impl Default for ModelSelectorAdapter {
                 "Anime-Cel-Shader-v4".into(),
             ],
             selected_quant: 1,
-            quant_options: vec!["FP16 (Native)".into(), "Q8_0 (Balanced)".into(), "Q4_K_M (Fast)".into()],
+            quant_options: vec![
+                "FP16 (Native)".into(),
+                "Q8_0 (Balanced)".into(),
+                "Q4_K_M (Fast)".into(),
+            ],
             lora_name: Some("LineArt-Detail-Enhancer".into()),
             lora_strength: 0.85,
         }
@@ -149,7 +155,9 @@ impl ModelSelectorAdapter {
     }
 
     pub fn selected_model(&self) -> Option<&str> {
-        self.checkpoints.get(self.selected_checkpoint).map(|s| s.as_str())
+        self.checkpoints
+            .get(self.selected_checkpoint)
+            .map(|s| s.as_str())
     }
 
     pub fn render(&self, buf: &mut CommandBuffer, bounds: Rect, palette: &ThemePalette) {
@@ -170,14 +178,20 @@ impl ModelSelectorAdapter {
         });
 
         // Checkpoint selector
-        let ckpt_rect = Rect::from_min_size(Vec2::new(bounds.min.x + 12.0, bounds.min.y + 32.0), Vec2::new(bounds.width() - 24.0, 26.0));
+        let ckpt_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x + 12.0, bounds.min.y + 32.0),
+            Vec2::new(bounds.width() - 24.0, 26.0),
+        );
         buf.push(DrawCommand::Rect {
             rect: ckpt_rect,
             fill: palette.elevated,
             radius: CornerRadius::same(4.0),
             stroke: Stroke::new(1.0, palette.border),
         });
-        let cur_ckpt = self.checkpoints.get(self.selected_checkpoint).map_or("", |s| s.as_str());
+        let cur_ckpt = self
+            .checkpoints
+            .get(self.selected_checkpoint)
+            .map_or("", |s| s.as_str());
         buf.push(DrawCommand::Text {
             text: format!("Model: {} ▾", cur_ckpt),
             pos: Vec2::new(ckpt_rect.min.x + 8.0, ckpt_rect.min.y + 6.0),
@@ -187,14 +201,20 @@ impl ModelSelectorAdapter {
         });
 
         // Quantization selector
-        let quant_rect = Rect::from_min_size(Vec2::new(bounds.min.x + 12.0, bounds.min.y + 64.0), Vec2::new(bounds.width() - 24.0, 26.0));
+        let quant_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x + 12.0, bounds.min.y + 64.0),
+            Vec2::new(bounds.width() - 24.0, 26.0),
+        );
         buf.push(DrawCommand::Rect {
             rect: quant_rect,
             fill: palette.elevated,
             radius: CornerRadius::same(4.0),
             stroke: Stroke::new(1.0, palette.border),
         });
-        let cur_quant = self.quant_options.get(self.selected_quant).map_or("", |s| s.as_str());
+        let cur_quant = self
+            .quant_options
+            .get(self.selected_quant)
+            .map_or("", |s| s.as_str());
         buf.push(DrawCommand::Text {
             text: format!("Precision: {} ▾", cur_quant),
             pos: Vec2::new(quant_rect.min.x + 8.0, quant_rect.min.y + 6.0),
@@ -205,13 +225,19 @@ impl ModelSelectorAdapter {
     }
 
     pub fn handle_mouse_down(&mut self, pos: Vec2, bounds: Rect) -> bool {
-        let ckpt_rect = Rect::from_min_size(Vec2::new(bounds.min.x + 12.0, bounds.min.y + 32.0), Vec2::new(bounds.width() - 24.0, 26.0));
+        let ckpt_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x + 12.0, bounds.min.y + 32.0),
+            Vec2::new(bounds.width() - 24.0, 26.0),
+        );
         if ckpt_rect.contains(pos) {
             self.selected_checkpoint = (self.selected_checkpoint + 1) % self.checkpoints.len();
             return true;
         }
 
-        let quant_rect = Rect::from_min_size(Vec2::new(bounds.min.x + 12.0, bounds.min.y + 64.0), Vec2::new(bounds.width() - 24.0, 26.0));
+        let quant_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x + 12.0, bounds.min.y + 64.0),
+            Vec2::new(bounds.width() - 24.0, 26.0),
+        );
         if quant_rect.contains(pos) {
             self.selected_quant = (self.selected_quant + 1) % self.quant_options.len();
             return true;
@@ -345,7 +371,10 @@ impl ServiceStatusAdapter {
         });
 
         // Status pill indicator
-        let dot_rect = Rect::from_min_size(Vec2::new(bounds.min.x + 12.0, bounds.min.y + 12.0), Vec2::new(10.0, 10.0));
+        let dot_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x + 12.0, bounds.min.y + 12.0),
+            Vec2::new(10.0, 10.0),
+        );
         buf.push(DrawCommand::Rect {
             rect: dot_rect,
             fill: if self.is_connected {
@@ -374,7 +403,11 @@ impl ServiceStatusAdapter {
             text: latency_str,
             pos: Vec2::new(bounds.max.x - 60.0, bounds.min.y + 9.0),
             size: 11.0,
-            color: if self.is_connected { palette.success } else { palette.danger },
+            color: if self.is_connected {
+                palette.success
+            } else {
+                palette.danger
+            },
             strong: false,
         });
     }
@@ -400,7 +433,10 @@ mod tests {
         assert_eq!(model_selector.selected_checkpoint, 0);
         model_selector.select(1);
         assert_eq!(model_selector.selected_checkpoint, 1);
-        assert_eq!(model_selector.selected_model().unwrap(), "Studio-Art-Photoreal-v1");
+        assert_eq!(
+            model_selector.selected_model().unwrap(),
+            "Studio-Art-Photoreal-v1"
+        );
 
         // 3. TaskProgressAdapter
         let mut progress = TaskProgressAdapter::new("task_01", "Texture Synthesis");
@@ -423,16 +459,32 @@ mod tests {
         let mut buf = CommandBuffer::new();
 
         let tool = ToolConfigAdapter::default();
-        tool.render(&mut buf, Rect::from_min_size(Vec2::ZERO, Vec2::new(260.0, 36.0)), &palette);
+        tool.render(
+            &mut buf,
+            Rect::from_min_size(Vec2::ZERO, Vec2::new(260.0, 36.0)),
+            &palette,
+        );
 
         let selector = ModelSelectorAdapter::new();
-        selector.render(&mut buf, Rect::from_min_size(Vec2::new(0.0, 40.0), Vec2::new(260.0, 36.0)), &palette);
+        selector.render(
+            &mut buf,
+            Rect::from_min_size(Vec2::new(0.0, 40.0), Vec2::new(260.0, 36.0)),
+            &palette,
+        );
 
         let progress = TaskProgressAdapter::new("t1", "Baking PBR");
-        progress.render(&mut buf, Rect::from_min_size(Vec2::new(0.0, 80.0), Vec2::new(260.0, 44.0)), &palette);
+        progress.render(
+            &mut buf,
+            Rect::from_min_size(Vec2::new(0.0, 80.0), Vec2::new(260.0, 44.0)),
+            &palette,
+        );
 
         let service = ServiceStatusAdapter::new("GPU Daemon", 8);
-        service.render(&mut buf, Rect::from_min_size(Vec2::new(0.0, 130.0), Vec2::new(260.0, 32.0)), &palette);
+        service.render(
+            &mut buf,
+            Rect::from_min_size(Vec2::new(0.0, 130.0), Vec2::new(260.0, 32.0)),
+            &palette,
+        );
 
         assert!(!buf.commands().is_empty());
     }

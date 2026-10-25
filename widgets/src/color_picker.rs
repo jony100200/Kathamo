@@ -46,11 +46,7 @@ impl HsvColor {
 
     /// Constructs an HsvColor from an RGBA Color.
     pub fn from_color(c: Color) -> Self {
-        let (h, s, v) = rgb_to_hsv(
-            c.r as f32 / 255.0,
-            c.g as f32 / 255.0,
-            c.b as f32 / 255.0,
-        );
+        let (h, s, v) = rgb_to_hsv(c.r as f32 / 255.0, c.g as f32 / 255.0, c.b as f32 / 255.0);
         Self {
             h,
             s,
@@ -154,10 +150,7 @@ impl ColorWheel {
     pub fn hs_to_reticle(&self, center: Vec2, hue: f32, sat: f32) -> Vec2 {
         let angle = hue * 2.0 * PI;
         let dist = sat * self.radius;
-        Vec2::new(
-            center.x + dist * angle.cos(),
-            center.y - dist * angle.sin(),
-        )
+        Vec2::new(center.x + dist * angle.cos(), center.y - dist * angle.sin())
     }
 
     /// Renders the color wheel, value slider, and hex readout.
@@ -213,8 +206,14 @@ impl ColorWheel {
             let hue = (a1 + a2) * 0.5 / (2.0 * PI);
             let seg_color = HsvColor::new(hue, 0.9, color.v, 1.0).to_color();
 
-            let p1 = Vec2::new(center.x + self.radius * a1.cos(), center.y - self.radius * a1.sin());
-            let p2 = Vec2::new(center.x + self.radius * a2.cos(), center.y - self.radius * a2.sin());
+            let p1 = Vec2::new(
+                center.x + self.radius * a1.cos(),
+                center.y - self.radius * a1.sin(),
+            );
+            let p2 = Vec2::new(
+                center.x + self.radius * a2.cos(),
+                center.y - self.radius * a2.sin(),
+            );
 
             // Arc segment approximated by filled quad
             cmd_buf.push(DrawCommand::Line {
@@ -241,7 +240,10 @@ impl ColorWheel {
         let reticle_radius = 5.5;
         cmd_buf.push(DrawCommand::Rect {
             rect: Rect::from_min_size(
-                Vec2::new(reticle_pos.x - reticle_radius, reticle_pos.y - reticle_radius),
+                Vec2::new(
+                    reticle_pos.x - reticle_radius,
+                    reticle_pos.y - reticle_radius,
+                ),
                 Vec2::new(reticle_radius * 2.0, reticle_radius * 2.0),
             ),
             fill: color.to_color(),

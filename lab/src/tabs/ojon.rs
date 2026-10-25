@@ -32,7 +32,11 @@ pub fn render_ojon_workstation_tab(
             });
         });
 
-        top.stat_card("PRIMARY VRAM (RTX 4060 Ti)", "11.8 / 16.0 GB", "74% Active (5.2 GB Free)");
+        top.stat_card(
+            "PRIMARY VRAM (RTX 4060 Ti)",
+            "11.8 / 16.0 GB",
+            "74% Active (5.2 GB Free)",
+        );
         top.stat_card("SECONDARY POOL (ARC B60)", "24.0 GB", "Dedicated VRAM Pool");
         top.stat_card("SYSTEM MEMORY", "21.4 / 32.0 GB", "Direct DMA Buffering");
         top.stat_card("CONVERSION SPEED", "142.8 MB/s", "NVMe Stream Active");

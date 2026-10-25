@@ -14,7 +14,9 @@
 //! and AccessKit accessibility nodes are coordinated behind replaceable adapters.
 
 use ui_core::{CornerRadius, Direction, Rect, SizeConstraint, Stroke, Vec2};
-use ui_platform::{AccessibilityNode, AccessibilityRole, AccessibilityTree, PointerState, TextInputEvent};
+use ui_platform::{
+    AccessibilityNode, AccessibilityRole, AccessibilityTree, PointerState, TextInputEvent,
+};
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::{BilingualLabel, FluentTypographyScale, ThemePalette};
 
@@ -467,20 +469,29 @@ impl<'a> KolponaUi<'a> {
     /// Edit the active UTF-8 text field using native keyboard events.
     /// Host applications handle clipboard I/O and forward paste contents explicitly.
     pub fn apply_text_event(buffer: &mut ui_core::TextEditBuffer, event: &TextInputEvent) -> bool {
-        if !buffer.is_focused() { return false; }
+        if !buffer.is_focused() {
+            return false;
+        }
         match event {
             TextInputEvent::Char(c) => buffer.insert_char(*c),
             TextInputEvent::Text(value) | TextInputEvent::Paste(value) => buffer.insert_str(value),
-            TextInputEvent::Backspace => { buffer.backspace(); },
-            TextInputEvent::Delete => { buffer.delete(); },
+            TextInputEvent::Backspace => {
+                buffer.backspace();
+            }
+            TextInputEvent::Delete => {
+                buffer.delete();
+            }
             TextInputEvent::Left => buffer.move_left(false),
             TextInputEvent::Right => buffer.move_right(false),
             TextInputEvent::Home => buffer.move_home(false),
             TextInputEvent::End => buffer.move_end(false),
             TextInputEvent::SelectAll => buffer.select_all(),
             TextInputEvent::Escape => buffer.set_focused(false),
-            TextInputEvent::Enter | TextInputEvent::Tab | TextInputEvent::Backtab |
-            TextInputEvent::Copy | TextInputEvent::Cut => return false,
+            TextInputEvent::Enter
+            | TextInputEvent::Tab
+            | TextInputEvent::Backtab
+            | TextInputEvent::Copy
+            | TextInputEvent::Cut => return false,
         }
         true
     }
@@ -582,8 +593,12 @@ impl<'a> KolponaUi<'a> {
             Vec2::new(rect.min.x + 8.0, rect.min.y + 7.0),
             Vec2::new(14.0, 14.0),
         );
-        self.icon_atlas
-            .render(self.cmd_buf, StudioIcon::Search, icon_rect, self.palette.text_muted);
+        self.icon_atlas.render(
+            self.cmd_buf,
+            StudioIcon::Search,
+            icon_rect,
+            self.palette.text_muted,
+        );
 
         self.advance(width, height);
         Response {
@@ -641,7 +656,9 @@ impl<'a> KolponaUi<'a> {
     pub fn stat_card(&mut self, label: &str, value: &str, subtext: &str) {
         let height = 68.0;
         let width = match self.direction {
-            Direction::Horizontal => (label.len().max(value.len()) as f32 * 10.5 + 32.0).clamp(210.0, 290.0),
+            Direction::Horizontal => {
+                (label.len().max(value.len()) as f32 * 10.5 + 32.0).clamp(210.0, 290.0)
+            }
             Direction::Vertical => (self.bounds.width() - 16.0).max(120.0),
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
@@ -918,7 +935,12 @@ impl<'a> KolponaUi<'a> {
     }
 
     /// Modern collapsible panel container with toggle chevron (essential for AI agent sidebars).
-    pub fn collapsible_panel<F, R>(&mut self, title: &str, is_open: &mut bool, content: F) -> Response
+    pub fn collapsible_panel<F, R>(
+        &mut self,
+        title: &str,
+        is_open: &mut bool,
+        content: F,
+    ) -> Response
     where
         F: FnOnce(&mut KolponaUi) -> R,
     {
@@ -997,7 +1019,13 @@ impl<'a> KolponaUi<'a> {
             *playhead = rel_x.clamp(0.0, 1.0);
         }
 
-        crate::timeline::render_audio_waveform(self.cmd_buf, samples, *playhead, rect, self.palette);
+        crate::timeline::render_audio_waveform(
+            self.cmd_buf,
+            samples,
+            *playhead,
+            rect,
+            self.palette,
+        );
         self.advance(width, height);
 
         Response {
@@ -1018,7 +1046,8 @@ impl<'a> KolponaUi<'a> {
         range_min: f32,
         range_max: f32,
     ) -> Response {
-        let mut slider = crate::range_slider::RangeSlider::new(*current_min, *current_max, range_min, range_max);
+        let mut slider =
+            crate::range_slider::RangeSlider::new(*current_min, *current_max, range_min, range_max);
         if let Some(lbl) = label {
             slider = slider.label(lbl);
         }
@@ -1034,12 +1063,7 @@ impl<'a> KolponaUi<'a> {
     }
 
     /// Viewport-clamped floating tooltip.
-    pub fn tooltip(
-        &mut self,
-        text: &str,
-        target_rect: Rect,
-        viewport: Rect,
-    ) {
+    pub fn tooltip(&mut self, text: &str, target_rect: Rect, viewport: Rect) {
         crate::tooltip::TooltipOverlay::new(text, target_rect).show(self, viewport);
     }
 
@@ -1078,7 +1102,10 @@ impl<'a> KolponaUi<'a> {
         color: &mut crate::color_picker::HsvColor,
     ) -> Response {
         let is_clicked = self.pointer.is_clicked();
-        let center = Vec2::new(self.cursor.x + wheel.radius + 12.0, self.cursor.y + wheel.radius + 12.0);
+        let center = Vec2::new(
+            self.cursor.x + wheel.radius + 12.0,
+            self.cursor.y + wheel.radius + 12.0,
+        );
         let changed = wheel.render(
             self.cmd_buf,
             center,
@@ -1270,7 +1297,13 @@ mod tests {
         // Frame 1: press down
         pointer.on_button_down(ui_platform::PointerButton::Primary);
 
-        let mut ui1 = KathamoUi::new(&mut cmd_buf, &mut icon_atlas, &palette, bounds, pointer.clone());
+        let mut ui1 = KathamoUi::new(
+            &mut cmd_buf,
+            &mut icon_atlas,
+            &palette,
+            bounds,
+            pointer.clone(),
+        );
         let resp1 = ui1.button("Action");
         assert!(resp1.clicked(), "Button must trigger on first click frame");
 
@@ -1280,7 +1313,10 @@ mod tests {
         let mut cmd_buf2 = CommandBuffer::new();
         let mut ui2 = KathamoUi::new(&mut cmd_buf2, &mut icon_atlas, &palette, bounds, pointer);
         let resp2 = ui2.button("Action");
-        assert!(!resp2.clicked(), "Button must NOT repeatedly trigger while held down");
+        assert!(
+            !resp2.clicked(),
+            "Button must NOT repeatedly trigger while held down"
+        );
     }
 
     #[test]
@@ -1334,8 +1370,14 @@ mod tests {
 
         // Accordion
         let mut acc = crate::accordion::Accordion::new(true)
-            .add_item(crate::accordion::AccordionItemState::new("trans", "Transform", true))
-            .add_item(crate::accordion::AccordionItemState::new("mat", "Material", false));
+            .add_item(crate::accordion::AccordionItemState::new(
+                "trans",
+                "Transform",
+                true,
+            ))
+            .add_item(crate::accordion::AccordionItemState::new(
+                "mat", "Material", false,
+            ));
         let (acc_resp, toggled_id) = ui.accordion(&mut acc);
         assert_eq!(toggled_id, None);
         assert!(!acc_resp.clicked());
@@ -1349,5 +1391,3 @@ mod tests {
         assert!(!cmd_buf.is_empty());
     }
 }
-
-

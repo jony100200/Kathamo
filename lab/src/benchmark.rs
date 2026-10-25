@@ -97,7 +97,10 @@ pub fn run_headless_benchmark(mut app: UiLabApp, num_frames: usize) {
         app.cpu.width(),
         app.cpu.height(),
     );
-    println!("   Ojon Workstation Visual QA Frame Saved: {}", ojon_screenshot_path);
+    println!(
+        "   Ojon Workstation Visual QA Frame Saved: {}",
+        ojon_screenshot_path
+    );
 
     // Run benchmark suite on Hardware GPU if available, or CPU safe mode
     if app.gpu.is_some() {

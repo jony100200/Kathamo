@@ -394,7 +394,10 @@ pub fn render_toggle(
     // Label if present
     if !label.is_empty() {
         cmd_buf.push(DrawCommand::Text {
-            pos: Vec2::new(track_rect.max.x + 10.0, bounds.min.y + (bounds.height() - 13.0) * 0.5 - 1.0),
+            pos: Vec2::new(
+                track_rect.max.x + 10.0,
+                bounds.min.y + (bounds.height() - 13.0) * 0.5 - 1.0,
+            ),
             text: label.to_string(),
             color: palette.text,
             size: 13.0,
@@ -416,7 +419,10 @@ pub fn render_text_input(
     let (bg_color, stroke) = if is_focused {
         (palette.canvas, Stroke::new(1.5, palette.accent))
     } else if is_hovered {
-        (palette.canvas, Stroke::new(1.0, palette.accent.with_alpha(140)))
+        (
+            palette.canvas,
+            Stroke::new(1.0, palette.accent.with_alpha(140)),
+        )
     } else {
         (palette.canvas, Stroke::new(1.0, palette.border))
     };
@@ -495,7 +501,10 @@ pub fn render_segmented_tabs(
     let tab_width = (bounds.width() - 4.0) / tabs.len() as f32;
     for (i, tab) in tabs.iter().enumerate() {
         let tab_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x + 2.0 + i as f32 * tab_width, bounds.min.y + 2.0),
+            Vec2::new(
+                bounds.min.x + 2.0 + i as f32 * tab_width,
+                bounds.min.y + 2.0,
+            ),
             Vec2::new(tab_width, bounds.height() - 4.0),
         );
 
@@ -624,7 +633,10 @@ pub fn render_model_card(
     palette: &ThemePalette,
 ) {
     let (fill, stroke) = if is_selected {
-        (palette.accent.with_alpha(32), Stroke::new(1.5, palette.accent))
+        (
+            palette.accent.with_alpha(32),
+            Stroke::new(1.5, palette.accent),
+        )
     } else if is_hovered {
         (palette.elevated, Stroke::new(1.0, palette.border))
     } else {
@@ -735,7 +747,15 @@ mod tests {
         assert!(!cmd_buf.is_empty());
 
         let mut cmd_buf2 = CommandBuffer::new();
-        render_text_input(&mut cmd_buf2, "Qwen-2.5", "Search...", bounds, true, false, &palette);
+        render_text_input(
+            &mut cmd_buf2,
+            "Qwen-2.5",
+            "Search...",
+            bounds,
+            true,
+            false,
+            &palette,
+        );
         assert!(!cmd_buf2.is_empty());
     }
 
@@ -744,13 +764,26 @@ mod tests {
         let mut cmd_buf = CommandBuffer::new();
         let palette = ThemePalette::dark();
         let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(300.0, 32.0));
-        render_segmented_tabs(&mut cmd_buf, &["GGUF", "AWQ", "EXL2"], 0, bounds, None, &palette);
+        render_segmented_tabs(
+            &mut cmd_buf,
+            &["GGUF", "AWQ", "EXL2"],
+            0,
+            bounds,
+            None,
+            &palette,
+        );
         assert!(!cmd_buf.is_empty());
 
         let mut cmd_buf2 = CommandBuffer::new();
         let card_bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(180.0, 72.0));
-        render_stat_card(&mut cmd_buf2, "VRAM Used", "11.8 / 16.0 GB", "74% Active Pool", card_bounds, &palette);
+        render_stat_card(
+            &mut cmd_buf2,
+            "VRAM Used",
+            "11.8 / 16.0 GB",
+            "74% Active Pool",
+            card_bounds,
+            &palette,
+        );
         assert!(!cmd_buf2.is_empty());
     }
 }
-

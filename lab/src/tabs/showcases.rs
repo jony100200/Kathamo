@@ -274,11 +274,7 @@ pub fn render_async_workers_tab(
     let btn_hover = spawn_btn_rect.contains(app.pointer.position);
     cmd_buf.push(DrawCommand::Rect {
         rect: spawn_btn_rect,
-        fill: if btn_hover {
-            p.accent_hover
-        } else {
-            p.accent
-        },
+        fill: if btn_hover { p.accent_hover } else { p.accent },
         radius: CornerRadius::same(6.0),
         stroke: Stroke::NONE,
     });
@@ -412,11 +408,7 @@ pub fn render_renderer_recovery_tab(
     let sim_hover = sim_btn_rect.contains(app.pointer.position);
     cmd_buf.push(DrawCommand::Rect {
         rect: sim_btn_rect,
-        fill: if sim_hover {
-            p.accent_hover
-        } else {
-            p.accent
-        },
+        fill: if sim_hover { p.accent_hover } else { p.accent },
         radius: CornerRadius::same(6.0),
         stroke: Stroke::NONE,
     });

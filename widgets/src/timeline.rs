@@ -185,7 +185,11 @@ pub fn render_audio_waveform(
 
     for i in 0..num_bars {
         let sample_idx = (i * samples.len()) / num_bars.max(1);
-        let amp = samples.get(sample_idx).copied().unwrap_or(0.1).clamp(0.05, 1.0);
+        let amp = samples
+            .get(sample_idx)
+            .copied()
+            .unwrap_or(0.1)
+            .clamp(0.05, 1.0);
         let bar_h = (amp * max_half_h).max(2.0);
 
         let bar_x = start_x + (i as f32) * step;

@@ -172,7 +172,9 @@ fn sticks_to_previous_run(c: char) -> bool {
 
 fn find_fonts_dir() -> Option<PathBuf> {
     let has_fonts = |p: &Path| p.join(REGULAR).is_file();
-    if let Ok(env_dir) = std::env::var("KATHAMO_FONTS_DIR").or_else(|_| std::env::var("KOLPONA_FONTS_DIR")) {
+    if let Ok(env_dir) =
+        std::env::var("KATHAMO_FONTS_DIR").or_else(|_| std::env::var("KOLPONA_FONTS_DIR"))
+    {
         let p = PathBuf::from(env_dir);
         if has_fonts(&p) {
             return Some(p);

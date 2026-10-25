@@ -170,12 +170,7 @@ impl NumericScrubber {
 /// - 1px hairline specular top highlight (simulating subtle studio downlight)
 /// - Translucent backdrop tint
 /// - Ambient soft drop shadow
-pub fn render_glass_card(
-    buf: &mut CommandBuffer,
-    rect: Rect,
-    palette: &ThemePalette,
-    radius: f32,
-) {
+pub fn render_glass_card(buf: &mut CommandBuffer, rect: Rect, palette: &ThemePalette, radius: f32) {
     // 1. Ambient drop shadow
     let shadow_rect = Rect::from_min_max(
         rect.min + Vec2::new(0.0, 4.0),
@@ -271,4 +266,3 @@ mod tests {
         assert_eq!(buf.len(), 3);
     }
 }
-

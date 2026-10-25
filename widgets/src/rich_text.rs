@@ -13,10 +13,17 @@ pub struct MarkdownView {
 
 impl MarkdownView {
     pub fn new(markdown: impl Into<String>) -> Self {
-        Self { source: markdown.into(), scroll_y: 0.0 }
+        Self {
+            source: markdown.into(),
+            scroll_y: 0.0,
+        }
     }
-    pub fn set_source(&mut self, text: impl Into<String>) { self.source = text.into(); }
-    pub fn append(&mut self, chunk: &str) { self.source.push_str(chunk); }
+    pub fn set_source(&mut self, text: impl Into<String>) {
+        self.source = text.into();
+    }
+    pub fn append(&mut self, chunk: &str) {
+        self.source.push_str(chunk);
+    }
 
     /// Render headings, lists, quotes, fenced code, and ordinary paragraphs.
     /// This is a display widget, not a full Markdown parser or rich-text editor.
@@ -29,13 +36,22 @@ impl MarkdownView {
             if trimmed.starts_with("```") {
                 code = !code;
                 if !trimmed[3..].is_empty() {
-                    draw_text(buf, trimmed[3..].to_owned(),
-                        Vec2::new(bounds.min.x + 12.0, y), 10.0, pal.text_muted, true);
+                    draw_text(
+                        buf,
+                        trimmed[3..].to_owned(),
+                        Vec2::new(bounds.min.x + 12.0, y),
+                        10.0,
+                        pal.text_muted,
+                        true,
+                    );
                 }
                 y += 21.0;
                 continue;
             }
-            if trimmed.is_empty() { y += 13.0; continue; }
+            if trimmed.is_empty() {
+                y += 13.0;
+                continue;
+            }
             let (prefix, text, size, foreground, strong) = if code {
                 ("", line, 12.0, pal.accent_hover, false)
             } else if let Some(t) = trimmed.strip_prefix("### ") {
@@ -44,8 +60,10 @@ impl MarkdownView {
                 ("", t, 18.0, pal.text, true)
             } else if let Some(t) = trimmed.strip_prefix("# ") {
                 ("", t, 23.0, pal.text, true)
-            } else if let Some(t) = trimmed.strip_prefix("- ")
-                .or_else(|| trimmed.strip_prefix("* ")) {
+            } else if let Some(t) = trimmed
+                .strip_prefix("- ")
+                .or_else(|| trimmed.strip_prefix("* "))
+            {
                 ("• ", t, 13.0, pal.text, false)
             } else if let Some(t) = trimmed.strip_prefix("> ") {
                 ("▏ ", t, 13.0, pal.text_muted, false)
@@ -53,8 +71,7 @@ impl MarkdownView {
                 ("", line, 13.0, pal.text, false)
             };
             let content = format!("{}{}", prefix, text.replace("**", "").replace("`", ""));
-            let max_chars = ((bounds.width() - 32.0) / (size * 0.55))
-                .floor().max(1.0) as usize;
+            let max_chars = ((bounds.width() - 32.0) / (size * 0.55)).floor().max(1.0) as usize;
             let rows = wrap(&content, max_chars);
             for row in rows {
                 if y + size >= bounds.min.y && y < bounds.max.y {
@@ -62,24 +79,39 @@ impl MarkdownView {
                         buf.push(DrawCommand::Rect {
                             rect: Rect::from_min_size(
                                 Vec2::new(bounds.min.x + 8.0, y - 3.0),
-                                Vec2::new((bounds.width() - 16.0).max(0.0), size + 7.0)),
-                            fill: pal.elevated, radius: CornerRadius::ZERO,
+                                Vec2::new((bounds.width() - 16.0).max(0.0), size + 7.0),
+                            ),
+                            fill: pal.elevated,
+                            radius: CornerRadius::ZERO,
                             stroke: Stroke::NONE,
                         });
                     }
-                    draw_text(buf, row, Vec2::new(bounds.min.x + 14.0, y),
-                              size, foreground, strong);
+                    draw_text(
+                        buf,
+                        row,
+                        Vec2::new(bounds.min.x + 14.0, y),
+                        size,
+                        foreground,
+                        strong,
+                    );
                 }
                 y += size + 6.0;
             }
-            if y > bounds.max.y + self.scroll_y.max(0.0) + 100.0 { break; }
+            if y > bounds.max.y + self.scroll_y.max(0.0) + 100.0 {
+                break;
+            }
         }
         buf.push(DrawCommand::ClipPop);
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChatRole { System, User, Assistant, Tool }
+pub enum ChatRole {
+    System,
+    User,
+    Assistant,
+    Tool,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChatMessage {
@@ -96,16 +128,25 @@ pub struct ChatTranscript {
 }
 
 impl ChatTranscript {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    pub fn push(&mut self, id: impl Into<String>, role: ChatRole,
-                content: impl Into<String>) -> Result<(), String> {
+    pub fn push(
+        &mut self,
+        id: impl Into<String>,
+        role: ChatRole,
+        content: impl Into<String>,
+    ) -> Result<(), String> {
         let id = id.into();
         if id.is_empty() || self.messages.iter().any(|m| m.id == id) {
             return Err("duplicate or empty message ID".into());
         }
         self.messages.push(ChatMessage {
-            id, role, content: content.into(), streaming: false,
+            id,
+            role,
+            content: content.into(),
+            streaming: false,
         });
         Ok(())
     }
@@ -118,15 +159,23 @@ impl ChatTranscript {
     }
 
     pub fn append_chunk(&mut self, id: &str, chunk: &str) -> Result<(), String> {
-        let message = self.messages.iter_mut().find(|m| m.id == id)
+        let message = self
+            .messages
+            .iter_mut()
+            .find(|m| m.id == id)
             .ok_or("unknown conversation message")?;
-        if !message.streaming { return Err("message is not streaming".into()); }
+        if !message.streaming {
+            return Err("message is not streaming".into());
+        }
         message.content.push_str(chunk);
         Ok(())
     }
 
     pub fn finish_stream(&mut self, id: &str) -> Result<(), String> {
-        let message = self.messages.iter_mut().find(|m| m.id == id)
+        let message = self
+            .messages
+            .iter_mut()
+            .find(|m| m.id == id)
             .ok_or("unknown conversation message")?;
         message.streaming = false;
         Ok(())
@@ -140,8 +189,10 @@ impl ChatTranscript {
         for msg in &self.messages {
             let wrapped = wrap(&msg.content, chars_per_line);
             let height = 35.0 + 20.0 * wrapped.len() as f32;
-            let card = Rect::from_min_size(Vec2::new(bounds.min.x + 18.0, y),
-                Vec2::new(width + 12.0, height));
+            let card = Rect::from_min_size(
+                Vec2::new(bounds.min.x + 18.0, y),
+                Vec2::new(width + 12.0, height),
+            );
             if card.intersects(bounds) {
                 let (name, color) = match msg.role {
                     ChatRole::User => ("You", pal.accent),
@@ -150,39 +201,69 @@ impl ChatTranscript {
                     ChatRole::Tool => ("Tool", pal.text_muted),
                 };
                 buf.push(DrawCommand::Rect {
-                    rect: card, fill: if msg.role == ChatRole::User {
+                    rect: card,
+                    fill: if msg.role == ChatRole::User {
                         pal.elevated_high
-                    } else { pal.surface },
+                    } else {
+                        pal.surface
+                    },
                     radius: CornerRadius::same(6.0),
                     stroke: Stroke::new(1.0, pal.border),
                 });
-                draw_text(buf, format!("{}{}", name,
-                    if msg.streaming { "  •" } else { "" }),
-                    card.min + Vec2::new(11.0, 8.0), 12.0, color, true);
+                draw_text(
+                    buf,
+                    format!("{}{}", name, if msg.streaming { "  •" } else { "" }),
+                    card.min + Vec2::new(11.0, 8.0),
+                    12.0,
+                    color,
+                    true,
+                );
                 for (i, row) in wrapped.into_iter().enumerate() {
                     let yy = card.min.y + 31.0 + i as f32 * 20.0;
                     if yy >= bounds.min.y && yy < bounds.max.y {
-                        draw_text(buf, row, Vec2::new(card.min.x + 11.0, yy),
-                                  13.0, pal.text, false);
+                        draw_text(
+                            buf,
+                            row,
+                            Vec2::new(card.min.x + 11.0, yy),
+                            13.0,
+                            pal.text,
+                            false,
+                        );
                     }
                 }
             }
             y += height + 10.0;
-            if y > bounds.max.y + 16.0 { break; }
+            if y > bounds.max.y + 16.0 {
+                break;
+            }
         }
         buf.push(DrawCommand::ClipPop);
     }
 }
 
-fn draw_text(buf: &mut CommandBuffer, text: impl Into<String>,
-             pos: Vec2, size: f32, color: Color, strong: bool) {
-    buf.push(DrawCommand::Text { text: text.into(), pos, size, color, strong });
+fn draw_text(
+    buf: &mut CommandBuffer,
+    text: impl Into<String>,
+    pos: Vec2,
+    size: f32,
+    color: Color,
+    strong: bool,
+) {
+    buf.push(DrawCommand::Text {
+        text: text.into(),
+        pos,
+        size,
+        color,
+        strong,
+    });
 }
 
 /// Safe Unicode scalar wrapping with a fallback for unspaced scripts.
 fn wrap(input: &str, limit: usize) -> Vec<String> {
     let max = limit.max(1);
-    if input.is_empty() { return vec![String::new()]; }
+    if input.is_empty() {
+        return vec![String::new()];
+    }
     let mut rows = Vec::new();
     let mut current = String::new();
     for word in input.split_whitespace() {
@@ -191,7 +272,9 @@ fn wrap(input: &str, limit: usize) -> Vec<String> {
             rows.push(std::mem::take(&mut current));
         }
         if count > max {
-            if !current.is_empty() { rows.push(std::mem::take(&mut current)); }
+            if !current.is_empty() {
+                rows.push(std::mem::take(&mut current));
+            }
             let mut piece = String::new();
             for ch in word.chars() {
                 piece.push(ch);
@@ -201,12 +284,18 @@ fn wrap(input: &str, limit: usize) -> Vec<String> {
             }
             current = piece;
         } else {
-            if !current.is_empty() { current.push(' '); }
+            if !current.is_empty() {
+                current.push(' ');
+            }
             current.push_str(word);
         }
     }
-    if !current.is_empty() { rows.push(current); }
-    if rows.is_empty() { rows.push(String::new()); }
+    if !current.is_empty() {
+        rows.push(current);
+    }
+    if rows.is_empty() {
+        rows.push(String::new());
+    }
     rows
 }
 
@@ -224,6 +313,8 @@ mod tests {
         log.finish_stream("a1").unwrap();
         assert_eq!(log.messages[1].content, "Hello there");
         assert!(log.push("u1", ChatRole::User, "duplicate").is_err());
-        assert!(wrap("বাংলা বাংলা বাংলা", 5).iter().all(|s| s.chars().count() <= 5));
+        assert!(wrap("বাংলা বাংলা বাংলা", 5)
+            .iter()
+            .all(|s| s.chars().count() <= 5));
     }
 }

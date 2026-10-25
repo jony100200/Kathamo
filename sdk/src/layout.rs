@@ -74,23 +74,35 @@ impl<'a> LayoutBuilder<'a> {
         gap: f32,
         mut build: impl FnMut(usize, &mut LayoutBuilder<'_>),
     ) {
-        if weights.is_empty() { return; }
+        if weights.is_empty() {
+            return;
+        }
         let gap = gap.max(0.0);
         let row_width = (self.bounds.max.x - self.padding - self.cursor.x).max(0.0);
         let usable = (row_width - gap * (weights.len().saturating_sub(1) as f32)).max(0.0);
         let positive_total: f32 = weights.iter().map(|w| w.max(0.0)).sum();
         let all_equal = positive_total == 0.0;
-        let total = if all_equal { weights.len() as f32 } else { positive_total };
+        let total = if all_equal {
+            weights.len() as f32
+        } else {
+            positive_total
+        };
         let mut x = self.cursor.x;
         let start_y = self.cursor.y;
         for (index, weight) in weights.iter().enumerate() {
-            let w = usable * if all_equal { 1.0 / total } else { weight.max(0.0) / total };
+            let w = usable
+                * if all_equal {
+                    1.0 / total
+                } else {
+                    weight.max(0.0) / total
+                };
             let rect = Rect::from_min_size(Vec2::new(x, start_y), Vec2::new(w, height.max(0.0)));
             self.cmd_buf.push(DrawCommand::ClipPush { rect });
             {
-                let mut child = LayoutBuilder::new(rect, &mut *self.cmd_buf, self.ptr, self.palette)
-                    .with_spacing(self.spacing)
-                    .with_padding(self.padding.min(w * 0.5));
+                let mut child =
+                    LayoutBuilder::new(rect, &mut *self.cmd_buf, self.ptr, self.palette)
+                        .with_spacing(self.spacing)
+                        .with_padding(self.padding.min(w * 0.5));
                 build(index, &mut child);
             }
             self.cmd_buf.push(DrawCommand::ClipPop);
@@ -206,8 +218,14 @@ impl<'a> LayoutBuilder<'a> {
         let toggle_w = 34.0;
         let toggle_h = 16.0;
 
-        let row_rect = Rect::from_min_size(self.cursor, Vec2::new(self.bounds.width() - (self.padding * 2.0), row_h));
-        let toggle_rect = Rect::from_min_size(Vec2::new(row_rect.max.x - toggle_w, row_rect.min.y + 3.0), Vec2::new(toggle_w, toggle_h));
+        let row_rect = Rect::from_min_size(
+            self.cursor,
+            Vec2::new(self.bounds.width() - (self.padding * 2.0), row_h),
+        );
+        let toggle_rect = Rect::from_min_size(
+            Vec2::new(row_rect.max.x - toggle_w, row_rect.min.y + 3.0),
+            Vec2::new(toggle_w, toggle_h),
+        );
 
         let clicked = toggle_rect.contains(self.ptr.position) && self.ptr.primary_clicked;
         if clicked {
@@ -226,15 +244,26 @@ impl<'a> LayoutBuilder<'a> {
         // Toggle track
         self.cmd_buf.push(DrawCommand::Rect {
             rect: toggle_rect,
-            fill: if *checked { self.palette.accent } else { self.palette.surface },
+            fill: if *checked {
+                self.palette.accent
+            } else {
+                self.palette.surface
+            },
             radius: CornerRadius::same(8.0),
             stroke: Stroke::new(1.0, self.palette.border),
         });
 
         // Toggle knob
-        let knob_x = if *checked { toggle_rect.max.x - 14.0 } else { toggle_rect.min.x + 2.0 };
+        let knob_x = if *checked {
+            toggle_rect.max.x - 14.0
+        } else {
+            toggle_rect.min.x + 2.0
+        };
         self.cmd_buf.push(DrawCommand::Rect {
-            rect: Rect::from_min_size(Vec2::new(knob_x, toggle_rect.min.y + 2.0), Vec2::new(12.0, 12.0)),
+            rect: Rect::from_min_size(
+                Vec2::new(knob_x, toggle_rect.min.y + 2.0),
+                Vec2::new(12.0, 12.0),
+            ),
             fill: Color::WHITE,
             radius: CornerRadius::same(6.0),
             stroke: Stroke::NONE,
@@ -245,9 +274,19 @@ impl<'a> LayoutBuilder<'a> {
     }
 
     /// High-precision numeric scrubber with horizontal mouse drag.
-    pub fn scrubber(&mut self, label: &str, value: &mut f32, min: f32, max: f32, step: f32) -> bool {
+    pub fn scrubber(
+        &mut self,
+        label: &str,
+        value: &mut f32,
+        min: f32,
+        max: f32,
+        step: f32,
+    ) -> bool {
         let row_h = 24.0;
-        let row_rect = Rect::from_min_size(self.cursor, Vec2::new(self.bounds.width() - (self.padding * 2.0), row_h));
+        let row_rect = Rect::from_min_size(
+            self.cursor,
+            Vec2::new(self.bounds.width() - (self.padding * 2.0), row_h),
+        );
 
         // Label (left half)
         self.cmd_buf.push(DrawCommand::Text {
@@ -260,7 +299,10 @@ impl<'a> LayoutBuilder<'a> {
 
         // Scrubber box (right half)
         let box_w = 100.0;
-        let box_rect = Rect::from_min_size(Vec2::new(row_rect.max.x - box_w, row_rect.min.y), Vec2::new(box_w, row_h));
+        let box_rect = Rect::from_min_size(
+            Vec2::new(row_rect.max.x - box_w, row_rect.min.y),
+            Vec2::new(box_w, row_h),
+        );
         let hovered = box_rect.contains(self.ptr.position);
         let mut changed = false;
 
@@ -271,7 +313,11 @@ impl<'a> LayoutBuilder<'a> {
 
         self.cmd_buf.push(DrawCommand::Rect {
             rect: box_rect,
-            fill: if hovered { self.palette.elevated } else { self.palette.surface },
+            fill: if hovered {
+                self.palette.elevated
+            } else {
+                self.palette.surface
+            },
             radius: CornerRadius::same(4.0),
             stroke: Stroke::new(1.0, self.palette.border),
         });
@@ -308,13 +354,16 @@ impl<'a> LayoutBuilder<'a> {
     {
         let start_y = self.cursor.y;
         let card_w = self.bounds.width() - (self.padding * 2.0);
-        
+
         self.cursor.y += self.padding;
         f(self);
         let end_y = self.cursor.y + self.padding;
         let card_h = end_y - start_y;
 
-        let card_rect = Rect::from_min_size(Vec2::new(self.bounds.min.x + self.padding, start_y), Vec2::new(card_w, card_h));
+        let card_rect = Rect::from_min_size(
+            Vec2::new(self.bounds.min.x + self.padding, start_y),
+            Vec2::new(card_w, card_h),
+        );
 
         self.cmd_buf.push(DrawCommand::Rect {
             rect: card_rect,

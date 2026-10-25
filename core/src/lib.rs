@@ -22,12 +22,13 @@ pub use dock_tree::{
 pub use docking::{DockPanel, DockSlot, DockWorkspace, ResolvedDockLayout};
 pub use id::ElementId;
 pub use inspector_api::{UiInspectorNode, UiInspectorSnapshot};
-pub use layout::{resolve_grid_layout, resolve_stack_layout, resolve_wrap_layout, Alignment, Breakpoint, Direction, LayoutItem, SizeConstraint};
+pub use layout::{
+    resolve_grid_layout, resolve_stack_layout, resolve_wrap_layout, Alignment, Breakpoint,
+    Direction, LayoutItem, SizeConstraint,
+};
 pub use math::{Color, CornerRadius, Margin, Padding, Rect, Stroke, Vec2};
 pub use modifier::Modifier;
 pub use redux::{Reducer, Store, UndoManager};
 pub use state::{ActionBus, Signal};
 pub use task::{TaskController, TaskId, TaskReceipt, TaskReporter, TaskStatus};
 pub use text_edit::TextEditBuffer;
-
-

@@ -52,7 +52,6 @@ fn collect_node_panels(node: &DockNode, out: &mut Vec<DockTabPanel>) {
     }
 }
 
-
 fn encode_field(value: &str) -> String {
     let mut result = String::with_capacity(value.len() * 2);
     for byte in value.bytes() {
@@ -62,7 +61,9 @@ fn encode_field(value: &str) -> String {
 }
 
 fn decode_field(value: &str) -> Result<String, String> {
-    if value.len() % 2 != 0 { return Err("invalid encoded workspace field".into()); }
+    if value.len() % 2 != 0 {
+        return Err("invalid encoded workspace field".into());
+    }
     let mut bytes = Vec::with_capacity(value.len() / 2);
     for chunk in value.as_bytes().chunks(2) {
         let hex = std::str::from_utf8(chunk).map_err(|e| e.to_string())?;
@@ -73,26 +74,59 @@ fn decode_field(value: &str) -> Result<String, String> {
 
 fn encode_node(node: &DockNode, out: &mut String) {
     match node {
-        DockNode::Leaf { id, tabs, active_tab } => {
-            out.push_str(&format!("L\t{}\t{}\t{}\n", encode_field(id), active_tab, tabs.len()));
+        DockNode::Leaf {
+            id,
+            tabs,
+            active_tab,
+        } => {
+            out.push_str(&format!(
+                "L\t{}\t{}\t{}\n",
+                encode_field(id),
+                active_tab,
+                tabs.len()
+            ));
             for tab in tabs {
-                out.push_str(&format!("T\t{}\t{}\t{}\t{}\n",
-                    encode_field(&tab.id), encode_field(&tab.title),
+                out.push_str(&format!(
+                    "T\t{}\t{}\t{}\t{}\n",
+                    encode_field(&tab.id),
+                    encode_field(&tab.title),
                     if tab.is_closable { 1 } else { 0 },
-                    tab.factory_id.as_ref().map_or("-".to_string(), |v| encode_field(v))));
+                    tab.factory_id
+                        .as_ref()
+                        .map_or("-".to_string(), |v| encode_field(v))
+                ));
             }
         }
-        DockNode::Split { id, axis, ratio, first, second } => {
-            out.push_str(&format!("S\t{}\t{}\t{}\n", encode_field(id),
-                if *axis == SplitAxis::Horizontal { "H" } else { "V" }, ratio));
+        DockNode::Split {
+            id,
+            axis,
+            ratio,
+            first,
+            second,
+        } => {
+            out.push_str(&format!(
+                "S\t{}\t{}\t{}\n",
+                encode_field(id),
+                if *axis == SplitAxis::Horizontal {
+                    "H"
+                } else {
+                    "V"
+                },
+                ratio
+            ));
             encode_node(first, out);
             encode_node(second, out);
         }
     }
 }
 
-fn decode_node<'a>(lines: &mut impl Iterator<Item = &'a str>, depth: usize) -> Result<DockNode, String> {
-    if depth > 64 { return Err("workspace tree exceeds maximum depth".into()); }
+fn decode_node<'a>(
+    lines: &mut impl Iterator<Item = &'a str>,
+    depth: usize,
+) -> Result<DockNode, String> {
+    if depth > 64 {
+        return Err("workspace tree exceeds maximum depth".into());
+    }
     let line = lines.next().ok_or("incomplete workspace tree")?;
     let parts: Vec<&str> = line.split('\t').collect();
     match parts.first().copied() {
@@ -100,23 +134,35 @@ fn decode_node<'a>(lines: &mut impl Iterator<Item = &'a str>, depth: usize) -> R
             let id = decode_field(parts[1])?;
             let active_tab = parts[2].parse::<usize>().map_err(|e| e.to_string())?;
             let count = parts[3].parse::<usize>().map_err(|e| e.to_string())?;
-            if count > 10000 { return Err("workspace has too many tabs".into()); }
+            if count > 10000 {
+                return Err("workspace has too many tabs".into());
+            }
             let mut tabs = Vec::with_capacity(count);
             for _ in 0..count {
                 let tab = lines.next().ok_or("missing dock tab")?;
                 let fields: Vec<&str> = tab.split('\t').collect();
-                if fields.len() != 5 || fields[0] != "T" { return Err("invalid dock tab".into()); }
+                if fields.len() != 5 || fields[0] != "T" {
+                    return Err("invalid dock tab".into());
+                }
                 tabs.push(DockTabPanel {
                     id: decode_field(fields[1])?,
                     title: decode_field(fields[2])?,
                     is_closable: fields[3] == "1",
-                    factory_id: if fields[4] == "-" { None } else { Some(decode_field(fields[4])?) },
+                    factory_id: if fields[4] == "-" {
+                        None
+                    } else {
+                        Some(decode_field(fields[4])?)
+                    },
                 });
             }
             if active_tab >= tabs.len() && !tabs.is_empty() {
                 return Err("workspace active tab out of range".into());
             }
-            Ok(DockNode::Leaf { id, tabs, active_tab })
+            Ok(DockNode::Leaf {
+                id,
+                tabs,
+                active_tab,
+            })
         }
         Some("S") if parts.len() == 4 => {
             let id = decode_field(parts[1])?;
@@ -131,7 +177,13 @@ fn decode_node<'a>(lines: &mut impl Iterator<Item = &'a str>, depth: usize) -> R
             }
             let first = Box::new(decode_node(lines, depth + 1)?);
             let second = Box::new(decode_node(lines, depth + 1)?);
-            Ok(DockNode::Split { id, axis, ratio, first, second })
+            Ok(DockNode::Split {
+                id,
+                axis,
+                ratio,
+                first,
+                second,
+            })
         }
         _ => Err("invalid workspace node".into()),
     }
@@ -147,18 +199,36 @@ impl DetachedPanel {
     /// Draw this pane inside its own window's content area.
     pub fn render(&mut self, ctx: &mut crate::app::AppContext) {
         let bounds = ctx.bounds();
-        self.editor.render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &ctx.theme);
+        self.editor
+            .render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &ctx.theme);
     }
 
-    pub fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, ctx: &crate::app::AppContext) -> bool {
-        self.editor.handle_mouse_down(pos, button, ctx.bounds(), &ctx.pointer)
+    pub fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &crate::app::AppContext,
+    ) -> bool {
+        self.editor
+            .handle_mouse_down(pos, button, ctx.bounds(), &ctx.pointer)
     }
 
-    pub fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, ctx: &crate::app::AppContext) -> bool {
-        self.editor.handle_mouse_move(pos, delta, ctx.bounds(), &ctx.pointer)
+    pub fn handle_mouse_move(
+        &mut self,
+        pos: Vec2,
+        delta: Vec2,
+        ctx: &crate::app::AppContext,
+    ) -> bool {
+        self.editor
+            .handle_mouse_move(pos, delta, ctx.bounds(), &ctx.pointer)
     }
 
-    pub fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton, ctx: &crate::app::AppContext) -> bool {
+    pub fn handle_mouse_up(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &crate::app::AppContext,
+    ) -> bool {
         self.editor.handle_mouse_up(pos, button, ctx.bounds())
     }
 
@@ -181,10 +251,13 @@ impl DetachedPanel {
 
 fn find_panel_leaf(node: &DockNode, panel_id: &str) -> Option<String> {
     match node {
-        DockNode::Leaf { id, tabs, .. } => tabs.iter()
-            .any(|tab| tab.id == panel_id).then(|| id.clone()),
-        DockNode::Split { first, second, .. } => find_panel_leaf(first, panel_id)
-            .or_else(|| find_panel_leaf(second, panel_id)),
+        DockNode::Leaf { id, tabs, .. } => tabs
+            .iter()
+            .any(|tab| tab.id == panel_id)
+            .then(|| id.clone()),
+        DockNode::Split { first, second, .. } => {
+            find_panel_leaf(first, panel_id).or_else(|| find_panel_leaf(second, panel_id))
+        }
     }
 }
 
@@ -221,7 +294,11 @@ impl WorkspaceHost {
         // Initialize standard preset workspaces
         host.add_preset_workspace("ws_2d", "2D Canvas", WorkspacePreset::Creative2D);
         host.add_preset_workspace("ws_3d", "3D Viewport", WorkspacePreset::Spatial3D);
-        host.add_preset_workspace("ws_graph", "Procedural Graph", WorkspacePreset::ProceduralGraph);
+        host.add_preset_workspace(
+            "ws_graph",
+            "Procedural Graph",
+            WorkspacePreset::ProceduralGraph,
+        );
         host.add_preset_workspace("ws_video", "Video Editor", WorkspacePreset::VideoEditing);
         host.add_preset_workspace("ws_desktop", "Application", WorkspacePreset::GeneralDesktop);
 
@@ -305,7 +382,8 @@ impl WorkspaceHost {
         collect_node_panels(&ws.dock_tree.root, &mut panel_ids);
         for panel in panel_ids {
             let factory = panel.factory_id.as_deref().unwrap_or(&panel.id);
-            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(panel.id.clone()) {
+            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(panel.id.clone())
+            {
                 if let Some(ed) = self.registry.create(factory) {
                     e.insert(ed);
                 }
@@ -320,7 +398,8 @@ impl WorkspaceHost {
         collect_node_panels(&ws.dock_tree.root, &mut panel_ids);
         for panel in panel_ids {
             let factory = panel.factory_id.as_deref().unwrap_or(&panel.id);
-            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(panel.id.clone()) {
+            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(panel.id.clone())
+            {
                 if let Some(ed) = self.registry.create(factory) {
                     e.insert(ed);
                 }
@@ -332,21 +411,36 @@ impl WorkspaceHost {
     /// Save this string in the consuming application's own settings location.
     pub fn save_layouts(&self) -> String {
         let mut out = String::from("KATHAMO_UI_1\n");
-        let active = self.workspaces.get(self.active_workspace_idx)
+        let active = self
+            .workspaces
+            .get(self.active_workspace_idx)
             .map_or("", |ws| ws.id.as_str());
         out.push_str(&format!("ACTIVE\t{}\n", encode_field(active)));
         for ws in &self.workspaces {
-            out.push_str(&format!("WORKSPACE\t{}\t{}\t{}\t{}\t{}\n",
-                encode_field(&ws.id), encode_field(&ws.name),
-                ws.dock_tree.splitter_thickness, ws.dock_tree.tab_header_height,
-                ws.dock_tree.maximized_leaf.as_deref().map_or("-".to_string(), encode_field)));
+            out.push_str(&format!(
+                "WORKSPACE\t{}\t{}\t{}\t{}\t{}\n",
+                encode_field(&ws.id),
+                encode_field(&ws.name),
+                ws.dock_tree.splitter_thickness,
+                ws.dock_tree.tab_header_height,
+                ws.dock_tree
+                    .maximized_leaf
+                    .as_deref()
+                    .map_or("-".to_string(), encode_field)
+            ));
             encode_node(&ws.dock_tree.root, &mut out);
-            let mut states: Vec<_> = ws.editors.iter().filter_map(|(id, editor)|
-                editor.save_state().map(|state| (id.as_str(), state))
-            ).collect();
+            let mut states: Vec<_> = ws
+                .editors
+                .iter()
+                .filter_map(|(id, editor)| editor.save_state().map(|state| (id.as_str(), state)))
+                .collect();
             states.sort_by_key(|(id, _)| *id);
             for (id, state) in states {
-                out.push_str(&format!("EDITOR\t{}\t{}\n", encode_field(id), encode_field(&state)));
+                out.push_str(&format!(
+                    "EDITOR\t{}\t{}\n",
+                    encode_field(id),
+                    encode_field(&state)
+                ));
             }
             out.push_str("END\n");
         }
@@ -357,9 +451,13 @@ impl WorkspaceHost {
     /// The current UI remains unchanged if parsing fails.
     pub fn restore_layouts(&mut self, text: &str) -> Result<(), String> {
         let mut lines = text.lines();
-        if lines.next() != Some("KATHAMO_UI_1") { return Err("unsupported Kathamo layout version".into()); }
+        if lines.next() != Some("KATHAMO_UI_1") {
+            return Err("unsupported Kathamo layout version".into());
+        }
         let active_line = lines.next().ok_or("missing active workspace")?;
-        let active = active_line.strip_prefix("ACTIVE\t").ok_or("missing active ID")?;
+        let active = active_line
+            .strip_prefix("ACTIVE\t")
+            .ok_or("missing active ID")?;
         let active_id = decode_field(active)?;
         let mut workspaces = Vec::new();
         while let Some(line) = lines.next() {
@@ -367,32 +465,50 @@ impl WorkspaceHost {
             if fields.len() != 6 || fields[0] != "WORKSPACE" {
                 return Err("invalid workspace header".into());
             }
-            if workspaces.len() >= 128 { return Err("too many saved workspaces".into()); }
+            if workspaces.len() >= 128 {
+                return Err("too many saved workspaces".into());
+            }
             let thickness = fields[3].parse::<f32>().map_err(|e| e.to_string())?;
             let header_height = fields[4].parse::<f32>().map_err(|e| e.to_string())?;
-            if !thickness.is_finite() || thickness <= 0.0 ||
-               !header_height.is_finite() || header_height <= 0.0 {
+            if !thickness.is_finite()
+                || thickness <= 0.0
+                || !header_height.is_finite()
+                || header_height <= 0.0
+            {
                 return Err("invalid dock metrics".into());
             }
             let mut tree = DockTree::with_root(decode_node(&mut lines, 0)?);
             tree.splitter_thickness = thickness;
             tree.tab_header_height = header_height;
-            tree.maximized_leaf = if fields[5] == "-" { None } else { Some(decode_field(fields[5])?) };
+            tree.maximized_leaf = if fields[5] == "-" {
+                None
+            } else {
+                Some(decode_field(fields[5])?)
+            };
             let mut ws = Workspace::new(decode_field(fields[1])?, decode_field(fields[2])?, tree);
             self.populate_workspace_editors(&mut ws);
             loop {
                 let state_line = lines.next().ok_or("missing workspace end marker")?;
-                if state_line == "END" { break; }
+                if state_line == "END" {
+                    break;
+                }
                 let parts: Vec<&str> = state_line.split('\t').collect();
-                if parts.len() != 3 || parts[0] != "EDITOR" { return Err("invalid editor state".into()); }
+                if parts.len() != 3 || parts[0] != "EDITOR" {
+                    return Err("invalid editor state".into());
+                }
                 if let Some(editor) = ws.editors.get_mut(&decode_field(parts[1])?) {
                     editor.restore_state(&decode_field(parts[2])?);
                 }
             }
             workspaces.push(ws);
         }
-        if workspaces.is_empty() { return Err("workspace file is empty".into()); }
-        let active_index = workspaces.iter().position(|ws| ws.id == active_id).unwrap_or(0);
+        if workspaces.is_empty() {
+            return Err("workspace file is empty".into());
+        }
+        let active_index = workspaces
+            .iter()
+            .position(|ws| ws.id == active_id)
+            .unwrap_or(0);
         self.workspaces = workspaces;
         self.active_workspace_idx = active_index;
         self.dock_view = DockTreeView::new();
@@ -429,7 +545,8 @@ impl WorkspaceHost {
             for leaf in &layout.leaves {
                 if leaf.bounds.contains(pos) {
                     if leaf.header_rect.contains(pos) {
-                        let tab_index = ((pos.x - leaf.header_rect.min.x - 8.0) / 114.0).floor() as isize;
+                        let tab_index =
+                            ((pos.x - leaf.header_rect.min.x - 8.0) / 114.0).floor() as isize;
                         if tab_index >= 0 {
                             if let Some(tab) = leaf.tabs.get(tab_index as usize) {
                                 self.focused_panel_id = Some(tab.id.clone());
@@ -444,7 +561,10 @@ impl WorkspaceHost {
         }
 
         // 1. Check if hit dock splitter or tab header
-        if self.dock_view.handle_mouse_down(pos, button, &layout, &mut ws.dock_tree) {
+        if self
+            .dock_view
+            .handle_mouse_down(pos, button, &layout, &mut ws.dock_tree)
+        {
             return true;
         }
 
@@ -473,7 +593,8 @@ impl WorkspaceHost {
 
         // 1. If actively dragging a dock splitter, delegate to dock view
         if self.dock_view.active_splitter_drag.is_some() || self.dock_view.dragging_tab.is_some() {
-            self.dock_view.handle_mouse_move(pos, delta, bounds, &mut ws.dock_tree, ptr);
+            self.dock_view
+                .handle_mouse_move(pos, delta, bounds, &mut ws.dock_tree, ptr);
             return true;
         }
 
@@ -496,7 +617,10 @@ impl WorkspaceHost {
         let ws = &mut self.workspaces[self.active_workspace_idx];
         let layout = ws.dock_tree.compute_layout(bounds);
 
-        if self.dock_view.handle_mouse_up(pos, button, &layout, &mut ws.dock_tree) {
+        if self
+            .dock_view
+            .handle_mouse_up(pos, button, &layout, &mut ws.dock_tree)
+        {
             return true;
         }
 
@@ -540,10 +664,16 @@ impl WorkspaceHost {
         let ws = &mut self.workspaces[self.active_workspace_idx];
         let mut panels = Vec::new();
         collect_node_panels(&ws.dock_tree.root, &mut panels);
-        let panel = panels.into_iter().find(|p| p.id == panel_id && p.is_closable)?;
+        let panel = panels
+            .into_iter()
+            .find(|p| p.id == panel_id && p.is_closable)?;
         let leaf_id = find_panel_leaf(&ws.dock_tree.root, panel_id)?;
-        if !ws.editors.contains_key(panel_id) { return None; }
-        if !ws.dock_tree.close_panel(&leaf_id, panel_id) { return None; }
+        if !ws.editors.contains_key(panel_id) {
+            return None;
+        }
+        if !ws.dock_tree.close_panel(&leaf_id, panel_id) {
+            return None;
+        }
         let editor = ws.editors.remove(panel_id)?;
         if self.focused_panel_id.as_deref() == Some(panel_id) {
             self.focused_panel_id = None;
@@ -555,8 +685,11 @@ impl WorkspaceHost {
     /// Store the returned DetachedPanel in the consuming app and render it from
     /// KathamoApp::update_window using its tab.id as the window ID.
     pub fn detach_to_window(
-        &mut self, panel_id: &str, ctx: &mut crate::app::AppContext,
-        width: u32, height: u32,
+        &mut self,
+        panel_id: &str,
+        ctx: &mut crate::app::AppContext,
+        width: u32,
+        height: u32,
     ) -> Option<DetachedPanel> {
         let panel = self.detach_panel(panel_id)?;
         ctx.open_window(&panel.tab.id, &panel.tab.title, width, height);
@@ -564,10 +697,18 @@ impl WorkspaceHost {
     }
 
     /// Reattach an existing editor without losing its state.
-    pub fn attach_panel(&mut self, leaf_id: &str, panel: DetachedPanel) -> Result<(), DetachedPanel> {
+    pub fn attach_panel(
+        &mut self,
+        leaf_id: &str,
+        panel: DetachedPanel,
+    ) -> Result<(), DetachedPanel> {
         let ws = &mut self.workspaces[self.active_workspace_idx];
-        if ws.editors.contains_key(&panel.tab.id) { return Err(panel); }
-        if !ws.dock_tree.add_tab(leaf_id, panel.tab.clone()) { return Err(panel); }
+        if ws.editors.contains_key(&panel.tab.id) {
+            return Err(panel);
+        }
+        if !ws.dock_tree.add_tab(leaf_id, panel.tab.clone()) {
+            return Err(panel);
+        }
         ws.editors.insert(panel.tab.id.clone(), panel.editor);
         Ok(())
     }
@@ -589,12 +730,17 @@ impl WorkspaceHost {
             self.active_workspace_idx = index;
             self.focused_panel_id = None;
             true
-        } else { false }
+        } else {
+            false
+        }
     }
 
     /// Traverse pane focus in a stable order; Tab/Shift+Tab switches the active pane.
     pub fn handle_key_down(&mut self, key: Key, modifiers: Modifiers) -> bool {
-        if key == Key::Escape && (self.dock_view.dragging_tab.is_some() || self.dock_view.active_splitter_drag.is_some()) {
+        if key == Key::Escape
+            && (self.dock_view.dragging_tab.is_some()
+                || self.dock_view.active_splitter_drag.is_some())
+        {
             self.dock_view.dragging_tab = None;
             self.dock_view.active_splitter_drag = None;
             return true;
@@ -603,8 +749,12 @@ impl WorkspaceHost {
         if key == Key::Tab && !modifiers.alt && !modifiers.command {
             let mut ids = Vec::new();
             collect_node_panels(&ws.dock_tree.root, &mut ids);
-            if ids.is_empty() { return false; }
-            let index = self.focused_panel_id.as_ref()
+            if ids.is_empty() {
+                return false;
+            }
+            let index = self
+                .focused_panel_id
+                .as_ref()
                 .and_then(|focus| ids.iter().position(|p| &p.id == focus));
             let next = match index {
                 Some(i) if modifiers.shift => (i + ids.len() - 1) % ids.len(),
@@ -617,34 +767,44 @@ impl WorkspaceHost {
             self.focused_panel_id = Some(id);
             return true;
         }
-        self.focused_panel_id.as_ref()
+        self.focused_panel_id
+            .as_ref()
             .and_then(|id| ws.editors.get_mut(id))
             .is_some_and(|editor| editor.handle_key_down(key, modifiers))
     }
 
     fn activate_tab_for_panel(node: &mut DockNode, panel_id: &str) -> bool {
         match node {
-            DockNode::Leaf { tabs, active_tab, .. } => {
+            DockNode::Leaf {
+                tabs, active_tab, ..
+            } => {
                 if let Some(index) = tabs.iter().position(|p| p.id == panel_id) {
                     *active_tab = index;
                     true
-                } else { false }
+                } else {
+                    false
+                }
             }
-            DockNode::Split { first, second, .. } =>
-                Self::activate_tab_for_panel(first, panel_id) ||
-                Self::activate_tab_for_panel(second, panel_id),
+            DockNode::Split { first, second, .. } => {
+                Self::activate_tab_for_panel(first, panel_id)
+                    || Self::activate_tab_for_panel(second, panel_id)
+            }
         }
     }
 
     pub fn handle_text_input(&mut self, text: &str) -> bool {
         let ws = &mut self.workspaces[self.active_workspace_idx];
-        self.focused_panel_id.as_ref().and_then(|id| ws.editors.get_mut(id))
+        self.focused_panel_id
+            .as_ref()
+            .and_then(|id| ws.editors.get_mut(id))
             .is_some_and(|editor| editor.handle_text_input(text))
     }
 
     pub fn handle_ime(&mut self, event: ImeEvent) -> bool {
         let ws = &mut self.workspaces[self.active_workspace_idx];
-        self.focused_panel_id.as_ref().and_then(|id| ws.editors.get_mut(id))
+        self.focused_panel_id
+            .as_ref()
+            .and_then(|id| ws.editors.get_mut(id))
             .is_some_and(|editor| editor.handle_ime(event))
     }
 
@@ -678,8 +838,11 @@ impl WorkspaceHost {
 
         // The focused editor has a visible focus ring.
         if let Some(focused) = &self.focused_panel_id {
-            if let Some(leaf) = layout.leaves.iter().find(|l|
-                l.tabs.get(l.active_tab).is_some_and(|tab| &tab.id == focused)) {
+            if let Some(leaf) = layout.leaves.iter().find(|l| {
+                l.tabs
+                    .get(l.active_tab)
+                    .is_some_and(|tab| &tab.id == focused)
+            }) {
                 cmd_buf.push(DrawCommand::Rect {
                     rect: leaf.content_rect,
                     fill: Color::TRANSPARENT,
@@ -690,7 +853,8 @@ impl WorkspaceHost {
         }
 
         // 2. Render docking chrome, tab bars, maximize buttons, and splitters on top
-        self.dock_view.render(cmd_buf, &layout, &ws.dock_tree, palette, ptr);
+        self.dock_view
+            .render(cmd_buf, &layout, &ws.dock_tree, palette, ptr);
     }
 
     // -------------------------------------------------------------------------
@@ -746,7 +910,10 @@ impl WorkspaceHost {
                 }),
                 second: Box::new(DockNode::Leaf {
                     id: "inspector_leaf".into(),
-                    tabs: vec![DockTabPanel::new("property_inspector", "Material & Transform")],
+                    tabs: vec![DockTabPanel::new(
+                        "property_inspector",
+                        "Material & Transform",
+                    )],
                     active_tab: 0,
                 }),
             }),
@@ -879,7 +1046,10 @@ mod tests {
         restored.restore_layouts(&saved).unwrap();
         assert_eq!(restored.active_workspace_idx, 3);
         assert_eq!(restored.workspaces.len(), host.workspaces.len());
-        assert_eq!(restored.active_workspace().dock_tree, host.active_workspace().dock_tree);
+        assert_eq!(
+            restored.active_workspace().dock_tree,
+            host.active_workspace().dock_tree
+        );
         assert!(restored.restore_layouts("invalid").is_err());
         assert_eq!(restored.active_workspace_idx, 3);
     }
@@ -901,10 +1071,24 @@ mod tests {
 
         host.render(&mut cmd_buf, bounds, &ptr, &palette);
         assert!(!cmd_buf.commands().is_empty());
-        let clip_pushes = cmd_buf.commands().iter().filter(|cmd| matches!(cmd, DrawCommand::ClipPush { .. })).count();
-        let clip_pops = cmd_buf.commands().iter().filter(|cmd| matches!(cmd, DrawCommand::ClipPop)).count();
-        assert!(clip_pushes > 0, "editors must be clipped to their dock content bounds");
-        assert_eq!(clip_pushes, clip_pops, "editor clip regions must be balanced");
+        let clip_pushes = cmd_buf
+            .commands()
+            .iter()
+            .filter(|cmd| matches!(cmd, DrawCommand::ClipPush { .. }))
+            .count();
+        let clip_pops = cmd_buf
+            .commands()
+            .iter()
+            .filter(|cmd| matches!(cmd, DrawCommand::ClipPop))
+            .count();
+        assert!(
+            clip_pushes > 0,
+            "editors must be clipped to their dock content bounds"
+        );
+        assert_eq!(
+            clip_pushes, clip_pops,
+            "editor clip regions must be balanced"
+        );
     }
 
     #[test]
@@ -935,7 +1119,10 @@ mod tests {
     #[test]
     fn single_preset_does_not_initialize_unrelated_workspaces() {
         let host = WorkspaceHost::with_preset(
-            EditorRegistry::new(), "game_editor", "Game Editor", WorkspacePreset::Spatial3D,
+            EditorRegistry::new(),
+            "game_editor",
+            "Game Editor",
+            WorkspacePreset::Spatial3D,
         );
         assert_eq!(host.workspaces.len(), 1);
         assert_eq!(host.active_workspace().name, "Game Editor");
@@ -949,7 +1136,12 @@ mod tests {
 
         // Click in main canvas area (center of 1280x720)
         let ptr = PointerState::default();
-        let handled = host.handle_mouse_down(Vec2::new(600.0, 360.0), PointerButton::Primary, bounds, &ptr);
+        let handled = host.handle_mouse_down(
+            Vec2::new(600.0, 360.0),
+            PointerButton::Primary,
+            bounds,
+            &ptr,
+        );
         assert!(handled);
     }
 }

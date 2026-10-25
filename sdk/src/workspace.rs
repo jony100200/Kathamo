@@ -474,6 +474,26 @@ impl WorkspaceHost {
         false
     }
 
+    /// Activate a dock panel by stable ID (useful for agents and command palettes).
+    pub fn activate_panel(&mut self, panel_id: &str) -> bool {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        if Self::activate_tab_for_panel(&mut ws.dock_tree.root, panel_id) {
+            self.focused_panel_id = Some(panel_id.to_string());
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Switch workspaces by stable ID instead of relying on an index.
+    pub fn activate_workspace(&mut self, id: &str) -> bool {
+        if let Some(index) = self.workspaces.iter().position(|ws| ws.id == id) {
+            self.active_workspace_idx = index;
+            self.focused_panel_id = None;
+            true
+        } else { false }
+    }
+
     /// Traverse pane focus in a stable order; Tab/Shift+Tab switches the active pane.
     pub fn handle_key_down(&mut self, key: Key, modifiers: Modifiers) -> bool {
         if key == Key::Escape && (self.dock_view.dragging_tab.is_some() || self.dock_view.active_splitter_drag.is_some()) {

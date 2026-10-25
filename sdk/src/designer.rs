@@ -23,13 +23,16 @@ pub enum DesignKind {
     Label,
     TextInput,
     Toggle,
+    Markdown,
+    ChatTranscript,
 }
 
 impl DesignKind {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 15] = [
         Self::Panel, Self::Viewport, Self::Hierarchy, Self::Inspector,
         Self::AssetBrowser, Self::Console, Self::Timeline, Self::NodeGraph,
         Self::Toolbar, Self::Button, Self::Label, Self::TextInput, Self::Toggle,
+        Self::Markdown, Self::ChatTranscript,
     ];
 
     pub fn name(self) -> &'static str {
@@ -47,6 +50,8 @@ impl DesignKind {
             Self::Label => "Label",
             Self::TextInput => "TextInput",
             Self::Toggle => "Toggle",
+            Self::Markdown => "Markdown",
+            Self::ChatTranscript => "ChatTranscript", 
         }
     }
 
@@ -65,6 +70,7 @@ impl DesignKind {
             Self::Label => Vec2::new(170.0, 28.0),
             Self::TextInput => Vec2::new(200.0, 32.0),
             Self::Toggle => Vec2::new(160.0, 30.0),
+            Self::Markdown | Self::ChatTranscript => Vec2::new(400.0, 260.0),
         }
     }
 }

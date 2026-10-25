@@ -71,8 +71,9 @@ impl DesktopApplication {
             Box::new(InspectorEditor { inspector })
         });
 
-        let mut workspace = WorkspaceHost::with_registry(registry);
-        workspace.switch_workspace(4); // GeneralDesktop preset
+        let workspace = WorkspaceHost::with_preset(
+            registry, "ws_desktop", "Application", WorkspacePreset::GeneralDesktop,
+        );
 
         // Application Menu Bar
         let menu_bar = MenuBar::new(vec![

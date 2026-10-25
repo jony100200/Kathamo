@@ -426,7 +426,7 @@ impl DesignRuntime {
         let id = node.id.clone();
         let rect = self.component_bounds(&id).unwrap();
         self.focused = Some(id.clone());
-        if button == PointerButton::Primary { self.pressed = Some(id.clone()); }
+        self.pressed = Some(id.clone());
         if let Some((_, instance)) = self.instances.get_mut(&id) {
             if let Some(event) = instance.down(pos, button, rect, ptr) {
                 self.emit(&id, event);

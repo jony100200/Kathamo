@@ -16,8 +16,16 @@ pub struct ImageFrame {
     pub version: u64,
 }
 
+/// Secondary OS-window lifecycle request, processed by NativeAppRunner.
+pub enum WindowRequest {
+    Open { id: String, title: String, width: u32, height: u32 },
+    Close { id: String },
+}
+
 /// Unified runtime context provided to applications on each frame.
 pub struct AppContext {
+    pub window_id: String,
+    pub window_requests: Vec<WindowRequest>,
     pub scale: f32,
     pub physical_size: (u32, u32),
     pub viewport: Rect,
@@ -41,6 +49,8 @@ impl AppContext {
         let logical_w = width as f32 / scale;
         let logical_h = height as f32 / scale;
         Self {
+            window_id: "main".into(),
+            window_requests: Vec::new(),
             scale,
             physical_size: (width, height),
             viewport: Rect::from_min_size(Vec2::ZERO, Vec2::new(logical_w, logical_h)),
@@ -69,6 +79,21 @@ impl AppContext {
 
     pub fn remove_image(&mut self, id: u64) {
         self.images.remove(&id);
+    }
+
+    /// Queue a secondary OS window, rendered through KathamoApp::update_window.
+    pub fn open_window(&mut self, id: &str, title: &str, width: u32, height: u32) {
+        if id != "main" && !id.is_empty() {
+            self.window_requests.push(WindowRequest::Open {
+                id: id.into(), title: title.into(), width: width.max(240), height: height.max(180),
+            });
+        }
+    }
+
+    pub fn close_window(&mut self, id: &str) {
+        if id != "main" {
+            self.window_requests.push(WindowRequest::Close { id: id.into() });
+        }
     }
 
     /// Resize context viewport on OS window resize.
@@ -138,6 +163,41 @@ pub trait KathamoApp: 'static {
 
     fn handle_ime(&mut self, _event: ImeEvent, _ctx: &mut AppContext) -> bool {
         false
+    }
+
+    /// Render a secondary native window. Override to display detached editor content.
+    /// The default renders the application's regular interface.
+    fn update_window(&mut self, _window_id: &str, ctx: &mut AppContext) {
+        self.update(ctx);
+    }
+
+    /// The default routes window-specific input to the normal app hooks.
+    fn handle_window_mouse_down(&mut self, _id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+        self.handle_mouse_down(pos, button, ctx)
+    }
+    fn handle_window_mouse_move(&mut self, _id: &str, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
+        self.handle_mouse_move(pos, delta, ctx)
+    }
+    fn handle_window_mouse_up(&mut self, _id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+        self.handle_mouse_up(pos, button, ctx)
+    }
+    fn handle_window_scroll(&mut self, _id: &str, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
+        self.handle_scroll(delta, pos, ctx)
+    }
+    fn handle_window_key_down(&mut self, _id: &str, key: Key, modifiers: Modifiers, ctx: &mut AppContext) -> bool {
+        self.handle_key_down(key, modifiers, ctx)
+    }
+    fn handle_window_text_input(&mut self, _id: &str, text: &str, ctx: &mut AppContext) -> bool {
+        self.handle_text_input(text, ctx)
+    }
+    fn handle_window_ime(&mut self, _id: &str, event: ImeEvent, ctx: &mut AppContext) -> bool {
+        self.handle_ime(event, ctx)
+    }
+    fn window_closed(&mut self, _id: &str) {}
+
+    /// Prepare a secondary window's own GPU device for same-device textures.
+    fn prepare_window_gpu(&mut self, _id: &str, gpu: &mut GpuBackend) {
+        self.prepare_gpu(gpu);
     }
 
     /// Optional zero-copy GPU viewport registration and rendering hook.

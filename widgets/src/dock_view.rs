@@ -24,6 +24,8 @@ pub struct DockTreeView {
     pub active_splitter_drag: Option<(String, SplitAxis, Vec2, f32)>, // (split_id, axis, start_pos, start_ratio)
     pub dragging_tab: Option<DraggingTabState>,
     pub hovered_splitter: Option<String>,
+    /// Set when a tab is dropped outside all dock leaves.
+    pub pending_detach: Option<String>,
 }
 
 impl DockTreeView {
@@ -179,6 +181,12 @@ impl DockTreeView {
                         return success;
                     }
                 }
+            }
+            // No docking target: offer the dragged panel to the application
+            // for creation of a native detached window.
+            if !layout.leaves.iter().any(|leaf| leaf.bounds.contains(pos)) {
+                self.pending_detach = Some(dragging.panel.id);
+                return true;
             }
         }
 

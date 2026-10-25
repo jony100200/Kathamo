@@ -15,3 +15,7 @@ ui-themes = { path = "../themes" }
 ui-text = { path = "../text" }
 ui-widgets = { path = "../widgets" }
 ui-testkit = { path = "../testkit" }
+
+[[example]]
+name = "kathamo_chat"
+path = "examples/kathamo_chat/main.rs"

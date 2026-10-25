@@ -320,8 +320,10 @@ impl CpuBackend {
         for g in &layout.glyphs {
             let key = GlyphKey::new(g.font, g.id, px);
             if let Some(mask) = self.glyphs.get(key) {
-                let gx = (origin_x + g.x).round() as i32 + mask.left;
-                let gy = (baseline + g.y).round() as i32 + mask.top;
+                let gx = ((origin_x + g.x).clamp(-100000.0, 100000.0).round() as i32)
+                    .saturating_add(mask.left);
+                let gy = ((baseline + g.y).clamp(-100000.0, 100000.0).round() as i32)
+                    .saturating_add(mask.top);
                 self.blit_mask(&mask, gx, gy, color);
             }
         }

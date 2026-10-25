@@ -1,4 +1,4 @@
-//! Showcase tabs: Docking Overview, Godot Anchors/M3, Infinite Canvas, Node Editor, Timeline, 100k List, Async Tasks, Renderer Recovery.
+//! Showcase tabs: Docking Overview, Responsive Anchors, Infinite Canvas, Node Editor, Timeline, 100k List, Async Tasks, Renderer Recovery.
 
 use crate::app::UiLabApp;
 use ui_core::*;
@@ -73,7 +73,7 @@ pub fn render_anchors_and_material3_tab(
     });
 
     cmd_buf.push(DrawCommand::Text {
-        text: "GODOT 4 ANCHOR/OFFSET SYSTEM & ANDROID MATERIAL 3 DESIGN TOKENS".into(),
+        text: "RESPONSIVE ANCHOR/OFFSET SYSTEM & DESIGN SYSTEM TOKENS".into(),
         pos: Vec2::new(content_rect.min.x + 24.0, content_rect.min.y + 20.0),
         size: 14.0,
         color: p.accent,

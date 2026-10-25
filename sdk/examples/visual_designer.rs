@@ -12,9 +12,9 @@ const PROP_Y: f32 = 190.0;
 const PROP_ROW: f32 = 39.0;
 const TOP_ACTIONS: [&str; 12] = [
     "New",
-    "Unity",
-    "Blender",
-    "Krita",
+    "Studio",
+    "3D DCC",
+    "Painting",
     "Chat",
     "Save",
     "Open",
@@ -124,7 +124,7 @@ impl VisualDesigner {
             .unwrap_or_else(std::env::temp_dir)
             .join("KathamoProjects");
         Self {
-            document: DesignDocument::template(DesignTemplate::Unity),
+            document: DesignDocument::template(DesignTemplate::GameStudio),
             runtime: DesignRuntime::new(),
             selected: None,
             save_path: project_folder.join("untitled.kui"),
@@ -253,9 +253,9 @@ impl VisualDesigner {
     fn toolbar_action(&mut self, index: usize) {
         match index {
             0 => self.select_template(DesignTemplate::Empty),
-            1 => self.select_template(DesignTemplate::Unity),
-            2 => self.select_template(DesignTemplate::Blender),
-            3 => self.select_template(DesignTemplate::Krita),
+            1 => self.select_template(DesignTemplate::GameStudio),
+            2 => self.select_template(DesignTemplate::Dcc3D),
+            3 => self.select_template(DesignTemplate::DigitalPainting),
             4 => self.select_template(DesignTemplate::ChatApp),
             5 => self.save(),
             6 => self.open(),

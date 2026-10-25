@@ -255,7 +255,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     child.ctx.focus.cycle_focus(child.modifiers.shift);
                 }
                 if let Some(text) = event.text {
-                    if !child.modifiers.ctrl && !child.modifiers.command {
+                    if accepts_key_text(text.as_str(), child.modifiers) {
                         self.app
                             .handle_window_text_input(&child.id, text.as_str(), &mut child.ctx);
                     }
@@ -373,6 +373,10 @@ fn key_from_winit(key: &WinitKey) -> Key {
         WinitKey::Named(NamedKey::ArrowDown) => Key::ArrowDown,
         WinitKey::Named(NamedKey::ArrowLeft) => Key::ArrowLeft,
         WinitKey::Named(NamedKey::ArrowRight) => Key::ArrowRight,
+        WinitKey::Named(NamedKey::Home) => Key::Custom("Home".into()),
+        WinitKey::Named(NamedKey::End) => Key::Custom("End".into()),
+        WinitKey::Named(NamedKey::PageUp) => Key::Custom("PageUp".into()),
+        WinitKey::Named(NamedKey::PageDown) => Key::Custom("PageDown".into()),
         _ => Key::Custom(format!("{key:?}")),
     }
 }
@@ -413,6 +417,15 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     Err(err) => eprintln!("[Kathamo Native] GPU unavailable, using CPU: {err}"),
                 }
                 self.window = Some(window.clone());
+                // Hidden Windows windows may not receive WM_PAINT/redraw events.
+                // Bootstrap presentation directly, then reveal only real pixels.
+                match self.present() {
+                    Ok(()) => {
+                        window.set_visible(true);
+                        self.revealed = true;
+                    }
+                    Err(error) => eprintln!("Kathamo first frame: {error}"),
+                }
                 window.request_redraw();
                 eprintln!("[Kathamo Native] Initial redraw requested.");
             }
@@ -499,7 +512,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     self.ctx.focus.cycle_focus(self.modifiers.shift);
                 }
                 if let Some(text) = event.text {
-                    if !self.modifiers.ctrl && !self.modifiers.command {
+                    if accepts_key_text(text.as_str(), self.modifiers) {
                         self.app.handle_text_input(text.as_str(), &mut self.ctx);
                     }
                 }
@@ -554,6 +567,12 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
             }
         }
     }
+}
+
+// Enter, Tab, Backspace and Delete are handled once through the key callback.
+// Winit may also supply their control characters in KeyEvent.text on Windows.
+fn accepts_key_text(text: &str, modifiers: Modifiers) -> bool {
+    !modifiers.ctrl && !modifiers.command && !text.is_empty() && !text.chars().any(char::is_control)
 }
 
 struct SecondaryWindow {
@@ -674,5 +693,25 @@ impl SecondaryWindow {
             .present(self.cpu.pixels(), width, height)?;
         self.ctx.pointer.step_frame();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod key_text_tests {
+    use super::*;
+    #[test]
+    fn control_keys_do_not_become_text_or_duplicate_editor_actions() {
+        for text in ["\t", "\r", "\n", "\u{8}", "\u{7f}", ""] {
+            assert!(!accepts_key_text(text, Modifiers::default()));
+        }
+        assert!(accepts_key_text("ক", Modifiers::default()));
+        assert!(accepts_key_text("A", Modifiers::default()));
+        assert!(!accepts_key_text(
+            "a",
+            Modifiers {
+                ctrl: true,
+                ..Modifiers::default()
+            }
+        ));
     }
 }

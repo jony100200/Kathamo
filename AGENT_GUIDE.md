@@ -120,7 +120,7 @@ ui.glass_card(160.0, |card| {
 | **Model Card** | `ui.model_card(name, params, quant, is_sel)` | Selectable list item with badge tags |
 | **Telemetry Stat** | `ui.stat_card("VRAM Pool", "11.8 GB", "74% Free")` | Telemetry metric display card |
 | **Progress Bar** | `ui.progress(0.75)` | Sleek 6px progress indicator |
-| **Drag Scrubber** | `ui.scrubber("Exposure", &mut val, min, max)` | Blender-style draggable numeric slider |
+| **Drag Scrubber** | `ui.scrubber("Exposure", &mut val, min, max)` | Interactive draggable numeric value scrubber |
 | **Vector Icon** | `ui.icon(StudioIcon::Sparkles)` | Cached zero-allocation Tabler SVG icon |
 
 ---
@@ -355,7 +355,7 @@ cargo run --example desktop_app -p kathamo -- --native
 ### Visual Designer document (shared with the native Designer)
 
 ```rust
-let mut ui = DesignDocument::template(DesignTemplate::Unity);
+let mut ui = DesignDocument::template(DesignTemplate::GameStudio);
 let id = ui.add(DesignKind::Button, "Run",
     Rect::from_min_size(Vec2::new(300.0, 100.0), Vec2::new(120.0, 30.0)));
 ui.find_mut(&id).unwrap().label = "Build".into();

@@ -20,6 +20,7 @@ pub mod range_slider;
 pub mod rich_text;
 pub mod stylebox;
 pub mod timeline;
+pub mod text_area;
 pub mod tooltip;
 pub mod ui;
 pub mod virtual_list;
@@ -68,5 +69,6 @@ pub use property_inspector::{
 };
 pub use stylebox::{InteractionState, Shadow, StyleBox};
 pub use timeline::{Timeline, TimelineTrack};
+pub use text_area::TextArea;
 pub use virtual_list::VirtualListState;
 pub use workspace_host::{CreativeDocument, PresentationMode, WorkspaceHost};

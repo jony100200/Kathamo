@@ -14,6 +14,35 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Test & benchmark visual dumps
+# Test & benchmark visual dumps, logs, and raw metrics
 *.ppm
 ui_lab_frame.ppm
+ojon_workstation_frame.ppm
+*.raw
+*.dump
+**/*.test.log
+**/*.benchmark.log
+benchmark_report.json
+benchmark_report.txt
+coverage/
+*.lcov
+*.profraw
+
+# Local test suites, testbeds, and verification crates
+**/tests_local/
+**/local_tests/
+**/test_output/
+**/test_results/
+**/test_artifacts/
+**/fixtures/local/
+**/tests_standalone/
+**/verification_tests/
+
+# Local development scratch and temporary files
+**/_local/
+**/scratch/
+**/tmp/
+**/*.tmp
+**/*.bak
+.env
+.env.*

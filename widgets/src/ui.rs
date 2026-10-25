@@ -102,10 +102,15 @@ impl<'a> KolponaUi<'a> {
         self
     }
 
-    /// Evaluates whether an activation click occurred within the given rectangle.
+    /// Activate once on initial press, never again on release or a held frame.
     #[inline]
     pub fn is_clicked_in_rect(&self, rect: Rect) -> bool {
-        rect.contains(self.pointer.position) && self.pointer.is_clicked()
+        rect.contains(self.pointer.position)
+            && if self.pointer.transitions_active {
+                self.pointer.primary_clicked
+            } else {
+                self.pointer.is_clicked()
+            }
     }
 
     /// Advances the layout cursor based on current layout direction (vertical or horizontal).
@@ -1157,6 +1162,28 @@ impl<'a> KolponaUi<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_activation_per_press_hold_release_sequence() {
+        let mut commands = CommandBuffer::new();
+        let mut icons = IconAtlas::new();
+        let palette = ThemePalette::dark();
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 200.0));
+        let mut pointer = PointerState::default();
+        pointer.on_move(Vec2::new(20.0, 20.0));
+        let mut clicks = 0;
+        pointer.on_button_down(ui_platform::PointerButton::Primary);
+        for stage in 0..3 {
+            let mut ui =
+                KathamoUi::new(&mut commands, &mut icons, &palette, bounds, pointer.clone());
+            clicks += usize::from(ui.button("Add node").clicked());
+            pointer.step_frame();
+            if stage == 1 {
+                pointer.on_button_up(ui_platform::PointerButton::Primary);
+            }
+        }
+        assert_eq!(clicks, 1);
+    }
 
     #[test]
     fn kolpona_ui_builder_evaluates_controls_and_advances_cursor() {

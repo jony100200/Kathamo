@@ -92,26 +92,26 @@ impl DesignKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesignTemplate {
     Empty,
-    Unity,
-    Blender,
-    Krita,
+    GameStudio,
+    Dcc3D,
+    DigitalPainting,
     ChatApp,
 }
 
 impl DesignTemplate {
     pub const ALL: [Self; 5] = [
         Self::Empty,
-        Self::Unity,
-        Self::Blender,
-        Self::Krita,
+        Self::GameStudio,
+        Self::Dcc3D,
+        Self::DigitalPainting,
         Self::ChatApp,
     ];
     pub fn name(self) -> &'static str {
         match self {
             Self::Empty => "Empty",
-            Self::Unity => "Unity",
-            Self::Blender => "Blender",
-            Self::Krita => "Krita",
+            Self::GameStudio => "Game Studio",
+            Self::Dcc3D => "3D DCC",
+            Self::DigitalPainting => "Digital Painting",
             Self::ChatApp => "Chat",
         }
     }
@@ -231,7 +231,7 @@ impl DesignDocument {
         }
         doc.place(DesignKind::Toolbar, "Main Toolbar", 0.0, 0.0, 1200.0, 40.0);
         match preset {
-            DesignTemplate::Unity | DesignTemplate::Blender => {
+            DesignTemplate::GameStudio | DesignTemplate::Dcc3D => {
                 doc.place(DesignKind::Hierarchy, "Hierarchy", 0.0, 40.0, 230.0, 490.0);
                 doc.place(
                     DesignKind::Viewport,
@@ -259,7 +259,7 @@ impl DesignDocument {
                 );
                 doc.place(DesignKind::Console, "Console", 684.0, 534.0, 516.0, 226.0);
             }
-            DesignTemplate::Krita => {
+            DesignTemplate::DigitalPainting => {
                 doc.place(DesignKind::Toolbar, "Paint Tools", 0.0, 44.0, 70.0, 716.0);
                 doc.place(
                     DesignKind::Viewport,
@@ -1042,7 +1042,7 @@ mod tests {
 
     #[test]
     fn design_round_trip_and_edit() {
-        let mut doc = DesignDocument::template(DesignTemplate::Unity);
+        let mut doc = DesignDocument::template(DesignTemplate::GameStudio);
         let id = doc.add(
             DesignKind::Button,
             "Compile",

@@ -10,6 +10,7 @@ pub struct TextEditBuffer {
     cursor: usize,
     selection_anchor: Option<usize>,
     focused: bool,
+    revision: u64,
 }
 
 impl TextEditBuffer {
@@ -22,6 +23,7 @@ impl TextEditBuffer {
             cursor,
             selection_anchor: None,
             focused: false,
+            revision: 0,
         }
     }
 
@@ -45,6 +47,17 @@ impl TextEditBuffer {
         self.cursor
     }
 
+    /// Changes only when content changes, so views can cache line indexes.
+    pub fn revision(&self) -> u64 { self.revision }
+
+    /// Place a character-indexed caret, preserving UTF-8 boundaries.
+    pub fn set_cursor(&mut self, index: usize, extend_selection: bool) {
+        if extend_selection {
+            self.selection_anchor.get_or_insert(self.cursor);
+        } else { self.selection_anchor = None; }
+        self.cursor = index.min(self.char_len());
+    }
+
     /// Whether the text edit buffer is currently focused.
     pub fn is_focused(&self) -> bool {
         self.focused
@@ -63,6 +76,7 @@ impl TextEditBuffer {
         self.content = text.into();
         self.cursor = self.content.chars().count();
         self.selection_anchor = None;
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// Inserts a character at the current cursor position.
@@ -72,6 +86,7 @@ impl TextEditBuffer {
         self.content.insert(byte_idx, c);
         self.cursor += 1;
         self.selection_anchor = None;
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// Inserts a string at the current cursor position.
@@ -81,6 +96,7 @@ impl TextEditBuffer {
         self.content.insert_str(byte_idx, text);
         self.cursor += text.chars().count();
         self.selection_anchor = None;
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// Backspaces the character before the cursor (or deletes selection).
@@ -92,6 +108,7 @@ impl TextEditBuffer {
             self.cursor -= 1;
             let byte_idx = self.cursor_byte_offset();
             self.content.remove(byte_idx);
+            self.revision = self.revision.wrapping_add(1);
             true
         } else {
             false
@@ -106,6 +123,7 @@ impl TextEditBuffer {
         if self.cursor < self.char_len() {
             let byte_idx = self.cursor_byte_offset();
             self.content.remove(byte_idx);
+            self.revision = self.revision.wrapping_add(1);
             true
         } else {
             false
@@ -187,6 +205,7 @@ impl TextEditBuffer {
             let start_byte = self.char_to_byte_offset(start);
             let end_byte = self.char_to_byte_offset(end);
             self.content.drain(start_byte..end_byte);
+            self.revision = self.revision.wrapping_add(1);
             self.cursor = start;
             self.selection_anchor = None;
             true
@@ -200,6 +219,7 @@ impl TextEditBuffer {
         self.content.clear();
         self.cursor = 0;
         self.selection_anchor = None;
+        self.revision = self.revision.wrapping_add(1);
     }
 
     #[inline]

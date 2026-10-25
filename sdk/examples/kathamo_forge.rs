@@ -410,11 +410,11 @@ impl KathamoForgeApp {
 
         let script_text = vec![
             "using System;",
-            "using UnityEngine;",
+            "using Kathamo.Engine;",
             "",
             "namespace KathamoForge.Gameplay {",
             "    [RequireComponent(typeof(CharacterController))]",
-            "    public class PlayerController : MonoBehaviour {",
+            "    public class PlayerController : ScriptBehaviour {",
             "        [Header(\"Locomotion Settings\")]",
             "        [SerializeField] private float moveSpeed = 6.5f;",
             "        [SerializeField] private float jumpForce = 10.5f;",

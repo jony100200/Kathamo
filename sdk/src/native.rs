@@ -124,6 +124,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     if let Some(key) = key {
                         self.children.remove(&key);
                         self.app.window_closed(&id);
+                        if let Some(main) = &self.window { main.request_redraw(); }
                     }
                 }
             }
@@ -134,6 +135,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         if matches!(event, WindowEvent::CloseRequested) {
             if let Some(child) = self.children.remove(&id) {
                 self.app.window_closed(&child.id);
+                if let Some(main) = &self.window { main.request_redraw(); }
             }
             return;
         }

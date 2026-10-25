@@ -23,6 +23,7 @@ Kathamo/
 ├── text/       ← HarfBuzz/rustybuzz shaping, FontRegistry, lazy fallback fonts
 ├── widgets/    ← Commercial studio controls, Tabler vector atlas, KolponaUi builder
 ├── testkit/    ← Frame timer, p95 benchmark recorder, offscreen pixel testing
+├── sdk/        ← Public KathamoApp, native windows, editor workspaces and UI API
 └── lab/        ← Interactive UI test harness and benchmark runner (ui-lab)
 ```
 
@@ -138,9 +139,16 @@ cargo run -p kathamo --example video_editor -- --native
 cargo run -p kathamo --example desktop_app -- --native
 ```
 
-Omit `--native` to run the existing headless example checks. Use `run_native(app)` from `kathamo::prelude` to launch a custom application.
+Omit `--native` to run the existing headless checks. Import `kathamo::prelude::*` and call `run_native(app)` to start your own application.
 
-**Current limitation:** external 3D/video image texture compositing still needs a real texture registry; the examples' 3D/video surfaces are not live application-engine frames. Workspace persistence and end-to-end accessibility integration are also under development.
+- **Image/video/3D viewport:** Use `CanvasHost::new_texture_host(id, (width, height))` and `ctx.set_image_rgba8(id, width, height, rgba)`. The same pixels render on GPU or CPU. For zero-copy wgpu textures, implement `KathamoApp::prepare_gpu`, create textures on `gpu.device()`, and call `gpu.register_external_view(id, view)`.
+- **Dock layout:** Use `WorkspaceHost::with_preset(...)` or `from_workspace(...)`. Persist with `workspace.save_layouts_to(path)` / `load_layouts_from(path)`.
+- **Detachable panels:** In the 3D example, drag the viewport tab outside the dock or press **Ctrl+Shift+D**. Consuming apps can use `WorkspaceHost::detach_to_window`, `KathamoApp::update_window`, and `window_closed`; close the child window to reattach it.
+- **Keyboard/focus:** `WorkspaceHost::handle_key_down` supports Tab/Shift+Tab pane traversal; forward text and IME to the workspace from `KathamoApp`.
+- **Layout:** `LayoutBuilder` supports custom padding, spacing, orientation and weighted `flex_columns`.
+- **Agent API:** `InterfaceInspector::capture_workspace(&workspace, bounds)`, `InterfaceInspector::hit_test(&snapshot, pos)`, `workspace.activate_panel(id)`.
+
+Kathamo supplies the UI only; applications implement actual painting, scene rendering, video decoding, and other behavior. Full cross-platform interaction and accessibility still need testing.
 
 ---
 

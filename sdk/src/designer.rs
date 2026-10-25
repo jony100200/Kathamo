@@ -76,14 +76,15 @@ impl DesignKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DesignTemplate { Empty, Unity, Blender, Krita }
+pub enum DesignTemplate { Empty, Unity, Blender, Krita, ChatApp }
 
 impl DesignTemplate {
-    pub const ALL: [Self; 4] = [Self::Empty, Self::Unity, Self::Blender, Self::Krita];
+    pub const ALL: [Self; 5] = [Self::Empty, Self::Unity, Self::Blender, Self::Krita, Self::ChatApp];
     pub fn name(self) -> &'static str {
         match self {
             Self::Empty => "Empty", Self::Unity => "Unity",
             Self::Blender => "Blender", Self::Krita => "Krita",
+            Self::ChatApp => "Chat", 
         }
     }
 }
@@ -188,6 +189,30 @@ impl DesignDocument {
                 doc.place(DesignKind::Viewport, "Painting Canvas", 74.0, 44.0, 850.0, 716.0);
                 doc.place(DesignKind::Inspector, "Brush Properties", 928.0, 44.0, 272.0, 352.0);
                 doc.place(DesignKind::Hierarchy, "Layers", 928.0, 400.0, 272.0, 360.0);
+            }
+            DesignTemplate::ChatApp => {
+                doc.place(DesignKind::Panel, "Conversations", 0.0, 42.0, 255.0, 718.0);
+                doc.place(DesignKind::Button, "New Conversation", 12.0, 74.0, 226.0, 38.0);
+                doc.place(DesignKind::ChatTranscript, "Conversation", 260.0, 42.0, 940.0, 645.0);
+                doc.place(DesignKind::TextInput, "Message", 277.0, 699.0, 770.0, 45.0);
+                doc.place(DesignKind::Button, "Send", 1060.0, 699.0, 125.0, 45.0);
+                let ids: Vec<_> = doc.elements.iter().map(|n| (n.id.clone(), n.label.clone())).collect();
+                for (id, label) in ids {
+                    match label.as_str() {
+                        "Message" => {
+                            doc.state_bindings.insert(id.clone(), "chat.draft".into());
+                            doc.action_bindings.insert(id.clone(), "chat.send".into());
+                            doc.layout_rules.insert(id, DesignPlacement::StretchX);
+                        }
+                        "Send" => {
+                            doc.action_bindings.insert(id.clone(), "chat.send".into());
+                            doc.layout_rules.insert(id, DesignPlacement::BottomRight);
+                        }
+                        "Conversation" => { doc.layout_rules.insert(id, DesignPlacement::StretchBoth); }
+                        "Conversations" => { doc.layout_rules.insert(id, DesignPlacement::StretchY); }
+                        _ => {}
+                    }
+                }
             }
             DesignTemplate::Empty => {}
         }

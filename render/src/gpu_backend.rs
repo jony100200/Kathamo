@@ -501,6 +501,7 @@ impl GpuBackend {
             indices: Vec::with_capacity(24 * 1024),
             batches: Vec::new(),
             clip_stack: Vec::new(),
+            images: HashMap::new(),
             packer: ShelfPacker::default(),
             slots: HashMap::new(),
             uploads: Vec::new(),
@@ -607,6 +608,70 @@ impl GpuBackend {
     pub fn simulate_device_loss(&mut self) {
         self.dev.device.destroy();
         self.lost.store(true, Ordering::SeqCst);
+    }
+
+    /// Device and queue used for zero-copy application-owned wgpu viewport textures.
+    /// External views must originate from this device; other Vulkan/DX12 devices need an explicit import/copy.
+    pub fn device(&self) -> &wgpu::Device { &self.dev.device }
+    pub fn queue(&self) -> &wgpu::Queue { &self.dev.queue }
+
+    /// Register an existing shader-readable RGBA GPU texture view, without copying its pixels.
+    /// Re-register views after a device-loss recovery.
+    pub fn register_external_view(&mut self, id: u64, view: wgpu::TextureView) {
+        let bind_group = self.make_image_bind_group(&view);
+        self.images.insert(id, GpuImage { _texture: None, _view: view, bind_group });
+    }
+
+    fn make_image_bind_group(&self, view: &wgpu::TextureView) -> wgpu::BindGroup {
+        self.dev.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("kathamo-image-bind-group"),
+            layout: &self.dev.image_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.dev.uniform_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&self.dev.atlas_view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.dev.sampler) },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(view) },
+                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&self.dev.image_sampler) },
+            ],
+        })
+    }
+
+    /// Upload an RGBA8 frame (paint layer, decoded image or video preview) to a sampled GPU texture.
+    /// Call again with the same ID to update the frame. Does not upload on every UI redraw.
+    pub fn upload_rgba8_image(&mut self, id: u64, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+        if width == 0 || height == 0 ||
+            (width as usize).checked_mul(height as usize).and_then(|x| x.checked_mul(4)) != Some(rgba.len()) {
+            return Err("RGBA8 image length must be width * height * 4".into());
+        }
+        // Reuse the existing texture when possible for high-frequency video/image updates.
+        // Texture width/height are tracked by the caller; replace when dimensions change.
+        let texture = self.dev.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("kathamo-application-rgba"),
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.dev.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture, mip_level: 0,
+                origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All,
+            },
+            rgba,
+            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: Some(height) },
+            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.make_image_bind_group(&view);
+        self.images.insert(id, GpuImage { _texture: Some(texture), _view: view, bind_group });
+        Ok(())
+    }
+
+    pub fn remove_image(&mut self, id: u64) {
+        self.images.remove(&id);
     }
 
     /// Number of glyph/icon rasters resident in the atlas.

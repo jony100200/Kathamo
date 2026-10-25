@@ -512,6 +512,9 @@ impl DesignRuntime {
         };
         let id = node.id.clone();
         let rect = self.component_bounds(&id).unwrap();
+        if self.focused.as_deref() != Some(id.as_str()) {
+            self.composition = None;
+        }
         self.focused = Some(id.clone());
         self.pressed = Some(id.clone());
         if let Some((_, instance)) = self.instances.get_mut(&id) {

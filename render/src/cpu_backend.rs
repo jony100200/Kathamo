@@ -14,13 +14,21 @@ use crate::shapes::{flatten_cubic, max_radius, scale_radius, sd_round_box, segme
 use crate::text::{self, GlyphCache, GlyphKey, Mask};
 use crate::vector::{IconKey, IconRasterCache};
 use std::time::Instant;
+use std::collections::HashMap;
 use ui_core::{Color, CornerRadius, Rect, Vec2};
+
+struct CpuImage {
+    width: u32,
+    height: u32,
+    rgba: Vec<u8>,
+}
 
 pub struct CpuBackend {
     width: u32,
     height: u32,
     scale: f32,
     pixels: Vec<u32>, // 0xAARRGGBB, always opaque
+    images: HashMap<u64, CpuImage>,
     clip_stack: Vec<[i32; 4]>,
     glyphs: GlyphCache,
     icons: IconRasterCache,
@@ -34,6 +42,7 @@ impl CpuBackend {
             height: 0,
             scale: 1.0,
             pixels: Vec::new(),
+            images: HashMap::new(),
             clip_stack: Vec::new(),
             glyphs: GlyphCache::new(),
             icons: IconRasterCache::new(),
@@ -41,6 +50,62 @@ impl CpuBackend {
                 backend: Some(BackendKind::SoftwareCpuSafeMode),
                 ..Default::default()
             },
+        }
+    }
+
+    /// Keep a CPU-readable frame for software rendering and device-loss fallback.
+    pub fn upload_rgba8_image(&mut self, id: u64, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+        if width == 0 || height == 0 ||
+            (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(4)) != Some(rgba.len()) {
+            return Err("RGBA8 image length must be width * height * 4".into());
+        }
+        self.images.insert(id, CpuImage { width, height, rgba: rgba.to_vec() });
+        Ok(())
+    }
+
+    pub fn remove_image(&mut self, id: u64) { self.images.remove(&id); }
+
+    fn draw_image(&mut self, id: u64, rect: Rect, uv: Rect, tint: Color) {
+        let Some(image) = self.images.get(&id) else {
+            let scale = self.scale;
+            let clip = self.clip();
+            self.fill_px_rect(
+                (rect.min.x * scale).round() as i32,
+                (rect.min.y * scale).round() as i32,
+                (rect.max.x * scale).round() as i32,
+                (rect.max.y * scale).round() as i32,
+                tint, clip,
+            );
+            return;
+        };
+        let clip = self.clip();
+        let scale = self.scale;
+        let x0 = (rect.min.x * scale).floor() as i32;
+        let y0 = (rect.min.y * scale).floor() as i32;
+        let x1 = (rect.max.x * scale).ceil() as i32;
+        let y1 = (rect.max.y * scale).ceil() as i32;
+        let w = (x1-x0).max(1) as f32;
+        let h = (y1-y0).max(1) as f32;
+        let left = x0.max(clip[0]).max(0);
+        let top = y0.max(clip[1]).max(0);
+        let right = x1.min(clip[2]).min(self.width as i32);
+        let bottom = y1.min(clip[3]).min(self.height as i32);
+        for y in top..bottom {
+            for x in left..right {
+                let u = (uv.min.x + (x as f32 - x0 as f32 + 0.5) / w * uv.width()).clamp(0.0, 1.0);
+                let v = (uv.min.y + (y as f32 - y0 as f32 + 0.5) / h * uv.height()).clamp(0.0, 1.0);
+                let ix = ((u * image.width as f32) as u32).min(image.width - 1);
+                let iy = ((v * image.height as f32) as u32).min(image.height - 1);
+                let at = ((iy * image.width + ix) * 4) as usize;
+                let (r,g,b,a) = (image.rgba[at],image.rgba[at+1],image.rgba[at+2],image.rgba[at+3]);
+                let color = Color::rgba(
+                    (r as u16 * tint.r as u16 / 255) as u8,
+                    (g as u16 * tint.g as u16 / 255) as u8,
+                    (b as u16 * tint.b as u16 / 255) as u8,
+                    (a as u16 * tint.a as u16 / 255) as u8,
+                );
+                self.blend(x, y, color, 1.0, clip);
+            }
         }
     }
 
@@ -349,20 +414,8 @@ impl RenderBackend for CpuBackend {
                     rect,
                     color,
                 } => self.draw_icon(id, svg, *rect, *color),
-                DrawCommand::Image {
-                    rect,
-                    texture_id: _,
-                    uv_rect: _,
-                    tint,
-                } => {
-                    let clip = self.clip();
-                    let s = self.scale;
-                    let x0 = (rect.min.x * s).round() as i32;
-                    let y0 = (rect.min.y * s).round() as i32;
-                    let x1 = (rect.max.x * s).round() as i32;
-                    let y1 = (rect.max.y * s).round() as i32;
-                    self.fill_px_rect(x0, y0, x1, y1, *tint, clip);
-                }
+                DrawCommand::Image { rect, texture_id, uv_rect, tint } =>
+                    self.draw_image(*texture_id, *rect, *uv_rect, *tint),
                 DrawCommand::ClipPush { rect } => {
                     let s = self.scale;
                     let parent = self.clip();

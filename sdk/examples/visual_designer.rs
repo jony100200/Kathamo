@@ -7,7 +7,7 @@ use kathamo::prelude::*;
 const PALETTE_X: f32 = 10.0;
 const PALETTE_Y: f32 = 142.0;
 const PALETTE_ROW: f32 = 27.0;
-const TREE_Y: f32 = 535.0;
+const TREE_Y: f32 = 585.0;
 const PROP_Y: f32 = 190.0;
 const PROP_ROW: f32 = 39.0;
 const TOP_ACTIONS: [&str; 11] = [

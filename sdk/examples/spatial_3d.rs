@@ -86,8 +86,9 @@ impl Spatial3dEditorApp {
             Box::new(AssetBrowserEditor { browser })
         });
 
-        let mut workspace = WorkspaceHost::with_registry(registry);
-        workspace.switch_workspace(1); // Spatial3D preset
+        let workspace = WorkspaceHost::with_preset(
+            registry, "ws_3d", "3D Viewport", WorkspacePreset::Spatial3D,
+        );
 
         // Application Menu Bar
         let menu_bar = MenuBar::new(vec![

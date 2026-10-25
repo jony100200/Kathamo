@@ -79,6 +79,7 @@ pub use ui_widgets::{
     KathamoUi, KolponaUi,
     MetadataPropertyInspector, PropertyChangedEvent, PropertyItem, PropertyValue,
     NodeConnection, NodeEditor, NodeGroup, NodePin,
+    MarkdownView, ChatMessage, ChatRole, ChatTranscript,
     Response,
     Timeline, TimelineTrack,
 };

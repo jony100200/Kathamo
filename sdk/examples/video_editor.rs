@@ -254,6 +254,18 @@ impl KathamoApp for VideoEditorApp {
         );
         self.workspace.handle_scroll(delta, pos, workspace_rect)
     }
+
+    fn handle_key_down(&mut self, key: Key, modifiers: Modifiers, _ctx: &mut AppContext) -> bool {
+        self.workspace.handle_key_down(key, modifiers)
+    }
+
+    fn handle_text_input(&mut self, text: &str, _ctx: &mut AppContext) -> bool {
+        self.workspace.handle_text_input(text)
+    }
+
+    fn handle_ime(&mut self, event: ImeEvent, _ctx: &mut AppContext) -> bool {
+        self.workspace.handle_ime(event)
+    }
 }
 
 fn main() {

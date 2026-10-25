@@ -54,7 +54,11 @@ fn collect_node_panels(node: &DockNode, out: &mut Vec<DockTabPanel>) {
 
 
 fn encode_field(value: &str) -> String {
-    value.as_bytes().iter().map(|b| format!("{b:02x}")).collect()
+    let mut result = String::with_capacity(value.len() * 2);
+    for byte in value.bytes() {
+        result.push_str(&format!("{byte:02x}"));
+    }
+    result
 }
 
 fn decode_field(value: &str) -> Result<String, String> {

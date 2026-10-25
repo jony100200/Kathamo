@@ -364,7 +364,18 @@ let reloaded = DesignDocument::load("interface.kui").unwrap();
 let rust_source = reloaded.export_rust();
 ```
 
-Run `cargo run -p kathamo --example visual_designer` to edit the same `.kui` file visually. Agents should edit the document by stable component IDs rather than generating pixel-position-only screenshots. The Designer exports UI code; consuming applications connect actual behavior.
+Run `cargo run -p kathamo --example visual_designer` to edit the same `.kui` file visually. Agents should edit the document by stable component IDs rather than generating pixel-position-only screenshots. The Designer now exports UI layout, responsive placement, and state/action binding IDs. Use `DesignRuntime` to instantiate real widgets and inspect or activate stable IDs. Agents may call `set_text_by_id` and `activate`; the consuming application remains responsible for interpreting and authorizing emitted `UiEvent` actions.
+
+```rust
+let mut runtime = DesignRuntime::new();
+runtime.sync(&reloaded);
+runtime.set_text_by_id(&reloaded, &id, "Hello").ok(); // only TextInput accepts text
+let actions = runtime.take_events();
+```
+
+For complex node UIs, validate and save `GraphDocument::from_editor(&editor)`; use `render_guided` for a readable step view or `apply_to` for the full existing `NodeEditor`. The two presentations share IDs, but Kathamo never executes the graph.
+
+Local verification after source edits: `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, `cargo test --workspace`, then `cargo run -p kathamo --example visual_designer -- --headless` and `cargo run -p kathamo --example interactive_ui`. Native pointer/keyboard/IME review is still required.
 
 ### Agent Inspection & Verification (`InterfaceInspector`)
 Verify UI layouts, widget bounds, and element states deterministically:

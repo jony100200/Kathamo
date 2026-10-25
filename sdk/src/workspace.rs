@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use ui_core::*;
 use ui_platform::{PointerButton, PointerState};
-use ui_render::CommandBuffer;
+use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::ThemePalette;
 use ui_widgets::DockTreeView;
 
@@ -278,7 +278,11 @@ impl WorkspaceHost {
         for leaf in &layout.leaves {
             if let Some(panel) = leaf.tabs.get(leaf.active_tab) {
                 if let Some(editor) = ws.editors.get_mut(&panel.id) {
+                    cmd_buf.push(DrawCommand::ClipPush {
+                        rect: leaf.content_rect,
+                    });
                     editor.render(cmd_buf, leaf.content_rect, ptr, palette);
+                    cmd_buf.push(DrawCommand::ClipPop);
                 }
             }
         }
@@ -481,6 +485,10 @@ mod tests {
 
         host.render(&mut cmd_buf, bounds, &ptr, &palette);
         assert!(!cmd_buf.commands().is_empty());
+        let clip_pushes = cmd_buf.commands().iter().filter(|cmd| matches!(cmd, DrawCommand::ClipPush { .. })).count();
+        let clip_pops = cmd_buf.commands().iter().filter(|cmd| matches!(cmd, DrawCommand::ClipPop)).count();
+        assert!(clip_pushes > 0, "editors must be clipped to their dock content bounds");
+        assert_eq!(clip_pushes, clip_pops, "editor clip regions must be balanced");
     }
 
     #[test]

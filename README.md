@@ -124,7 +124,23 @@ If you encounter any problems, please open a GitHub issue with your Linux distri
 
 ---
 
-## 7. Licenses & Open Source Acknowledgements
+## 7. Current SDK Maturity (October 24, 2026)
+
+Kathamo is a reusable **application UI/UX framework**, not a 2D paint engine, 3D engine, video encoder, or AI runtime. Applications supply their own underlying functionality.
+
+The public `kathamo` SDK now provides editor registry, workspace presets, dock layouts, reusable components and five application-style demonstrations. **Those five SDK examples currently run through `HeadlessAppRunner` and do not open native application windows.** UI Lab separately has a native demonstration window.
+
+Key work still outstanding for Blender-, Unity-, Godot-, or Krita-class desktop interfaces:
+
+- A public SDK native-window runner and complete keyboard/text/IME/focus dispatch.
+- Real external GPU image/viewport texture binding and CPU image fallback (the current `DrawCommand::Image` renderer does not consume its `texture_id`).
+- Layout/editor state persistence, robust multi-instance panes and docking, end-to-end accessibility, and cross-platform GUI verification.
+
+Read the [source-based readiness audit and prioritized implementation gates](docs/SDK_READINESS_AUDIT_2026-10-24.md). The benchmark figures above are previously reported measurements, **not results freshly reproduced by the audit**.
+
+---
+
+## 8. Licenses & Open Source Acknowledgements
 
 - **Kathamo Core**: Licensed under [MIT](LICENSE).
 - **Special Thanks & Third-Party Notices**: Full attribution, gratitude, and complete license texts for all bundled fonts (`Inter`, `Space Grotesk`, `Noto Sans Bengali`, `JetBrains Mono`, `IBM Plex Mono`), vector icons (`Tabler Icons`), and foundation crates (`wgpu`, `winit`, `rustybuzz`, `accesskit`, `resvg`, `softbuffer`) are documented in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).

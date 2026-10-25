@@ -36,6 +36,7 @@ pub mod components;
 pub mod editors;
 pub mod inspect;
 pub mod layout;
+pub mod native;
 pub mod prelude;
 pub mod workspace;
 

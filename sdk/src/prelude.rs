@@ -44,7 +44,7 @@ pub use crate::workspace::{
     DetachedPanel, Workspace, WorkspaceHost, WorkspacePreset,
 };
 
-pub use crate::designer::{DesignDocument, DesignElement, DesignKind, DesignTemplate};
+pub use crate::designer::{DesignDocument, DesignElement, DesignKind, DesignPlacement, DesignTemplate};
 pub use crate::runtime::{ComponentRegistry, DesignRuntime, DesignWidget, ResponsiveRule, UiEvent, UiEventKind, UiValue};
 pub use crate::graph_document::GraphDocument;
 

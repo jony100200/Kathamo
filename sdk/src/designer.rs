@@ -179,13 +179,13 @@ impl DesignDocument {
     /// Reparent a component, preserving parent-relative coordinates.
     pub fn set_parent(&mut self, id: &str, parent: Option<&str>) -> Result<(), String> {
         if self.find(id).is_none() { return Err("unknown component".into()); }
-        let mut next = parent;
+        let mut next = parent.map(str::to_owned);
         for _ in 0..=self.elements.len() {
             match next {
-                Some(p) if p == id => return Err("component hierarchy cycle".into()),
-                Some(p) => next = Some(self.find(p).ok_or("unknown parent")?).and_then(|n| n.parent.as_deref()),
+                Some(ref p) if p == id => return Err("component hierarchy cycle".into()),
+                Some(ref p) => next = self.find(p).ok_or("unknown parent")?.parent.clone(),
                 None => {
-                    self.find_mut(id).unwrap().parent = parent.map(str::to_string);
+                    self.find_mut(id).unwrap().parent = parent.map(str::to_owned);
                     return Ok(());
                 }
             }

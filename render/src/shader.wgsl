@@ -13,6 +13,8 @@ struct Globals {
 @group(0) @binding(0) var<uniform> globals: Globals;
 @group(0) @binding(1) var atlas_tex: texture_2d<f32>;
 @group(0) @binding(2) var atlas_smp: sampler;
+@group(0) @binding(3) var image_tex: texture_2d<f32>;
+@group(0) @binding(4) var image_smp: sampler;
 
 struct VsIn {
     @location(0) pos: vec2<f32>,
@@ -82,6 +84,10 @@ fn fs_main(i: VsOut) -> @location(0) vec4<f32> {
     if (mode == 1) {
         let cov = textureSample(atlas_tex, atlas_smp, i.shape.xy).r;
         return out_color(i.color.rgb, i.color.a * cov);
+    }
+    if (mode == 3) {
+        let sample_color = textureSample(image_tex, image_smp, i.shape.xy);
+        return out_color(sample_color.rgb * i.color.rgb, sample_color.a * i.color.a);
     }
     if (mode == 2) {
         let a = i.shape.xy;

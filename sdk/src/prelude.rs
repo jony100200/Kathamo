@@ -66,7 +66,7 @@ pub use ui_core::{UiInspectorNode, UiInspectorSnapshot};
 // 12. Standard Widgets
 pub use ui_widgets::{
     CanvasHost, CanvasHostKind, CanvasStroke, CanvasTool, ChatMessage, ChatRole, ChatTranscript,
-    HierarchyEvent, HierarchyItem, HierarchyTree, KathamoUi, KolponaUi, MarkdownView,
+    GraphNode, HierarchyEvent, HierarchyItem, HierarchyTree, KathamoUi, KolponaUi, MarkdownView,
     MetadataPropertyInspector, NodeConnection, NodeEditor, NodeGroup, NodePin,
     PropertyChangedEvent, PropertyItem, PropertyValue, Response, Timeline, TimelineTrack,
 };

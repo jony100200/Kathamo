@@ -181,14 +181,12 @@ impl DesignDocument {
         if self.find(id).is_none() { return Err("unknown component".into()); }
         let mut next = parent.map(str::to_owned);
         for _ in 0..=self.elements.len() {
-            match next {
-                Some(ref p) if p == id => return Err("component hierarchy cycle".into()),
-                Some(ref p) => next = self.find(p).ok_or("unknown parent")?.parent.clone(),
-                None => {
-                    self.find_mut(id).unwrap().parent = parent.map(str::to_owned);
-                    return Ok(());
-                }
-            }
+            let Some(p) = next.take() else {
+                self.find_mut(id).unwrap().parent = parent.map(str::to_owned);
+                return Ok(());
+            };
+            if p == id { return Err("component hierarchy cycle".into()); }
+            next = self.find(&p).ok_or("unknown parent")?.parent.clone();
         }
         Err("component hierarchy too deep".into())
     }

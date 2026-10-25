@@ -94,6 +94,9 @@ impl CanvasHost {
                 resolution,
                 uv_rect: Rect::from_min_max(Vec2::ZERO, Vec2::new(1.0, 1.0)),
             },
+            pan: Vec2::ZERO,
+            show_grid: false,
+            show_checkerboard: false,
             ..Default::default()
         }
     }
@@ -213,7 +216,15 @@ impl CanvasHost {
     /// Handles scroll wheel zooming.
     pub fn handle_scroll(&mut self, delta: Vec2, cursor_pos: Vec2, viewport: Rect) {
         let factor = if delta.y > 0.0 { 1.12 } else { 0.89 };
-        self.zoom_at(factor, cursor_pos, viewport.min);
+        if matches!(self.kind, CanvasHostKind::ExternalTexture { .. }) {
+            let old_zoom = self.zoom;
+            self.zoom = (old_zoom * factor).clamp(0.05, 30.0);
+            let center = viewport.center();
+            self.pan = (cursor_pos - center) / self.zoom -
+                (cursor_pos - center) / old_zoom + self.pan;
+        } else {
+            self.zoom_at(factor, cursor_pos, viewport.min);
+        }
     }
 
     /// Renders the complete canvas host into the draw command buffer.
@@ -305,11 +316,14 @@ impl CanvasHost {
                     self.render_stroke(buf, stroke, viewport.min);
                 }
             }
-            CanvasHostKind::ExternalTexture { texture_id, uv_rect, .. } => {
-                let world_rect = Rect::from_min_size(Vec2::ZERO, Vec2::new(512.0, 512.0));
-                let screen_min = self.world_to_screen(world_rect.min, viewport.min);
-                let screen_max = self.world_to_screen(world_rect.max, viewport.min);
-                let quad = Rect::from_min_max(screen_min, screen_max);
+            CanvasHostKind::ExternalTexture { texture_id, resolution, uv_rect } => {
+                // Fit the actual image/video aspect ratio into the dock pane.
+                let source = Vec2::new(resolution.0.max(1) as f32, resolution.1.max(1) as f32);
+                let fit = (viewport.width().max(1.0) / source.x)
+                    .min(viewport.height().max(1.0) / source.y) * 0.96;
+                let half = source * (fit * self.zoom * 0.5);
+                let center = viewport.center() + self.pan * self.zoom;
+                let quad = Rect::from_min_max(center - half, center + half);
 
                 if viewport.intersects(quad) {
                     buf.push(DrawCommand::Image {

@@ -124,19 +124,23 @@ If you encounter any problems, please open a GitHub issue with your Linux distri
 
 ---
 
-## 7. Current SDK Maturity (October 24, 2026)
+## 7. SDK Quick Start
 
-Kathamo is a reusable **application UI/UX framework**, not a 2D paint engine, 3D engine, video encoder, or AI runtime. Applications supply their own underlying functionality.
+Kathamo provides the **user interface**; each application supplies its own painting, 3D, video, audio or other processing logic.
 
-The public `kathamo` SDK now provides editor registry, workspace presets, dock layouts, reusable components and five application-style demonstrations. **Those five SDK examples currently run through `HeadlessAppRunner` and do not open native application windows.** UI Lab separately has a native demonstration window.
+Launch an interactive native SDK example:
 
-Key work still outstanding for Blender-, Unity-, Godot-, or Krita-class desktop interfaces:
+```bash
+cargo run -p kathamo --example creative_2d -- --native
+cargo run -p kathamo --example spatial_3d -- --native
+cargo run -p kathamo --example procedural_editor -- --native
+cargo run -p kathamo --example video_editor -- --native
+cargo run -p kathamo --example desktop_app -- --native
+```
 
-- A public SDK native-window runner and complete keyboard/text/IME/focus dispatch.
-- Real external GPU image/viewport texture binding and CPU image fallback (the current `DrawCommand::Image` renderer does not consume its `texture_id`).
-- Layout/editor state persistence, robust multi-instance panes and docking, end-to-end accessibility, and cross-platform GUI verification.
+Omit `--native` to run the existing headless example checks. Use `run_native(app)` from `kathamo::prelude` to launch a custom application.
 
-Read the [source-based readiness audit and prioritized implementation gates](docs/SDK_READINESS_AUDIT_2026-10-24.md). The benchmark figures above are previously reported measurements, **not results freshly reproduced by the audit**.
+**Current limitation:** external 3D/video image texture compositing still needs a real texture registry; the examples' 3D/video surfaces are not live application-engine frames. Workspace persistence and end-to-end accessibility integration are also under development.
 
 ---
 

@@ -775,6 +775,14 @@ impl KathamoApp for VisualDesigner {
         self.handle_shortcut(key, modifiers)
     }
 
+    fn handle_ime(&mut self, event: ImeEvent, ctx: &mut AppContext) -> bool {
+        if self.preview { return self.runtime.ime(&self.document, event); }
+        if let ImeEvent::Commit(text) = event {
+            return self.handle_text_input(&text, ctx);
+        }
+        false
+    }
+
     fn handle_text_input(&mut self, text: &str, _ctx: &mut AppContext) -> bool {
         if self.preview { return self.runtime.text_input(&self.document, text); }
         if let Some((_, value)) = &mut self.editing {

@@ -242,7 +242,7 @@ impl DesignDocument {
             if !node.visible { continue; }
             let Some(abs) = self.absolute_bounds(&node.id) else { continue };
             let rect = Rect::from_min_size(origin + abs.min * zoom, abs.size() * zoom);
-            draw_component(buf, rect, zoom, node, selected == Some(&node.id), palette);
+            draw_component(buf, rect, zoom, node, selected == Some(node.id.as_str()), palette);
         }
     }
 

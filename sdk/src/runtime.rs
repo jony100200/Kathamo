@@ -129,7 +129,7 @@ impl Instance {
             Self::Assets(w) => w.render(buf, rect, ptr, pal),
             Self::Console(w) => w.render(buf, rect, pal),
             Self::Timeline(w) => w.render(buf, rect, pal),
-            Self::Canvas(w) => w.render(buf, rect, ptr, pal),
+            Self::Canvas(w) => w.render(buf, rect, pal),
         }
     }
 
@@ -141,7 +141,7 @@ impl Instance {
             Self::Hierarchy(w) => w.handle_mouse_down(pos, button, rect, ptr)
                 .map(|v| UiEventKind::Selected(format!("{v:?}"))),
             Self::Assets(w) => w.handle_mouse_down(pos, button, rect).map(UiEventKind::Selected),
-            Self::Canvas(w) => { w.handle_mouse_down(pos, button, rect, ptr); None }
+            Self::Canvas(w) => { w.handle_mouse_down(pos, button, rect); None }
             Self::Timeline(w) if button == PointerButton::Primary => {
                 if pos.y <= rect.min.y + 28.0 {
                     let value = ((pos.x - rect.min.x) / rect.width()).clamp(0.0, 1.0);
@@ -157,7 +157,10 @@ impl Instance {
         match self {
             Self::Custom(w) => w.pointer_move(pos, delta, rect),
             Self::Graph(w) => w.handle_mouse_move(pos, delta, rect),
-            Self::Canvas(w) => { let _ = (pos, delta, rect, w); }
+            Self::Canvas(w) => {
+                let ptr = PointerState { primary_down: true, ..PointerState::default() };
+                w.handle_mouse_move(pos, delta, rect, &ptr);
+            }
             _ => {}
         }
     }
@@ -302,13 +305,10 @@ impl DesignRuntime {
     pub fn relayout(&mut self, doc: &DesignDocument, bounds: Rect) {
         self.bounds = bounds;
         self.computed.clear();
-        let mut pending = &doc.elements[..];
         // Parent ordering is not required for loading, so resolve recursively.
-        for node in pending.iter() {
+        for node in &doc.elements {
             self.resolve(doc, &node.id, 0);
         }
-        pending = &[];
-        let _ = pending;
     }
 
     fn resolve(&mut self, doc: &DesignDocument, id: &str, depth: usize) -> Option<Rect> {
@@ -378,7 +378,7 @@ impl DesignRuntime {
                     DesignKind::TextInput => render_text_input(buf,
                         match value { Some(UiValue::Text(s)) => s.as_str(), _ => "" },
                         &node.label, rect,
-                        self.focused.as_deref() == Some(&node.id),
+                        self.focused.as_deref() == Some(node.id.as_str()),
                         rect.contains(ptr.position), pal),
                     _ => {
                         buf.push(DrawCommand::Rect { rect, fill: node.background,
@@ -488,7 +488,7 @@ impl DesignRuntime {
             }
         }
         let kind = doc.find(&id).map(|n| n.kind);
-        match (kind, key) {
+        match (kind, &key) {
             (Some(DesignKind::Button), Key::Enter | Key::Space) =>
                 self.emit(&id, UiEventKind::Activated),
             (Some(DesignKind::Toggle), Key::Enter | Key::Space) => {
@@ -547,7 +547,7 @@ impl DesignRuntime {
     pub fn inspect(&self, doc: &DesignDocument) -> Vec<(String, DesignKind, Rect, bool)> {
         doc.elements.iter().filter_map(|n|
             self.component_bounds(&n.id).map(|r|
-                (n.id.clone(), n.kind, r, self.focused.as_deref() == Some(&n.id))
+                (n.id.clone(), n.kind, r, self.focused.as_deref() == Some(n.id.as_str()))
             )).collect()
     }
 }

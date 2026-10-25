@@ -88,6 +88,42 @@ impl DesignTemplate {
     }
 }
 
+/// Responsive layout behaviour shared by the Visual Designer and native runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DesignPlacement {
+    #[default]
+    Absolute,
+    Fill,
+    StretchX,
+    StretchY,
+    StretchBoth,
+    Right,
+    Bottom,
+    BottomRight,
+}
+
+impl DesignPlacement {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Absolute => "Absolute",
+            Self::Fill => "Fill",
+            Self::StretchX => "StretchX",
+            Self::StretchY => "StretchY",
+            Self::StretchBoth => "StretchBoth",
+            Self::Right => "Right",
+            Self::Bottom => "Bottom",
+            Self::BottomRight => "BottomRight",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        [
+            Self::Absolute, Self::Fill, Self::StretchX, Self::StretchY,
+            Self::StretchBoth, Self::Right, Self::Bottom, Self::BottomRight
+        ].into_iter().find(|mode| mode.name() == text)
+    }
+}
+
 /// One component instance; coordinates are relative to its parent, or to the document if root.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DesignElement {
@@ -123,6 +159,8 @@ pub struct DesignDocument {
     pub state_bindings: HashMap<String, String>,
     /// Optional application action identifiers for buttons and other interactive widgets.
     pub action_bindings: HashMap<String, String>,
+    /// Per-component responsive placement retained in .kui and Rust exports.
+    pub layout_rules: HashMap<String, DesignPlacement>,
     next_id: u64,
 }
 
@@ -130,7 +168,7 @@ impl DesignDocument {
     pub fn new(name: impl Into<String>, width: f32, height: f32) -> Self {
         Self { name: name.into(), width: width.max(320.0), height: height.max(240.0),
             elements: Vec::new(), state_bindings: HashMap::new(),
-            action_bindings: HashMap::new(), next_id: 1 }
+            action_bindings: HashMap::new(), layout_rules: HashMap::new(), next_id: 1 }
     }
 
     pub fn template(preset: DesignTemplate) -> Self {
@@ -237,6 +275,7 @@ impl DesignDocument {
         self.elements.retain(|node| !removed.contains(&node.id));
         self.state_bindings.retain(|id, _| !removed.contains(id));
         self.action_bindings.retain(|id, _| !removed.contains(id));
+        self.layout_rules.retain(|id, _| !removed.contains(id));
         true
     }
 
@@ -278,6 +317,11 @@ impl DesignDocument {
                     hex(&node.id),
                     state.map(|v| hex(v)).unwrap_or_else(|| "-".into()),
                     action.map(|v| hex(v)).unwrap_or_else(|| "-".into())));
+            }
+        }
+        for node in &self.elements {
+            if let Some(mode) = self.layout_rules.get(&node.id) {
+                out.push_str(&format!("L\t{}\t{}\n", hex(&node.id), mode.name()));
             }
         }
         out
@@ -328,6 +372,12 @@ impl DesignDocument {
                         doc.action_bindings.insert(id, unhex(f[3])?);
                     }
                 }
+                Some("L") if f.len() == 3 => {
+                    let id = unhex(f[1])?;
+                    if !known.contains(&id) { return Err("layout refers to unknown component".into()); }
+                    doc.layout_rules.insert(id,
+                        DesignPlacement::parse(f[2]).ok_or("invalid layout placement")?);
+                }
                 _ => return Err("invalid component record".into()),
             }
         }
@@ -375,6 +425,13 @@ impl DesignDocument {
             if let Some(action) = self.action_bindings.get(&n.id) {
                 out.push_str(&format!(
                     "    ui.action_bindings.insert({:?}.into(), {:?}.into());\n", n.id, action));
+            }
+        }
+        for n in &self.elements {
+            if let Some(layout) = self.layout_rules.get(&n.id) {
+                out.push_str(&format!(
+                    "    ui.layout_rules.insert({:?}.into(), DesignPlacement::{});\n",
+                    n.id, layout.name()));
             }
         }
         out.push_str("    ui\n}\n");

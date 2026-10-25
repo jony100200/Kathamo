@@ -338,4 +338,25 @@ mod tests {
         });
         assert!(doc.validate().is_err());
     }
+    #[test]
+    fn thousand_step_graph_guided_view_culls_outside_cards() {
+        let mut document = GraphDocument::empty();
+        for i in 0..1000 {
+            document.nodes.push(GraphNode {
+                id: format!("node_{i}"), title: format!("Step {i}"),
+                pos: Vec2::new(i as f32 * 300.0, 0.0),
+                size: Vec2::new(190.0, 100.0),
+                inputs: Vec::new(), outputs: Vec::new(),
+                category: "Step".into(), is_collapsed: false, preview_color: None,
+            });
+        }
+        assert_eq!(document.guided_steps().unwrap().len(), 1000);
+        let mut buf = CommandBuffer::new();
+        let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 600.0));
+        document.render_guided(&mut buf, viewport, 0.0, None, &ThemePalette::dark()).unwrap();
+        assert!(buf.len() < 50, "off-screen cards must not submit UI draw commands");
+        assert_eq!(document.guided_hit_test(viewport, Vec2::new(50.0, 55.0), 0.0).unwrap(),
+            Some("node_0".into()));
+    }
+
 }

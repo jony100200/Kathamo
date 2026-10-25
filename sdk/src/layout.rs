@@ -46,6 +46,58 @@ impl<'a> LayoutBuilder<'a> {
         }
     }
 
+    /// Customize spacing without changing the global theme.
+    pub fn with_spacing(mut self, spacing: f32) -> Self {
+        self.spacing = spacing.max(0.0);
+        self
+    }
+
+    /// Customize container padding and update its content origin.
+    pub fn with_padding(mut self, padding: f32) -> Self {
+        self.padding = padding.max(0.0);
+        self.cursor = self.bounds.min + Vec2::splat(self.padding);
+        self
+    }
+
+    /// Use a horizontal or vertical item flow.
+    pub fn with_direction(mut self, direction: LayoutDirection) -> Self {
+        self.direction = direction;
+        self
+    }
+
+    /// Draw a weighted, responsive multi-column row.
+    /// Each child receives its own bounds, cursor, and independent item layout.
+    pub fn flex_columns(
+        &mut self,
+        height: f32,
+        weights: &[f32],
+        gap: f32,
+        mut build: impl FnMut(usize, &mut LayoutBuilder<'_>),
+    ) {
+        if weights.is_empty() { return; }
+        let gap = gap.max(0.0);
+        let row_width = (self.bounds.max.x - self.padding - self.cursor.x).max(0.0);
+        let usable = (row_width - gap * (weights.len().saturating_sub(1) as f32)).max(0.0);
+        let total: f32 = weights.iter().map(|w| w.max(0.0)).sum();
+        let total = if total > 0.0 { total } else { weights.len() as f32 };
+        let mut x = self.cursor.x;
+        let start_y = self.cursor.y;
+        for (index, weight) in weights.iter().enumerate() {
+            let w = usable * if *weight > 0.0 { *weight / total } else if total == weights.len() as f32 { 1.0 / total } else { 0.0 };
+            let rect = Rect::from_min_size(Vec2::new(x, start_y), Vec2::new(w, height.max(0.0)));
+            self.cmd_buf.push(DrawCommand::ClipPush { rect });
+            {
+                let mut child = LayoutBuilder::new(rect, &mut *self.cmd_buf, self.ptr, self.palette)
+                    .with_spacing(self.spacing)
+                    .with_padding(self.padding.min(w * 0.5));
+                build(index, &mut child);
+            }
+            self.cmd_buf.push(DrawCommand::ClipPop);
+            x += w + gap;
+        }
+        self.cursor.y = start_y + height.max(0.0) + self.spacing;
+    }
+
     /// Add empty spacing between items.
     pub fn space(&mut self, amount: f32) {
         match self.direction {

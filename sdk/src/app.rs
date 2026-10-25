@@ -1,7 +1,7 @@
 //! Standard Application Lifecycle, Context, and Runner for Kathamo SDK.
 
 use ui_core::*;
-use ui_platform::{FocusManager, PointerButton, PointerState};
+use ui_platform::{FocusManager, ImeEvent, Key, Modifiers, PointerButton, PointerState};
 use ui_render::CommandBuffer;
 use ui_themes::ThemePalette;
 
@@ -80,6 +80,36 @@ pub trait KathamoApp: 'static {
 
     /// Optional pointer input hook.
     fn handle_mouse_down(&mut self, _pos: Vec2, _button: PointerButton, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
+    /// Pointer movement (including dragging) in logical coordinates.
+    fn handle_mouse_move(&mut self, _pos: Vec2, _delta: Vec2, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
+    fn handle_mouse_up(&mut self, _pos: Vec2, _button: PointerButton, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
+    fn handle_scroll(&mut self, _delta: Vec2, _pos: Vec2, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
+    fn handle_key_down(&mut self, _key: Key, _modifiers: Modifiers, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
+    fn handle_text_input(&mut self, _text: &str, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
+    fn handle_ime(&mut self, _event: ImeEvent, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
+    /// Enable this for animation or other actively updating views.
+    fn wants_continuous_redraw(&self) -> bool {
         false
     }
 }

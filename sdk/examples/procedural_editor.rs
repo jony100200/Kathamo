@@ -68,8 +68,9 @@ impl ProceduralGraphEditorApp {
             Box::new(AssetBrowserEditor { browser })
         });
 
-        let mut workspace = WorkspaceHost::with_registry(registry);
-        workspace.switch_workspace(2); // ProceduralGraph preset
+        let workspace = WorkspaceHost::with_preset(
+            registry, "ws_graph", "Procedural Graph", WorkspacePreset::ProceduralGraph,
+        );
 
         // Application Menu Bar
         let menu_bar = MenuBar::new(vec![

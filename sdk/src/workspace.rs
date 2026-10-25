@@ -133,6 +133,57 @@ fn decode_node<'a>(lines: &mut impl Iterator<Item = &'a str>, depth: usize) -> R
     }
 }
 
+/// A dock editor removed from its workspace and ready for a separate native window.
+pub struct DetachedPanel {
+    pub tab: DockTabPanel,
+    pub editor: Box<dyn Editor>,
+}
+
+impl DetachedPanel {
+    /// Draw this pane inside its own window's content area.
+    pub fn render(&mut self, ctx: &mut crate::app::AppContext) {
+        let bounds = ctx.bounds();
+        self.editor.render(&mut ctx.cmd_buf, bounds, &ctx.pointer, &ctx.theme);
+    }
+
+    pub fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, ctx: &crate::app::AppContext) -> bool {
+        self.editor.handle_mouse_down(pos, button, ctx.bounds(), &ctx.pointer)
+    }
+
+    pub fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, ctx: &crate::app::AppContext) -> bool {
+        self.editor.handle_mouse_move(pos, delta, ctx.bounds(), &ctx.pointer)
+    }
+
+    pub fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton, ctx: &crate::app::AppContext) -> bool {
+        self.editor.handle_mouse_up(pos, button, ctx.bounds())
+    }
+
+    pub fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &crate::app::AppContext) -> bool {
+        self.editor.handle_scroll(delta, pos, ctx.bounds())
+    }
+
+    pub fn handle_key_down(&mut self, key: Key, modifiers: Modifiers) -> bool {
+        self.editor.handle_key_down(key, modifiers)
+    }
+
+    pub fn handle_text_input(&mut self, text: &str) -> bool {
+        self.editor.handle_text_input(text)
+    }
+
+    pub fn handle_ime(&mut self, event: ImeEvent) -> bool {
+        self.editor.handle_ime(event)
+    }
+}
+
+fn find_panel_leaf(node: &DockNode, panel_id: &str) -> Option<String> {
+    match node {
+        DockNode::Leaf { id, tabs, .. } => tabs.iter()
+            .any(|tab| tab.id == panel_id).then(|| id.clone()),
+        DockNode::Split { first, second, .. } => find_panel_leaf(first, panel_id)
+            .or_else(|| find_panel_leaf(second, panel_id)),
+    }
+}
+
 /// The central workspace host orchestrating multi-workspace layouts,
 /// dock tree splitting, tab docking, and live editor dispatch.
 pub struct WorkspaceHost {
@@ -472,6 +523,44 @@ impl WorkspaceHost {
         }
 
         false
+    }
+
+    /// Move a dock panel out of its workspace without recreating its editor state.
+    /// The application owns the returned editor and may show it in a second OS window.
+    pub fn detach_panel(&mut self, panel_id: &str) -> Option<DetachedPanel> {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        let mut panels = Vec::new();
+        collect_node_panels(&ws.dock_tree.root, &mut panels);
+        let panel = panels.into_iter().find(|p| p.id == panel_id && p.is_closable)?;
+        let leaf_id = find_panel_leaf(&ws.dock_tree.root, panel_id)?;
+        if !ws.editors.contains_key(panel_id) { return None; }
+        if !ws.dock_tree.close_panel(&leaf_id, panel_id) { return None; }
+        let editor = ws.editors.remove(panel_id)?;
+        if self.focused_panel_id.as_deref() == Some(panel_id) {
+            self.focused_panel_id = None;
+        }
+        Some(DetachedPanel { tab: panel, editor })
+    }
+
+    /// Detach the pane and request its native window from the current AppContext.
+    /// Store the returned DetachedPanel in the consuming app and render it from
+    /// KathamoApp::update_window using its tab.id as the window ID.
+    pub fn detach_to_window(
+        &mut self, panel_id: &str, ctx: &mut crate::app::AppContext,
+        width: u32, height: u32,
+    ) -> Option<DetachedPanel> {
+        let panel = self.detach_panel(panel_id)?;
+        ctx.open_window(&panel.tab.id, &panel.tab.title, width, height);
+        Some(panel)
+    }
+
+    /// Reattach an existing editor without losing its state.
+    pub fn attach_panel(&mut self, leaf_id: &str, panel: DetachedPanel) -> Result<(), DetachedPanel> {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        if ws.editors.contains_key(&panel.tab.id) { return Err(panel); }
+        if !ws.dock_tree.add_tab(leaf_id, panel.tab.clone()) { return Err(panel); }
+        ws.editors.insert(panel.tab.id.clone(), panel.editor);
+        Ok(())
     }
 
     /// Activate a dock panel by stable ID (useful for agents and command palettes).

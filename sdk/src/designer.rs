@@ -1,7 +1,7 @@
 //! Serializable, agent-editable UI document shared by Kathamo Designer and consuming apps.
 //! The document defines interface components and layout, never application functionality.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use ui_core::{Color, CornerRadius, Rect, Stroke, Vec2};
@@ -113,13 +113,18 @@ pub struct DesignDocument {
     pub width: f32,
     pub height: f32,
     pub elements: Vec<DesignElement>,
+    /// Optional per-component data bindings; values live in the application runtime.
+    pub state_bindings: HashMap<String, String>,
+    /// Optional application action identifiers for buttons and other interactive widgets.
+    pub action_bindings: HashMap<String, String>,
     next_id: u64,
 }
 
 impl DesignDocument {
     pub fn new(name: impl Into<String>, width: f32, height: f32) -> Self {
         Self { name: name.into(), width: width.max(320.0), height: height.max(240.0),
-            elements: Vec::new(), next_id: 1 }
+            elements: Vec::new(), state_bindings: HashMap::new(),
+            action_bindings: HashMap::new(), next_id: 1 }
     }
 
     pub fn template(preset: DesignTemplate) -> Self {
@@ -224,6 +229,8 @@ impl DesignDocument {
             if removed.len() == before { break; }
         }
         self.elements.retain(|node| !removed.contains(&node.id));
+        self.state_bindings.retain(|id, _| !removed.contains(id));
+        self.action_bindings.retain(|id, _| !removed.contains(id));
         true
     }
 
@@ -257,6 +264,16 @@ impl DesignDocument {
                 n.bounds.min.x, n.bounds.min.y, n.bounds.width(), n.bounds.height(),
                 color_hex(n.background), color_hex(n.foreground), if n.visible { 1 } else { 0 }));
         }
+        for node in &self.elements {
+            let state = self.state_bindings.get(&node.id);
+            let action = self.action_bindings.get(&node.id);
+            if state.is_some() || action.is_some() {
+                out.push_str(&format!("B\t{}\t{}\t{}\n",
+                    hex(&node.id),
+                    state.map(|v| hex(v)).unwrap_or_else(|| "-".into()),
+                    action.map(|v| hex(v)).unwrap_or_else(|| "-".into())));
+            }
+        }
         out
     }
 
@@ -273,21 +290,40 @@ impl DesignDocument {
         let mut known = HashSet::new();
         for line in lines {
             if doc.elements.len() >= 4096 { return Err("too many components".into()); }
-            let f = fields(line, 12)?;
-            if f[0] != "N" { return Err("invalid component record".into()); }
-            let id = unhex(f[1])?;
-            if id.is_empty() || !known.insert(id.clone()) { return Err("duplicate component ID".into()); }
-            let parent = if f[2] == "-" { None } else { Some(unhex(f[2])?) };
-            let kind = DesignKind::parse(f[3]).ok_or("unknown component kind")?;
-            let (x, y, w, h) = (finite(f[5])?, finite(f[6])?, positive(f[7])?, positive(f[8])?);
-            let mut node = DesignElement::new(id, kind, unhex(f[4])?,
-                Rect::from_min_size(Vec2::new(x, y), Vec2::new(w, h)));
-            node.parent = parent;
-            node.background = parse_color(f[9])?;
-            node.foreground = parse_color(f[10])?;
-            node.visible = match f[11] { "0" => false, "1" => true,
-                _ => return Err("invalid visible flag".into()) };
-            doc.elements.push(node);
+            let f: Vec<_> = line.split('\t').collect();
+            match f.first().copied() {
+                Some("N") if f.len() == 12 => {
+                    let id = unhex(f[1])?;
+                    if id.is_empty() || !known.insert(id.clone()) {
+                        return Err("duplicate component ID".into());
+                    }
+                    let parent = if f[2] == "-" { None } else { Some(unhex(f[2])?) };
+                    let kind = DesignKind::parse(f[3]).ok_or("unknown component kind")?;
+                    let (x, y, w, h) =
+                        (finite(f[5])?, finite(f[6])?, positive(f[7])?, positive(f[8])?);
+                    let mut node = DesignElement::new(id, kind, unhex(f[4])?,
+                        Rect::from_min_size(Vec2::new(x, y), Vec2::new(w, h)));
+                    node.parent = parent;
+                    node.background = parse_color(f[9])?;
+                    node.foreground = parse_color(f[10])?;
+                    node.visible = match f[11] {
+                        "0" => false, "1" => true,
+                        _ => return Err("invalid visible flag".into())
+                    };
+                    doc.elements.push(node);
+                }
+                Some("B") if f.len() == 4 => {
+                    let id = unhex(f[1])?;
+                    if !known.contains(&id) { return Err("binding refers to unknown component".into()); }
+                    if f[2] != "-" {
+                        doc.state_bindings.insert(id.clone(), unhex(f[2])?);
+                    }
+                    if f[3] != "-" {
+                        doc.action_bindings.insert(id, unhex(f[3])?);
+                    }
+                }
+                _ => return Err("invalid component record".into()),
+            }
         }
         // Parent order may vary when an agent reparents existing components.
         for node in &doc.elements {
@@ -313,7 +349,7 @@ impl DesignDocument {
     /// Export an editable Rust function constructing the same runtime UI document.
     pub fn export_rust(&self) -> String {
         let mut out = format!(
-            "use kathamo::prelude::*;\n\n// Render with: build_ui().render(&mut ctx.cmd_buf, ctx.bounds().min, 1.0, None, &ctx.theme);\npub fn build_ui() -> DesignDocument {{\n    let mut ui = DesignDocument::new({:?}, {}f32, {}f32);\n",
+            "use kathamo::prelude::*;\n\n// Call runtime.render(&ui, &mut ctx.cmd_buf, ctx.bounds(), &ctx.pointer, &ctx.theme);\n// Forward pointer, key and text events to the same DesignRuntime.\npub fn build_ui() -> DesignDocument {{\n    let mut ui = DesignDocument::new({:?}, {}f32, {}f32);\n",
             self.name, self.width, self.height);
         for n in &self.elements {
             out.push_str(&format!(
@@ -324,6 +360,16 @@ impl DesignDocument {
                 n.label, n.bounds.min.x, n.bounds.min.y, n.bounds.width(), n.bounds.height(),
                 n.background.r, n.background.g, n.background.b, n.background.a,
                 n.foreground.r, n.foreground.g, n.foreground.b, n.foreground.a, n.visible));
+        }
+        for n in &self.elements {
+            if let Some(key) = self.state_bindings.get(&n.id) {
+                out.push_str(&format!(
+                    "    ui.state_bindings.insert({:?}.into(), {:?}.into());\n", n.id, key));
+            }
+            if let Some(action) = self.action_bindings.get(&n.id) {
+                out.push_str(&format!(
+                    "    ui.action_bindings.insert({:?}.into(), {:?}.into());\n", n.id, action));
+            }
         }
         out.push_str("    ui\n}\n");
         out

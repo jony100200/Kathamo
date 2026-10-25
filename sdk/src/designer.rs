@@ -8,7 +8,7 @@ use ui_core::{Color, CornerRadius, Rect, Stroke, Vec2};
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::ThemePalette;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DesignKind {
     Panel,
     Viewport,

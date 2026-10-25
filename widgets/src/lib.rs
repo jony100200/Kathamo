@@ -69,6 +69,8 @@ pub use property_inspector::{
 };
 pub use stylebox::{InteractionState, Shadow, StyleBox};
 pub use text_area::TextArea;
-pub use timeline::{Timeline, TimelineTrack};
+pub use timeline::{
+    ClipEdge, Timeline, TimelineClip, TimelineGeometry, TimelineHit, TimelineTrack, TimelineView,
+};
 pub use virtual_list::VirtualListState;
 pub use workspace_host::{CreativeDocument, PresentationMode, WorkspaceHost};

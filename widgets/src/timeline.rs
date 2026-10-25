@@ -10,6 +10,178 @@ pub struct TimelineTrack {
     pub keyframes: Vec<u32>, // Frame indices
 }
 
+/// Transient view state. Frames may be fractional; document edits remain app-owned.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TimelineView {
+    pub start_frame: f64,
+    pub visible_frames: f64,
+    pub first_track: usize,
+}
+
+impl TimelineView {
+    pub fn new(visible_frames: f64) -> Self {
+        Self {
+            start_frame: 0.0,
+            visible_frames,
+            first_track: 0,
+        }
+    }
+
+    fn normalized(mut self) -> Self {
+        if !self.visible_frames.is_finite() {
+            self.visible_frames = 240.0;
+        }
+        self.visible_frames = self.visible_frames.clamp(1.0, u32::MAX as f64);
+        if !self.start_frame.is_finite() {
+            self.start_frame = 0.0;
+        }
+        self.start_frame = self
+            .start_frame
+            .clamp(0.0, u32::MAX as f64 - self.visible_frames);
+        self
+    }
+
+    /// Zoom around a pointer position expressed as a proportion of the visible lane.
+    pub fn zoom(&mut self, factor: f64, anchor: f64) {
+        if !factor.is_finite() || factor <= 0.0 || !anchor.is_finite() {
+            return;
+        }
+        *self = self.normalized();
+        let anchor = anchor.clamp(0.0, 1.0);
+        let frame = self.start_frame + anchor * self.visible_frames;
+        self.visible_frames = (self.visible_frames * factor).clamp(1.0, u32::MAX as f64);
+        self.start_frame = frame - anchor * self.visible_frames;
+        *self = self.normalized();
+    }
+
+    pub fn pan(&mut self, frames: f64) {
+        if frames.is_finite() {
+            self.start_frame += frames;
+            *self = self.normalized();
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TimelineClip<'a> {
+    pub track: usize,
+    pub start_frame: f64,
+    pub end_frame: f64,
+    pub label: &'a str,
+    pub selected: bool,
+    pub muted: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipEdge {
+    Body,
+    Start,
+    End,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimelineHit {
+    Ruler,
+    Track(usize),
+    Clip { index: usize, edge: ClipEdge },
+}
+
+/// One geometry authority for rendering, scrubbing, clip picking and trim handles.
+#[derive(Debug, Clone, Copy)]
+pub struct TimelineGeometry {
+    pub bounds: Rect,
+    pub lane: Rect,
+    pub view: TimelineView,
+}
+
+impl TimelineGeometry {
+    pub const RULER_HEIGHT: f32 = 30.0;
+    pub const ROW_HEIGHT: f32 = 44.0;
+
+    pub fn new(bounds: Rect, view: TimelineView) -> Self {
+        let label_width = 128.0_f32.min(bounds.width() * 0.35);
+        Self {
+            bounds,
+            lane: Rect::from_min_max(
+                Vec2::new(bounds.min.x + label_width, bounds.min.y),
+                bounds.max,
+            ),
+            view: view.normalized(),
+        }
+    }
+
+    pub fn frame_x(&self, frame: f64) -> f32 {
+        self.lane.min.x
+            + ((frame - self.view.start_frame) / self.view.visible_frames) as f32
+                * self.lane.width()
+    }
+
+    pub fn frame_at(&self, pos: Vec2) -> Option<f64> {
+        if !self.lane.contains(pos) || self.lane.width() <= 0.0 {
+            return None;
+        }
+        Some(
+            self.view.start_frame
+                + ((pos.x - self.lane.min.x) / self.lane.width()) as f64 * self.view.visible_frames,
+        )
+    }
+
+    pub fn row(&self, track: usize) -> Option<Rect> {
+        let offset = track.checked_sub(self.view.first_track)?;
+        let y = self.bounds.min.y + Self::RULER_HEIGHT + offset as f32 * Self::ROW_HEIGHT;
+        Rect::from_min_size(
+            Vec2::new(self.bounds.min.x, y),
+            Vec2::new(self.bounds.width(), Self::ROW_HEIGHT),
+        )
+        .intersect(self.bounds)
+    }
+
+    pub fn clip_rect(&self, clip: &TimelineClip<'_>) -> Option<Rect> {
+        if !clip.start_frame.is_finite()
+            || !clip.end_frame.is_finite()
+            || clip.end_frame <= clip.start_frame
+        {
+            return None;
+        }
+        let row = self.row(clip.track)?;
+        Rect::from_min_max(
+            Vec2::new(self.frame_x(clip.start_frame), row.min.y + 5.0),
+            Vec2::new(self.frame_x(clip.end_frame), row.max.y - 5.0),
+        )
+        .intersect(self.lane)
+    }
+
+    pub fn hit(
+        &self,
+        pos: Vec2,
+        clips: &[TimelineClip<'_>],
+        track_count: usize,
+    ) -> Option<TimelineHit> {
+        if !self.bounds.contains(pos) {
+            return None;
+        }
+        if pos.y < self.bounds.min.y + Self::RULER_HEIGHT {
+            return self.lane.contains(pos).then_some(TimelineHit::Ruler);
+        }
+        for (index, clip) in clips.iter().enumerate().rev() {
+            if self.clip_rect(clip).is_some_and(|r| r.contains(pos)) {
+                let edge = if (pos.x - self.frame_x(clip.start_frame)).abs() <= 6.0 {
+                    ClipEdge::Start
+                } else if (pos.x - self.frame_x(clip.end_frame)).abs() <= 6.0 {
+                    ClipEdge::End
+                } else {
+                    ClipEdge::Body
+                };
+                return Some(TimelineHit::Clip { index, edge });
+            }
+        }
+        let track = self.view.first_track.saturating_add(
+            ((pos.y - self.bounds.min.y - Self::RULER_HEIGHT) / Self::ROW_HEIGHT) as usize,
+        );
+        (track < track_count).then_some(TimelineHit::Track(track))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Timeline {
     pub current_frame: u32,
@@ -45,6 +217,150 @@ impl Default for Timeline {
 }
 
 impl Timeline {
+    /// Render app-provided clip spans without owning playback, decoding or document state.
+    pub fn render_clips(
+        &self,
+        buf: &mut CommandBuffer,
+        viewport: Rect,
+        palette: &ThemePalette,
+        view: TimelineView,
+        clips: &[TimelineClip<'_>],
+    ) {
+        let geometry = TimelineGeometry::new(viewport, view);
+        buf.push(DrawCommand::ClipPush { rect: viewport });
+        buf.push(DrawCommand::Rect {
+            rect: viewport,
+            fill: palette.surface,
+            radius: CornerRadius::ZERO,
+            stroke: Stroke::NONE,
+        });
+        for (index, track) in self.tracks.iter().enumerate().skip(view.first_track) {
+            let Some(row) = geometry.row(index) else {
+                break;
+            };
+            buf.push(DrawCommand::Rect {
+                rect: row,
+                fill: palette.canvas,
+                radius: CornerRadius::ZERO,
+                stroke: Stroke::new(1.0, palette.border),
+            });
+            let labels =
+                Rect::from_min_max(row.min, Vec2::new(geometry.lane.min.x - 6.0, row.max.y));
+            buf.push(DrawCommand::ClipPush { rect: labels });
+            buf.push(DrawCommand::Text {
+                text: track.name.clone(),
+                pos: row.min + Vec2::new(8.0, 14.0),
+                size: 12.0,
+                color: palette.text_muted,
+                strong: false,
+            });
+            buf.push(DrawCommand::ClipPop);
+        }
+        buf.push(DrawCommand::ClipPush {
+            rect: geometry.lane,
+        });
+        for clip in clips {
+            let Some(rect) = geometry.clip_rect(clip) else {
+                continue;
+            };
+            buf.push(DrawCommand::Rect {
+                rect,
+                fill: if clip.muted {
+                    palette.elevated
+                } else {
+                    palette.accent.with_alpha(60)
+                },
+                radius: CornerRadius::same(4.0),
+                stroke: Stroke::new(
+                    if clip.selected { 2.0 } else { 1.0 },
+                    if clip.selected {
+                        palette.accent
+                    } else {
+                        palette.border
+                    },
+                ),
+            });
+            buf.push(DrawCommand::ClipPush { rect });
+            buf.push(DrawCommand::Text {
+                text: clip.label.into(),
+                pos: rect.min + Vec2::new(8.0, 9.0),
+                size: 12.0,
+                color: palette.text,
+                strong: clip.selected,
+            });
+            buf.push(DrawCommand::ClipPop);
+            if clip.selected {
+                for frame in [clip.start_frame, clip.end_frame] {
+                    let x = geometry.frame_x(frame);
+                    if x >= geometry.lane.min.x && x <= geometry.lane.max.x {
+                        buf.push(DrawCommand::Line {
+                            start: Vec2::new(x, rect.min.y + 4.0),
+                            end: Vec2::new(x, rect.max.y - 4.0),
+                            stroke: Stroke::new(3.0, palette.accent),
+                        });
+                    }
+                }
+            }
+        }
+        for (index, track) in self.tracks.iter().enumerate().skip(view.first_track) {
+            let Some(row) = geometry.row(index) else {
+                break;
+            };
+            for frame in &track.keyframes {
+                let x = geometry.frame_x(*frame as f64);
+                buf.push(DrawCommand::Rect {
+                    rect: Rect::from_min_size(
+                        Vec2::new(x - 3.0, row.max.y - 10.0),
+                        Vec2::new(6.0, 6.0),
+                    ),
+                    fill: palette.warning,
+                    radius: CornerRadius::same(2.0),
+                    stroke: Stroke::NONE,
+                });
+            }
+        }
+        let ruler = Rect::from_min_size(
+            viewport.min,
+            Vec2::new(
+                viewport.width(),
+                TimelineGeometry::RULER_HEIGHT.min(viewport.height()),
+            ),
+        );
+        buf.push(DrawCommand::Rect {
+            rect: ruler,
+            fill: palette.elevated,
+            radius: CornerRadius::ZERO,
+            stroke: Stroke::new(1.0, palette.border),
+        });
+        let ticks = (geometry.lane.width() / 80.0).clamp(1.0, 32.0) as usize;
+        for tick in 0..=ticks {
+            let frame = geometry.view.start_frame
+                + geometry.view.visible_frames * tick as f64 / ticks as f64;
+            let x = geometry.frame_x(frame);
+            buf.push(DrawCommand::Text {
+                text: format!("{:.2}s", frame / self.fps.max(1) as f64),
+                pos: Vec2::new(x + 4.0, ruler.min.y + 8.0),
+                size: 11.0,
+                color: palette.text_muted,
+                strong: false,
+            });
+        }
+        let x = geometry.frame_x(self.current_frame as f64);
+        buf.push(DrawCommand::Line {
+            start: Vec2::new(x, ruler.min.y),
+            end: Vec2::new(x, viewport.max.y),
+            stroke: Stroke::new(2.0, palette.danger),
+        });
+        buf.push(DrawCommand::Rect {
+            rect: Rect::from_min_size(Vec2::new(x - 5.0, ruler.min.y), Vec2::new(10.0, 8.0)),
+            fill: palette.danger,
+            radius: CornerRadius::same(2.0),
+            stroke: Stroke::NONE,
+        });
+        buf.push(DrawCommand::ClipPop);
+        buf.push(DrawCommand::ClipPop);
+    }
+
     pub fn scrub_to(&mut self, frame: u32) {
         self.current_frame = frame.min(self.total_frames);
     }

@@ -587,7 +587,7 @@ impl KathamoApp for VisualDesigner {
                 if y > tree.max.y { break; }
                 let r = Rect::from_min_size(Vec2::new(12.0, y - 3.0),
                     Vec2::new(202.0, 23.0));
-                if self.selected.as_deref() == Some(&node.id) {
+                if self.selected.as_deref() == Some(node.id.as_str()) {
                     fill(buf, r, t.elevated_high, t.accent);
                 }
                 label(buf, format!("{}  {}", node.kind.name(), node.label),

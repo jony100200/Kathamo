@@ -292,6 +292,12 @@ impl KathamoApp for Spatial3dEditorApp {
     }
 
     fn update_window(&mut self, id: &str, ctx: &mut AppContext) {
+        if !ctx.images.contains_key(&2001) {
+            ctx.set_image_rgba8(2001, 2, 2, vec![
+                50, 100, 210, 255, 130, 180, 230, 255,
+                70, 140, 220, 255, 150, 200, 240, 255,
+            ]).expect("valid detached viewport image");
+        }
         if let Some(panel) = self.detached.get_mut(id) { panel.render(ctx); }
     }
 

@@ -230,9 +230,42 @@ impl KathamoApp for DesktopApplication {
         );
         self.workspace.handle_mouse_down(pos, button, workspace_rect, &ctx.pointer)
     }
+
+    fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
+        if self.dialogs.is_open { return false; }
+        let bounds = ctx.bounds();
+        let workspace_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x, bounds.min.y + 28.0),
+            Vec2::new(bounds.width(), bounds.height() - 28.0),
+        );
+        self.workspace.handle_mouse_move(pos, delta, workspace_rect, &ctx.pointer)
+    }
+
+    fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+        let bounds = ctx.bounds();
+        let workspace_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x, bounds.min.y + 28.0),
+            Vec2::new(bounds.width(), bounds.height() - 28.0),
+        );
+        self.workspace.handle_mouse_up(pos, button, workspace_rect)
+    }
+
+    fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
+        if self.dialogs.is_open { return false; }
+        let bounds = ctx.bounds();
+        let workspace_rect = Rect::from_min_size(
+            Vec2::new(bounds.min.x, bounds.min.y + 28.0),
+            Vec2::new(bounds.width(), bounds.height() - 28.0),
+        );
+        self.workspace.handle_scroll(delta, pos, workspace_rect)
+    }
 }
 
 fn main() {
+    if std::env::args().any(|arg| arg == "--native") {
+        run_native(DesktopApplication::new()).expect("Kathamo native application failed");
+        return;
+    }
     println!("=== Kathamo Demonstration 5: General Desktop Application ===");
     let app = DesktopApplication::new();
     let mut runner = HeadlessAppRunner::new(app);

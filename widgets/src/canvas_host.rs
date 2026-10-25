@@ -220,8 +220,8 @@ impl CanvasHost {
             let old_zoom = self.zoom;
             self.zoom = (old_zoom * factor).clamp(0.05, 30.0);
             let center = viewport.center();
-            self.pan = (cursor_pos - center) / self.zoom -
-                (cursor_pos - center) / old_zoom + self.pan;
+            let anchor = cursor_pos - center;
+            self.pan = self.pan + anchor * (1.0 / self.zoom - 1.0 / old_zoom);
         } else {
             self.zoom_at(factor, cursor_pos, viewport.min);
         }

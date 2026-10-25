@@ -1399,6 +1399,28 @@ mod tests {
     }
 
     #[test]
+    fn gpu_backend_samples_application_rgba_texture() {
+        let Some(mut gpu) = headless() else { return };
+        let texels = [255u8, 0, 0, 255, 0, 255, 0, 255];
+        gpu.upload_rgba8_image(77, 2, 1, &texels).unwrap();
+        let mut commands = CommandBuffer::new();
+        commands.push(DrawCommand::Image {
+            rect: Rect::from_min_size(Vec2::ZERO, Vec2::new(320.0, 200.0)),
+            texture_id: 77,
+            uv_rect: Rect::from_min_max(Vec2::ZERO, Vec2::new(1.0, 1.0)),
+            tint: Color::WHITE,
+        });
+        gpu.begin_frame(320, 200, Color::BLACK);
+        gpu.submit(&commands);
+        gpu.end_frame().unwrap();
+        let pixels = gpu.read_pixels().unwrap();
+        assert_eq!(pixels[100 * 320 + 60], 0xFFFF_0000);
+        assert_eq!(pixels[100 * 320 + 260], 0xFF00_FF00);
+        gpu.upload_rgba8_image(77, 2, 1, &texels).unwrap();
+        assert_eq!(gpu.images.len(), 1, "video frames should update in-place");
+    }
+
+    #[test]
     fn gpu_backend_renders_real_pixels_and_recovers_from_real_device_loss() {
         let Some(mut gpu) = headless() else { return };
         let mut buf = CommandBuffer::new();

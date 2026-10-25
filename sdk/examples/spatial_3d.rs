@@ -9,6 +9,7 @@
 //! - MenuBar, DialogHost (Build Settings modal), and NotificationHost
 
 use kathamo::prelude::*;
+use std::collections::HashMap;
 
 pub struct Spatial3dEditorApp {
     pub workspace: WorkspaceHost,
@@ -16,6 +17,7 @@ pub struct Spatial3dEditorApp {
     pub notifications: NotificationHost,
     pub dialogs: DialogHost,
     pub inspector_snapshot: Option<UiInspectorSnapshot>,
+    pub detached: HashMap<String, DetachedPanel>,
 }
 
 impl Spatial3dEditorApp {
@@ -132,7 +134,7 @@ impl Spatial3dEditorApp {
         ]);
 
         let mut notifications = NotificationHost::new();
-        notifications.info("Vulkan PBR", "3D Viewport connected to Vulkan hardware rasterizer (60 FPS).");
+        notifications.info("Viewport UI", "Example frame preview; application renderer supplied separately.");
 
         Self {
             workspace,
@@ -140,6 +142,7 @@ impl Spatial3dEditorApp {
             notifications,
             dialogs: DialogHost::new(),
             inspector_snapshot: None,
+            detached: HashMap::new(),
         }
     }
 
@@ -168,6 +171,21 @@ impl KathamoApp for Spatial3dEditorApp {
     }
 
     fn update(&mut self, ctx: &mut AppContext) {
+        // RGBA frame for the native renderer demo; replace with application image/video/3D output.
+        if !ctx.images.contains_key(&2001) {
+            let (width, height) = (320usize, 180usize);
+            let mut rgba = vec![0u8; width * height * 4];
+            for y in 0..height {
+                for x in 0..width {
+                    let i = (y * width + x) * 4;
+                    rgba[i] = (30 + 180 * x / width) as u8;
+                    rgba[i + 1] = (40 + 100 * y / height) as u8;
+                    rgba[i + 2] = 190;
+                    rgba[i + 3] = 255;
+                }
+            }
+            ctx.set_image_rgba8(2001, width as u32, height as u32, rgba).expect("valid RGBA preview");
+        }
         let palette = ctx.theme;
         let bounds = ctx.bounds();
 
@@ -255,7 +273,13 @@ impl KathamoApp for Spatial3dEditorApp {
         self.workspace.handle_scroll(delta, pos, workspace_rect)
     }
 
-    fn handle_key_down(&mut self, key: Key, modifiers: Modifiers, _ctx: &mut AppContext) -> bool {
+    fn handle_key_down(&mut self, key: Key, modifiers: Modifiers, ctx: &mut AppContext) -> bool {
+        if modifiers.ctrl && modifiers.shift && matches!(key, Key::Character('d') | Key::Character('D')) {
+            if let Some(panel) = self.workspace.detach_to_window("viewport_3d", ctx, 920, 580) {
+                self.detached.insert(panel.tab.id.clone(), panel);
+            }
+            return true;
+        }
         self.workspace.handle_key_down(key, modifiers)
     }
 
@@ -265,6 +289,43 @@ impl KathamoApp for Spatial3dEditorApp {
 
     fn handle_ime(&mut self, event: ImeEvent, _ctx: &mut AppContext) -> bool {
         self.workspace.handle_ime(event)
+    }
+
+    fn update_window(&mut self, id: &str, ctx: &mut AppContext) {
+        if let Some(panel) = self.detached.get_mut(id) { panel.render(ctx); }
+    }
+
+    fn handle_window_mouse_down(&mut self, id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+        self.detached.get_mut(id).is_some_and(|panel| panel.handle_mouse_down(pos, button, ctx))
+    }
+    fn handle_window_mouse_move(&mut self, id: &str, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
+        self.detached.get_mut(id).is_some_and(|panel| panel.handle_mouse_move(pos, delta, ctx))
+    }
+    fn handle_window_mouse_up(&mut self, id: &str, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
+        self.detached.get_mut(id).is_some_and(|panel| panel.handle_mouse_up(pos, button, ctx))
+    }
+    fn handle_window_scroll(&mut self, id: &str, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
+        self.detached.get_mut(id).is_some_and(|panel| panel.handle_scroll(delta, pos, ctx))
+    }
+    fn handle_window_key_down(&mut self, id: &str, key: Key, modifiers: Modifiers, _ctx: &mut AppContext) -> bool {
+        self.detached.get_mut(id).is_some_and(|panel| panel.handle_key_down(key, modifiers))
+    }
+    fn handle_window_text_input(&mut self, id: &str, text: &str, _ctx: &mut AppContext) -> bool {
+        self.detached.get_mut(id).is_some_and(|panel| panel.handle_text_input(text))
+    }
+    fn handle_window_ime(&mut self, id: &str, event: ImeEvent, _ctx: &mut AppContext) -> bool {
+        self.detached.get_mut(id).is_some_and(|panel| panel.handle_ime(event))
+    }
+
+    fn window_closed(&mut self, id: &str) {
+        if let Some(panel) = self.detached.remove(id) {
+            let target = self.workspace.active_workspace().dock_tree.compute_layout(
+                Rect::from_min_size(Vec2::ZERO, Vec2::new(1280.0, 720.0))
+            ).leaves.first().map(|leaf| leaf.id.clone());
+            if let Some(leaf_id) = target {
+                let _ = self.workspace.attach_panel(&leaf_id, panel);
+            }
+        }
     }
 }
 

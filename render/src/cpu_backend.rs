@@ -462,6 +462,23 @@ mod tests {
     }
 
     #[test]
+    fn cpu_backend_samples_registered_rgba_viewport_frames() {
+        let mut cpu = CpuBackend::new();
+        cpu.upload_rgba8_image(42, 2, 1, &[255, 0, 0, 255, 0, 255, 0, 255]).unwrap();
+        cpu.begin_frame(8, 4, Color::BLACK);
+        let mut draw = CommandBuffer::new();
+        draw.push(DrawCommand::Image {
+            rect: Rect::from_min_size(Vec2::ZERO, Vec2::new(8.0, 4.0)),
+            texture_id: 42,
+            uv_rect: Rect::from_min_max(Vec2::ZERO, Vec2::new(1.0, 1.0)),
+            tint: Color::WHITE,
+        });
+        cpu.submit(&draw);
+        assert_eq!(px(&cpu, 1, 2), Color::rgb(255, 0, 0).to_u32());
+        assert_eq!(px(&cpu, 6, 2), Color::rgb(0, 255, 0).to_u32());
+    }
+
+    #[test]
     fn cpu_backend_rasterizes_rects_cleanly() {
         let mut cpu = CpuBackend::new();
         cpu.begin_frame(100, 100, Color::BLACK);

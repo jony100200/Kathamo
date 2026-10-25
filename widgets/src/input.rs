@@ -439,10 +439,11 @@ pub fn render_text_input(
             strong: false,
         });
     } else {
-        let display_text = if text.len() > max_chars {
-            let skip = text.len().saturating_sub(max_chars);
-            let tail = &text[text.char_indices().nth(skip).map(|(i, _)| i).unwrap_or(0)..];
-            tail.to_string()
+        // Count Unicode scalars, not UTF-8 bytes; Bengali/emoji input must
+        // never lose a word or index into the middle of a character.
+        let count = text.chars().count();
+        let display_text = if count > max_chars {
+            text.chars().skip(count - max_chars).collect::<String>()
         } else {
             text.to_string()
         };
@@ -458,7 +459,7 @@ pub fn render_text_input(
     // Blinking / focus cursor indicator
     if is_focused {
         let char_width = 7.5;
-        let visible_chars = text.len().min(max_chars);
+        let visible_chars = text.chars().count().min(max_chars);
         let cursor_x = bounds.min.x + 10.0 + visible_chars as f32 * char_width;
         let cursor_top = bounds.min.y + 6.0;
         let cursor_bottom = bounds.max.y - 6.0;

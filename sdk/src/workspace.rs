@@ -107,6 +107,19 @@ impl WorkspaceHost {
         host
     }
 
+    /// Host an application's custom dock tree with its own registered editors.
+    pub fn from_workspace(registry: EditorRegistry, mut workspace: Workspace) -> Self {
+        let mut host = Self {
+            registry,
+            workspaces: Vec::new(),
+            active_workspace_idx: 0,
+            dock_view: DockTreeView::new(),
+        };
+        host.populate_workspace_editors(&mut workspace);
+        host.workspaces.push(workspace);
+        host
+    }
+
     /// Add a preset workspace layout.
     pub fn add_preset_workspace(&mut self, id: &str, name: &str, preset: WorkspacePreset) {
         let dock_tree = match preset {
@@ -506,6 +519,41 @@ mod tests {
         let clip_pops = cmd_buf.commands().iter().filter(|cmd| matches!(cmd, DrawCommand::ClipPop)).count();
         assert!(clip_pushes > 0, "editors must be clipped to their dock content bounds");
         assert_eq!(clip_pushes, clip_pops, "editor clip regions must be balanced");
+    }
+
+    #[test]
+    fn multiple_independent_panes_can_share_one_editor_factory() {
+        let mut tree = DockTree::new(
+            "left",
+            DockTabPanel::new("canvas_a", "Canvas A").with_factory("canvas_2d"),
+        );
+        assert!(tree.split_leaf(
+            "left",
+            "canvas_split",
+            "right",
+            SplitAxis::Horizontal,
+            0.5,
+            DockTabPanel::new("canvas_b", "Canvas B").with_factory("canvas_2d"),
+        ));
+
+        let host = WorkspaceHost::from_workspace(
+            EditorRegistry::new(),
+            Workspace::new("my_ui", "Two Viewports", tree),
+        );
+        assert_eq!(host.workspaces.len(), 1);
+        assert_eq!(host.active_workspace().editors.len(), 2);
+        assert!(host.active_workspace().editors.contains_key("canvas_a"));
+        assert!(host.active_workspace().editors.contains_key("canvas_b"));
+    }
+
+    #[test]
+    fn single_preset_does_not_initialize_unrelated_workspaces() {
+        let host = WorkspaceHost::with_preset(
+            EditorRegistry::new(), "game_editor", "Game Editor", WorkspacePreset::Spatial3D,
+        );
+        assert_eq!(host.workspaces.len(), 1);
+        assert_eq!(host.active_workspace().name, "Game Editor");
+        assert!(host.active_workspace().editors.contains_key("viewport_3d"));
     }
 
     #[test]

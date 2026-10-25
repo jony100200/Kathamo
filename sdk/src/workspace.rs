@@ -40,12 +40,10 @@ impl Workspace {
     }
 }
 
-fn collect_node_panels(node: &DockNode, out: &mut Vec<String>) {
+fn collect_node_panels(node: &DockNode, out: &mut Vec<DockTabPanel>) {
     match node {
         DockNode::Leaf { tabs, .. } => {
-            for tab in tabs {
-                out.push(tab.id.clone());
-            }
+            out.extend(tabs.iter().cloned());
         }
         DockNode::Split { first, second, .. } => {
             collect_node_panels(first, out);
@@ -92,6 +90,23 @@ impl WorkspaceHost {
         host
     }
 
+    /// Create a single workspace for a consuming application.
+    pub fn with_preset(
+        registry: EditorRegistry,
+        id: &str,
+        name: &str,
+        preset: WorkspacePreset,
+    ) -> Self {
+        let mut host = Self {
+            registry,
+            workspaces: Vec::new(),
+            active_workspace_idx: 0,
+            dock_view: DockTreeView::new(),
+        };
+        host.add_preset_workspace(id, name, preset);
+        host
+    }
+
     /// Add a preset workspace layout.
     pub fn add_preset_workspace(&mut self, id: &str, name: &str, preset: WorkspacePreset) {
         let dock_tree = match preset {
@@ -135,9 +150,10 @@ impl WorkspaceHost {
     fn populate_workspace_editors(&self, ws: &mut Workspace) {
         let mut panel_ids = Vec::new();
         collect_node_panels(&ws.dock_tree.root, &mut panel_ids);
-        for id in panel_ids {
-            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(id.clone()) {
-                if let Some(ed) = self.registry.create(&id) {
+        for panel in panel_ids {
+            let factory = panel.factory_id.as_deref().unwrap_or(&panel.id);
+            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(panel.id.clone()) {
+                if let Some(ed) = self.registry.create(factory) {
                     e.insert(ed);
                 }
             }
@@ -149,9 +165,10 @@ impl WorkspaceHost {
         let ws = &mut self.workspaces[self.active_workspace_idx];
         let mut panel_ids = Vec::new();
         collect_node_panels(&ws.dock_tree.root, &mut panel_ids);
-        for id in panel_ids {
-            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(id.clone()) {
-                if let Some(ed) = self.registry.create(&id) {
+        for panel in panel_ids {
+            let factory = panel.factory_id.as_deref().unwrap_or(&panel.id);
+            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(panel.id.clone()) {
+                if let Some(ed) = self.registry.create(factory) {
                     e.insert(ed);
                 }
             }

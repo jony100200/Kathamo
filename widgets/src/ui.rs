@@ -14,7 +14,7 @@
 //! and AccessKit accessibility nodes are coordinated behind replaceable adapters.
 
 use ui_core::{CornerRadius, Direction, Rect, SizeConstraint, Stroke, Vec2};
-use ui_platform::{AccessibilityNode, AccessibilityRole, AccessibilityTree, PointerState};
+use ui_platform::{AccessibilityNode, AccessibilityRole, AccessibilityTree, PointerState, TextInputEvent};
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::{BilingualLabel, FluentTypographyScale, ThemePalette};
 
@@ -462,6 +462,27 @@ impl<'a> KolponaUi<'a> {
             dragging: false,
             activated: clicked,
         }
+    }
+
+    /// Edit the active UTF-8 text field using native keyboard events.
+    /// Host applications handle clipboard I/O and forward paste contents explicitly.
+    pub fn apply_text_event(buffer: &mut ui_core::TextEditBuffer, event: &TextInputEvent) -> bool {
+        if !buffer.is_focused() { return false; }
+        match event {
+            TextInputEvent::Char(c) => buffer.insert_char(*c),
+            TextInputEvent::Text(value) | TextInputEvent::Paste(value) => buffer.insert_str(value),
+            TextInputEvent::Backspace => { buffer.backspace(); },
+            TextInputEvent::Delete => { buffer.delete(); },
+            TextInputEvent::Left => buffer.move_left(false),
+            TextInputEvent::Right => buffer.move_right(false),
+            TextInputEvent::Home => buffer.move_home(false),
+            TextInputEvent::End => buffer.move_end(false),
+            TextInputEvent::SelectAll => buffer.select_all(),
+            TextInputEvent::Escape => buffer.set_focused(false),
+            TextInputEvent::Enter | TextInputEvent::Tab | TextInputEvent::Backtab |
+            TextInputEvent::Copy | TextInputEvent::Cut => return false,
+        }
+        true
     }
 
     /// Modern text input field.

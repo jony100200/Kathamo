@@ -28,15 +28,19 @@ impl Creative2dEditorApp {
 
         // 2. Customized 2D Layers Hierarchy
         registry.register_factory("hierarchy_tree", "Layers", "Structure", || {
-            let mut tree = HierarchyTree::default();
-            tree.items = vec![
-                HierarchyItem::new("layer_highlights", "Layer 4: Highlights & FX").with_depth(0),
-                HierarchyItem::new("layer_color", "Layer 3: Flat Colors & Shading").with_depth(0),
-                HierarchyItem::new("layer_inks", "Layer 2: Clean Line Art").with_depth(0),
-                HierarchyItem::new("layer_sketch", "Layer 1: Rough Underdrawing").with_depth(0),
-                HierarchyItem::new("layer_bg", "Background Canvas").with_depth(0),
-            ];
-            tree.items[1].selected = true;
+            let mut color_layer = HierarchyItem::new("layer_color", "Layer 3: Flat Colors & Shading").with_depth(0);
+            color_layer.selected = true;
+
+            let tree = HierarchyTree {
+                items: vec![
+                    HierarchyItem::new("layer_highlights", "Layer 4: Highlights & FX").with_depth(0),
+                    color_layer,
+                    HierarchyItem::new("layer_inks", "Layer 2: Clean Line Art").with_depth(0),
+                    HierarchyItem::new("layer_sketch", "Layer 1: Rough Underdrawing").with_depth(0),
+                    HierarchyItem::new("layer_bg", "Background Canvas").with_depth(0),
+                ],
+                ..Default::default()
+            };
             Box::new(HierarchyEditor { tree })
         });
 
@@ -141,7 +145,7 @@ impl KathamoApp for Creative2dEditorApp {
     }
 
     fn update(&mut self, ctx: &mut AppContext) {
-        let palette = ctx.theme.clone();
+        let palette = ctx.theme;
         let bounds = ctx.bounds();
 
         // 1. Top Menu Bar (height: 28px)

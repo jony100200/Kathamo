@@ -1005,6 +1005,10 @@ impl ConsoleView {
         });
     }
 
+    pub fn push(&mut self, message: impl Into<String>, level: ConsoleLogLevel) {
+        self.log(level, "System", message);
+    }
+
     pub fn clear(&mut self) {
         self.entries.clear();
     }

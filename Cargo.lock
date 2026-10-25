@@ -2842,6 +2842,7 @@ dependencies = [
 name = "ui-lab"
 version = "0.1.0"
 dependencies = [
+ "kathamo",
  "ui-core",
  "ui-platform",
  "ui-render",

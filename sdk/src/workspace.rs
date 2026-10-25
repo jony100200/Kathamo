@@ -136,9 +136,9 @@ impl WorkspaceHost {
         let mut panel_ids = Vec::new();
         collect_node_panels(&ws.dock_tree.root, &mut panel_ids);
         for id in panel_ids {
-            if !ws.editors.contains_key(&id) {
+            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(id.clone()) {
                 if let Some(ed) = self.registry.create(&id) {
-                    ws.editors.insert(id, ed);
+                    e.insert(ed);
                 }
             }
         }
@@ -150,9 +150,9 @@ impl WorkspaceHost {
         let mut panel_ids = Vec::new();
         collect_node_panels(&ws.dock_tree.root, &mut panel_ids);
         for id in panel_ids {
-            if !ws.editors.contains_key(&id) {
+            if let std::collections::hash_map::Entry::Vacant(e) = ws.editors.entry(id.clone()) {
                 if let Some(ed) = self.registry.create(&id) {
-                    ws.editors.insert(id, ed);
+                    e.insert(ed);
                 }
             }
         }

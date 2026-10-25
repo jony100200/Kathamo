@@ -12,3 +12,4 @@ ui-render = { path = "../render" }
 ui-themes = { path = "../themes" }
 ui-widgets = { path = "../widgets" }
 ui-testkit = { path = "../testkit" }
+kathamo = { path = "../sdk" }

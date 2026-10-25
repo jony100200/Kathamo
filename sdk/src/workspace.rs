@@ -52,6 +52,87 @@ fn collect_node_panels(node: &DockNode, out: &mut Vec<DockTabPanel>) {
     }
 }
 
+
+fn encode_field(value: &str) -> String {
+    value.as_bytes().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn decode_field(value: &str) -> Result<String, String> {
+    if value.len() % 2 != 0 { return Err("invalid encoded workspace field".into()); }
+    let mut bytes = Vec::with_capacity(value.len() / 2);
+    for chunk in value.as_bytes().chunks(2) {
+        let hex = std::str::from_utf8(chunk).map_err(|e| e.to_string())?;
+        bytes.push(u8::from_str_radix(hex, 16).map_err(|e| e.to_string())?);
+    }
+    String::from_utf8(bytes).map_err(|e| e.to_string())
+}
+
+fn encode_node(node: &DockNode, out: &mut String) {
+    match node {
+        DockNode::Leaf { id, tabs, active_tab } => {
+            out.push_str(&format!("L\t{}\t{}\t{}\n", encode_field(id), active_tab, tabs.len()));
+            for tab in tabs {
+                out.push_str(&format!("T\t{}\t{}\t{}\t{}\n",
+                    encode_field(&tab.id), encode_field(&tab.title),
+                    if tab.is_closable { 1 } else { 0 },
+                    tab.factory_id.as_ref().map_or("-".to_string(), |v| encode_field(v))));
+            }
+        }
+        DockNode::Split { id, axis, ratio, first, second } => {
+            out.push_str(&format!("S\t{}\t{}\t{}\n", encode_field(id),
+                if *axis == SplitAxis::Horizontal { "H" } else { "V" }, ratio));
+            encode_node(first, out);
+            encode_node(second, out);
+        }
+    }
+}
+
+fn decode_node<'a>(lines: &mut impl Iterator<Item = &'a str>, depth: usize) -> Result<DockNode, String> {
+    if depth > 64 { return Err("workspace tree exceeds maximum depth".into()); }
+    let line = lines.next().ok_or("incomplete workspace tree")?;
+    let parts: Vec<&str> = line.split('\t').collect();
+    match parts.first().copied() {
+        Some("L") if parts.len() == 4 => {
+            let id = decode_field(parts[1])?;
+            let active_tab = parts[2].parse::<usize>().map_err(|e| e.to_string())?;
+            let count = parts[3].parse::<usize>().map_err(|e| e.to_string())?;
+            if count > 10000 { return Err("workspace has too many tabs".into()); }
+            let mut tabs = Vec::with_capacity(count);
+            for _ in 0..count {
+                let tab = lines.next().ok_or("missing dock tab")?;
+                let fields: Vec<&str> = tab.split('\t').collect();
+                if fields.len() != 5 || fields[0] != "T" { return Err("invalid dock tab".into()); }
+                tabs.push(DockTabPanel {
+                    id: decode_field(fields[1])?,
+                    title: decode_field(fields[2])?,
+                    is_closable: fields[3] == "1",
+                    factory_id: if fields[4] == "-" { None } else { Some(decode_field(fields[4])?) },
+                });
+            }
+            if active_tab >= tabs.len() && !tabs.is_empty() {
+                return Err("workspace active tab out of range".into());
+            }
+            Ok(DockNode::Leaf { id, tabs, active_tab })
+        }
+        Some("S") if parts.len() == 4 => {
+            let id = decode_field(parts[1])?;
+            let axis = match parts[2] {
+                "H" => SplitAxis::Horizontal,
+                "V" => SplitAxis::Vertical,
+                _ => return Err("invalid split axis".into()),
+            };
+            let ratio = parts[3].parse::<f32>().map_err(|e| e.to_string())?;
+            if !ratio.is_finite() || !(0.05..=0.95).contains(&ratio) {
+                return Err("invalid workspace split ratio".into());
+            }
+            let first = Box::new(decode_node(lines, depth + 1)?);
+            let second = Box::new(decode_node(lines, depth + 1)?);
+            Ok(DockNode::Split { id, axis, ratio, first, second })
+        }
+        _ => Err("invalid workspace node".into()),
+    }
+}
+
 /// The central workspace host orchestrating multi-workspace layouts,
 /// dock tree splitting, tab docking, and live editor dispatch.
 pub struct WorkspaceHost {
@@ -186,6 +267,86 @@ impl WorkspaceHost {
                 }
             }
         }
+    }
+
+    /// Export all workspace layouts and optional editor state in a versioned, UTF-8-safe format.
+    /// Save this string in the consuming application's own settings location.
+    pub fn save_layouts(&self) -> String {
+        let mut out = String::from("KATHAMO_UI_1\n");
+        let active = self.workspaces.get(self.active_workspace_idx)
+            .map_or("", |ws| ws.id.as_str());
+        out.push_str(&format!("ACTIVE\t{}\n", encode_field(active)));
+        for ws in &self.workspaces {
+            out.push_str(&format!("WORKSPACE\t{}\t{}\t{}\t{}\t{}\n",
+                encode_field(&ws.id), encode_field(&ws.name),
+                ws.dock_tree.splitter_thickness, ws.dock_tree.tab_header_height,
+                ws.dock_tree.maximized_leaf.as_deref().map_or("-".to_string(), encode_field)));
+            encode_node(&ws.dock_tree.root, &mut out);
+            let mut states: Vec<_> = ws.editors.iter().filter_map(|(id, editor)|
+                editor.save_state().map(|state| (id.as_str(), state))
+            ).collect();
+            states.sort_by_key(|(id, _)| *id);
+            for (id, state) in states {
+                out.push_str(&format!("EDITOR\t{}\t{}\n", encode_field(id), encode_field(&state)));
+            }
+            out.push_str("END\n");
+        }
+        out
+    }
+
+    /// Restore docking and editor state using the host's registered editor factories.
+    /// The current UI remains unchanged if parsing fails.
+    pub fn restore_layouts(&mut self, text: &str) -> Result<(), String> {
+        let mut lines = text.lines();
+        if lines.next() != Some("KATHAMO_UI_1") { return Err("unsupported Kathamo layout version".into()); }
+        let active_line = lines.next().ok_or("missing active workspace")?;
+        let active = active_line.strip_prefix("ACTIVE\t").ok_or("missing active ID")?;
+        let active_id = decode_field(active)?;
+        let mut workspaces = Vec::new();
+        while let Some(line) = lines.next() {
+            let fields: Vec<&str> = line.split('\t').collect();
+            if fields.len() != 6 || fields[0] != "WORKSPACE" {
+                return Err("invalid workspace header".into());
+            }
+            if workspaces.len() >= 128 { return Err("too many saved workspaces".into()); }
+            let thickness = fields[3].parse::<f32>().map_err(|e| e.to_string())?;
+            let header_height = fields[4].parse::<f32>().map_err(|e| e.to_string())?;
+            if !thickness.is_finite() || thickness <= 0.0 ||
+               !header_height.is_finite() || header_height <= 0.0 {
+                return Err("invalid dock metrics".into());
+            }
+            let mut tree = DockTree::with_root(decode_node(&mut lines, 0)?);
+            tree.splitter_thickness = thickness;
+            tree.tab_header_height = header_height;
+            tree.maximized_leaf = if fields[5] == "-" { None } else { Some(decode_field(fields[5])?) };
+            let mut ws = Workspace::new(decode_field(fields[1])?, decode_field(fields[2])?, tree);
+            self.populate_workspace_editors(&mut ws);
+            loop {
+                let state_line = lines.next().ok_or("missing workspace end marker")?;
+                if state_line == "END" { break; }
+                let parts: Vec<&str> = state_line.split('\t').collect();
+                if parts.len() != 3 || parts[0] != "EDITOR" { return Err("invalid editor state".into()); }
+                if let Some(editor) = ws.editors.get_mut(&decode_field(parts[1])?) {
+                    editor.restore_state(&decode_field(parts[2])?);
+                }
+            }
+            workspaces.push(ws);
+        }
+        if workspaces.is_empty() { return Err("workspace file is empty".into()); }
+        let active_index = workspaces.iter().position(|ws| ws.id == active_id).unwrap_or(0);
+        self.workspaces = workspaces;
+        self.active_workspace_idx = active_index;
+        self.dock_view = DockTreeView::new();
+        Ok(())
+    }
+
+    pub fn save_layouts_to(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::write(path, self.save_layouts())
+    }
+
+    pub fn load_layouts_from(&mut self, path: impl AsRef<std::path::Path>) -> Result<(), String> {
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        self.restore_layouts(&text)
     }
 
     // -------------------------------------------------------------------------
@@ -497,6 +658,20 @@ impl WorkspaceHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workspace_layout_state_roundtrips() {
+        let mut host = WorkspaceHost::new();
+        host.set_active_workspace(3);
+        let saved = host.save_layouts();
+        let mut restored = WorkspaceHost::new();
+        restored.restore_layouts(&saved).unwrap();
+        assert_eq!(restored.active_workspace_idx, 3);
+        assert_eq!(restored.workspaces.len(), host.workspaces.len());
+        assert_eq!(restored.active_workspace().dock_tree, host.active_workspace().dock_tree);
+        assert!(restored.restore_layouts("invalid").is_err());
+        assert_eq!(restored.active_workspace_idx, 3);
+    }
 
     #[test]
     fn test_workspace_host_switching_and_rendering() {

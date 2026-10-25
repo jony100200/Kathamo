@@ -295,15 +295,27 @@ workspace.switch_workspace(3); // Video Editing (Monitor Preview + Multi-Track T
 workspace.switch_workspace(4); // General Desktop (Telemetry HUD + Console + Service Browser)
 ```
 
-### Dynamic EditorRegistry
-Applications register custom editors without modifying framework internals:
+### Custom Workspaces and Reusable Editors
+Register an editor **type**, then compose unique pane **instances**. One editor type can appear in several independent panels:
 ```rust
 let mut registry = EditorRegistry::new();
-registry.register_factory("custom_viewport", "Custom Viewport", "Rendering", || {
+registry.register_factory("custom_viewport", "Viewport", "Rendering", || {
     Box::new(MyCustomEditor::new())
 });
-let workspace = WorkspaceHost::with_registry(registry);
+let mut tree = DockTree::new(
+    "left", DockTabPanel::new("view_a", "Perspective").with_factory("custom_viewport")
+);
+tree.split_leaf(
+    "left", "root_split", "right", SplitAxis::Horizontal, 0.5,
+    DockTabPanel::new("view_b", "Top").with_factory("custom_viewport"),
+);
+let workspace = WorkspaceHost::from_workspace(
+    registry, Workspace::new("editor", "Scene Editor", tree),
+);
 ```
+Use `WorkspaceHost::with_preset(registry, id, name, WorkspacePreset::Spatial3D)` for one ready-made layout. Use `WorkspaceHost::with_registry` only when you want all five standard workspaces.
+
+An application implements `KathamoApp`, forwards pointer input to its `WorkspaceHost`, then starts its real OS window with `run_native(app)`. The application supplies viewport image buffers, editor data, and backend functionality; Kathamo supplies UI chrome and input infrastructure.
 
 ### Fluent Declarative Layouts (`LayoutBuilder`)
 Compose forms, cards, scrubbers, and controls with zero coordinate math:
@@ -322,22 +334,22 @@ layout.card(|ui| {
 ```
 
 ### 5 Standard Framework Demonstrations
-Run the verified interface demonstrations built with public Kathamo APIs:
+Run an interactive native window by passing `--native` (without it, each example runs headless checks):
 ```bash
 # 1. 2D Creative Workstation (Layers, Inks, Brush Dynamics, Export Modal)
-cargo run --example creative_2d -p kathamo
+cargo run --example creative_2d -p kathamo -- --native
 
 # 2. 3D Spatial DCC Workstation (3D Viewport Blit, Outliner, PBR Material Inspector)
-cargo run --example spatial_3d -p kathamo
+cargo run --example spatial_3d -p kathamo -- --native
 
 # 3. Procedural Flow Graph (Typed Pins, Spline Wires, Groups, Node Inspector)
-cargo run --example procedural_editor -p kathamo
+cargo run --example procedural_editor -p kathamo -- --native
 
 # 4. NLE Video Workstation (Video Monitor, Multi-Track Scrubbable Timeline, Clips)
-cargo run --example video_editor -p kathamo
+cargo run --example video_editor -p kathamo -- --native
 
 # 5. General Desktop Application (Telemetry HUD, Form Controls, Console Log, Migration Dialog)
-cargo run --example desktop_app -p kathamo
+cargo run --example desktop_app -p kathamo -- --native
 ```
 
 ### Agent Inspection & Verification (`InterfaceInspector`)

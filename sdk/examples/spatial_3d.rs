@@ -23,7 +23,7 @@ impl Spatial3dEditorApp {
         let mut registry = EditorRegistry::new();
 
         // 1. Customized 3D Viewport Host (Blits external GPU texture)
-        registry.register_factory("canvas", "3D Viewport", "Viewports", || {
+        registry.register_factory("viewport_3d", "3D Viewport", "Viewports", || {
             Box::new(CanvasEditor::new_3d_mock())
         });
 

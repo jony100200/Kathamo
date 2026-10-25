@@ -180,7 +180,8 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     MouseScrollDelta::PixelDelta(p) => Vec2::new(p.x as f32/20.0,p.y as f32/20.0),
                 };
                 child.ctx.pointer.scroll_delta = delta;
-                self.app.handle_window_scroll(&child.id, delta, child.ctx.pointer.position, &mut child.ctx);
+                let pos = child.ctx.pointer.position;
+                self.app.handle_window_scroll(&child.id, delta, pos, &mut child.ctx);
                 window.request_redraw();
             }
             WindowEvent::ModifiersChanged(mods) => {

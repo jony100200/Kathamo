@@ -589,7 +589,7 @@ impl NodeEditor {
         }
 
         // 4. Nodes
-        render_nodes(buf, &self.nodes, &self.selected_nodes, self.pan, self.zoom, viewport.min, palette);
+        render_nodes(buf, &self.nodes, &self.selected_nodes, self.pan, self.zoom, viewport.min, viewport, palette);
 
         // 5. Toolbar
         render_toolbar(buf, viewport, palette);

@@ -67,6 +67,14 @@ impl CommandBuffer {
         self.commands.push(cmd);
     }
 
+    pub fn insert(&mut self, index: usize, cmd: DrawCommand) {
+        if index <= self.commands.len() {
+            self.commands.insert(index, cmd);
+        } else {
+            self.commands.push(cmd);
+        }
+    }
+
     pub fn commands(&self) -> &[DrawCommand] {
         &self.commands
     }

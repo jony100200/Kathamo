@@ -355,6 +355,7 @@ impl<'a> LayoutBuilder<'a> {
         let start_y = self.cursor.y;
         let card_w = self.bounds.width() - (self.padding * 2.0);
 
+        let insert_pos = self.cmd_buf.len();
         self.cursor.y += self.padding;
         f(self);
         let end_y = self.cursor.y + self.padding;
@@ -365,12 +366,15 @@ impl<'a> LayoutBuilder<'a> {
             Vec2::new(card_w, card_h),
         );
 
-        self.cmd_buf.push(DrawCommand::Rect {
-            rect: card_rect,
-            fill: self.palette.elevated,
-            radius: CornerRadius::same(6.0),
-            stroke: Stroke::new(1.0, self.palette.border),
-        });
+        self.cmd_buf.insert(
+            insert_pos,
+            DrawCommand::Rect {
+                rect: card_rect,
+                fill: self.palette.elevated,
+                radius: CornerRadius::same(6.0),
+                stroke: Stroke::new(1.0, self.palette.border),
+            },
+        );
 
         self.cursor.y = end_y + self.spacing;
     }

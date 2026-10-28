@@ -4,21 +4,21 @@ use super::geometry::{
 };
 use super::minimap::render_minimap;
 use super::presets::create_default_graph;
-use super::types::PresetNode;
 use super::render::{
-    render_connections, render_grid, render_hud, render_marquee, render_nodes,
-    render_pending_wire, render_search_overlay, render_toolbar,
+    render_connections, render_grid, render_hud, render_marquee, render_nodes, render_pending_wire,
+    render_search_overlay, render_toolbar,
 };
 use super::search_menu::SearchMenuState;
+use super::types::PresetNode;
 use super::types::{
     DraggingNode, GraphNode, NodeAlignment, NodeConnection, NodeGroup, NodePin, PendingWire,
     ToolbarAction,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use ui_core::{CornerRadius, Rect, Stroke, Vec2};
-use ui_render::DrawCommand;
 use ui_platform::{Key, PointerButton};
 use ui_render::CommandBuffer;
+use ui_render::DrawCommand;
 use ui_themes::ThemePalette;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -243,7 +243,12 @@ impl NodeEditor {
 
         for (idx, node_id) in order.iter().enumerate() {
             if let Some(node) = self.nodes.iter().find(|n| n.id == *node_id) {
-                lines.push(format!("  [{}] Node '{}' ({})", idx + 1, node.title, node.category));
+                lines.push(format!(
+                    "  [{}] Node '{}' ({})",
+                    idx + 1,
+                    node.title,
+                    node.category
+                ));
             }
         }
 
@@ -307,19 +312,13 @@ impl NodeEditor {
             return;
         }
         self.nodes.retain(|n| !to_remove.contains(&n.id));
-        self.connections.retain(|c| {
-            !to_remove.contains(&c.from_node) && !to_remove.contains(&c.to_node)
-        });
+        self.connections
+            .retain(|c| !to_remove.contains(&c.from_node) && !to_remove.contains(&c.to_node));
         self.selected_nodes.clear();
         self.selected_node = None;
     }
 
-    pub fn handle_mouse_down(
-        &mut self,
-        screen_pos: Vec2,
-        button: PointerButton,
-        viewport: Rect,
-    ) {
+    pub fn handle_mouse_down(&mut self, screen_pos: Vec2, button: PointerButton, viewport: Rect) {
         self.handle_mouse_down_with_modifiers(screen_pos, button, viewport, false);
     }
 
@@ -416,12 +415,7 @@ impl NodeEditor {
         }
     }
 
-    pub fn handle_mouse_move(
-        &mut self,
-        screen_pos: Vec2,
-        delta_screen: Vec2,
-        viewport: Rect,
-    ) {
+    pub fn handle_mouse_move(&mut self, screen_pos: Vec2, delta_screen: Vec2, viewport: Rect) {
         self.handle_mouse_move_with_buttons(screen_pos, delta_screen, viewport, false);
     }
 
@@ -470,7 +464,9 @@ impl NodeEditor {
         if button == PointerButton::Primary {
             let world_pos = self.screen_to_world(screen_pos, viewport.min);
 
-            if let (Some(start), Some(curr)) = (self.marquee_start.take(), self.marquee_current.take()) {
+            if let (Some(start), Some(curr)) =
+                (self.marquee_start.take(), self.marquee_current.take())
+            {
                 let diff: Vec2 = start - curr;
                 if diff.length() > 3.0 {
                     let box_rect = Rect::from_min_max(
@@ -490,7 +486,9 @@ impl NodeEditor {
             self.dragging_node = None;
 
             if let Some(wire) = self.pending_wire.take() {
-                if let Some((target_node_id, target_pin_id, target_is_output)) = self.hit_test_pin(world_pos) {
+                if let Some((target_node_id, target_pin_id, target_is_output)) =
+                    self.hit_test_pin(world_pos)
+                {
                     if wire.from_node != target_node_id && wire.is_output != target_is_output {
                         let (from_n, from_p, to_n, to_p) = if wire.is_output {
                             (wire.from_node, wire.from_pin, target_node_id, target_pin_id)
@@ -498,18 +496,28 @@ impl NodeEditor {
                             (target_node_id, target_pin_id, wire.from_node, wire.from_pin)
                         };
 
-                        let from_type = self.nodes.iter().find(|n| n.id == from_n)
+                        let from_type = self
+                            .nodes
+                            .iter()
+                            .find(|n| n.id == from_n)
                             .and_then(|n| n.outputs.iter().find(|p| p.id == from_p))
-                            .map(|p| p.pin_type.clone()).unwrap_or_default();
-                        let to_type = self.nodes.iter().find(|n| n.id == to_n)
+                            .map(|p| p.pin_type.clone())
+                            .unwrap_or_default();
+                        let to_type = self
+                            .nodes
+                            .iter()
+                            .find(|n| n.id == to_n)
                             .and_then(|n| n.inputs.iter().find(|p| p.id == to_p))
-                            .map(|p| p.pin_type.clone()).unwrap_or_default();
+                            .map(|p| p.pin_type.clone())
+                            .unwrap_or_default();
 
-                        let types_match = from_type == to_type || from_type == "Any" || to_type == "Any";
+                        let types_match =
+                            from_type == to_type || from_type == "Any" || to_type == "Any";
                         let creates_cycle = self.can_reach(&to_n, &from_n);
 
                         if types_match && !creates_cycle {
-                            self.connections.retain(|c| !(c.to_node == to_n && c.to_pin == to_p));
+                            self.connections
+                                .retain(|c| !(c.to_node == to_n && c.to_pin == to_p));
                             self.connections.push(NodeConnection {
                                 from_node: from_n,
                                 from_pin: from_p,
@@ -544,7 +552,11 @@ impl NodeEditor {
                 }
             }
             Key::Tab => {
-                let pos = self.nodes.last().map(|n| n.pos + Vec2::new(n.size.x + 40.0, 0.0)).unwrap_or(Vec2::new(100.0, 100.0));
+                let pos = self
+                    .nodes
+                    .last()
+                    .map(|n| n.pos + Vec2::new(n.size.x + 40.0, 0.0))
+                    .unwrap_or(Vec2::new(100.0, 100.0));
                 self.open_search_menu(pos);
                 true
             }
@@ -576,11 +588,27 @@ impl NodeEditor {
         render_grid(buf, viewport, self.pan, self.zoom, palette);
 
         // 2. Connections
-        render_connections(buf, &self.nodes, &self.connections, self.pan, self.zoom, viewport.min, palette);
+        render_connections(
+            buf,
+            &self.nodes,
+            &self.connections,
+            self.pan,
+            self.zoom,
+            viewport.min,
+            palette,
+        );
 
         // 3. Pending wire
         if let Some(wire) = &self.pending_wire {
-            render_pending_wire(buf, &self.nodes, wire, self.pan, self.zoom, viewport.min, palette);
+            render_pending_wire(
+                buf,
+                &self.nodes,
+                wire,
+                self.pan,
+                self.zoom,
+                viewport.min,
+                palette,
+            );
         }
 
         // 3.5. Marquee box
@@ -589,16 +617,39 @@ impl NodeEditor {
         }
 
         // 4. Nodes
-        render_nodes(buf, &self.nodes, &self.selected_nodes, self.pan, self.zoom, viewport.min, viewport, palette);
+        render_nodes(
+            buf,
+            &self.nodes,
+            &self.selected_nodes,
+            self.pan,
+            self.zoom,
+            viewport.min,
+            viewport,
+            palette,
+        );
 
         // 5. Toolbar
         render_toolbar(buf, viewport, palette);
 
         // 6. HUD
-        render_hud(buf, viewport, self.nodes.len(), self.connections.len(), self.zoom, palette);
+        render_hud(
+            buf,
+            viewport,
+            self.nodes.len(),
+            self.connections.len(),
+            self.zoom,
+            palette,
+        );
 
         // 7. Search overlay
-        render_search_overlay(buf, &self.search_state, self.pan, self.zoom, viewport.min, palette);
+        render_search_overlay(
+            buf,
+            &self.search_state,
+            self.pan,
+            self.zoom,
+            viewport.min,
+            palette,
+        );
 
         // 8. Minimap
         if self.show_minimap {

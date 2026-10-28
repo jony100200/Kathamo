@@ -162,11 +162,11 @@ pub struct DraggingNode {
 
 pub fn category_color(category: &str, palette: &ThemePalette) -> Color {
     match category {
-        "Source" => Color::rgb(0x38, 0x8E, 0x3C),     // Forest Green
+        "Source" => Color::rgb(0x38, 0x8E, 0x3C), // Forest Green
         "Processing" => Color::rgb(0x19, 0x76, 0xD2), // Cobalt Blue
-        "Material" => Color::rgb(0xF5, 0x7C, 0x00),   // Vibrant Amber/Orange
-        "Output" => Color::rgb(0x7B, 0x1F, 0xA2),     // Deep Purple
-        "Utility" => Color::rgb(0x60, 0x7D, 0x8B),    // Slate Gray
+        "Material" => Color::rgb(0xF5, 0x7C, 0x00), // Vibrant Amber/Orange
+        "Output" => Color::rgb(0x7B, 0x1F, 0xA2), // Deep Purple
+        "Utility" => Color::rgb(0x60, 0x7D, 0x8B), // Slate Gray
         _ => palette.accent,
     }
 }

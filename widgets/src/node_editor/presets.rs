@@ -220,7 +220,8 @@ pub fn create_default_graph() -> (Vec<GraphNode>, Vec<NodeConnection>, Vec<NodeG
         PresetNode::StylizeColor.create_node("node_stylize".into(), Vec2::new(300.0, 80.0)),
         PresetNode::MakeSeamless.create_node("node_seamless".into(), Vec2::new(540.0, 80.0)),
         PresetNode::PbrGenerator.create_node("node_pbr".into(), Vec2::new(780.0, 60.0)),
-        PresetNode::PresentationVideo.create_node("node_presentation".into(), Vec2::new(1020.0, 100.0)),
+        PresetNode::PresentationVideo
+            .create_node("node_presentation".into(), Vec2::new(1020.0, 100.0)),
     ];
 
     let connections = vec![

@@ -125,9 +125,15 @@ pub fn render_pending_wire(
         let end = world_to_screen(pending_wire.current_world_pos, pan, zoom, viewport_origin);
         let dist = (end.x - start.x).abs().max(40.0 * zoom) * 0.5;
         let (ctrl1, ctrl2) = if pending_wire.is_output {
-            (Vec2::new(start.x + dist, start.y), Vec2::new(end.x - dist, end.y))
+            (
+                Vec2::new(start.x + dist, start.y),
+                Vec2::new(end.x - dist, end.y),
+            )
         } else {
-            (Vec2::new(start.x - dist, start.y), Vec2::new(end.x + dist, end.y))
+            (
+                Vec2::new(start.x - dist, start.y),
+                Vec2::new(end.x + dist, end.y),
+            )
         };
 
         buf.push(DrawCommand::CubicBezier {
@@ -188,9 +194,20 @@ pub fn render_nodes(
             let radius = 7.0 * zoom;
             buf.push(DrawCommand::Rect {
                 rect: Rect::from_min_size(screen_pos, screen_size),
-                fill: if is_selected { palette.accent } else { palette.surface },
+                fill: if is_selected {
+                    palette.accent
+                } else {
+                    palette.surface
+                },
                 radius: CornerRadius::same(radius),
-                stroke: Stroke::new(1.5 * zoom, if is_selected { palette.accent } else { palette.border }),
+                stroke: Stroke::new(
+                    1.5 * zoom,
+                    if is_selected {
+                        palette.accent
+                    } else {
+                        palette.border
+                    },
+                ),
             });
             continue;
         }
@@ -202,7 +219,11 @@ pub fn render_nodes(
             radius: CornerRadius::same(6.0 * zoom),
             stroke: Stroke::new(
                 if is_selected { 2.0 * zoom } else { 1.0 },
-                if is_selected { palette.accent } else { palette.border },
+                if is_selected {
+                    palette.accent
+                } else {
+                    palette.border
+                },
             ),
         });
 
@@ -303,15 +324,30 @@ pub fn render_toolbar(buf: &mut CommandBuffer, viewport: Rect, palette: &ThemePa
         let is_primary = matches!(action, ToolbarAction::SearchAdd);
         buf.push(DrawCommand::Rect {
             rect,
-            fill: if is_primary { palette.accent.with_alpha(40) } else { palette.surface.with_alpha(200) },
+            fill: if is_primary {
+                palette.accent.with_alpha(40)
+            } else {
+                palette.surface.with_alpha(200)
+            },
             radius: CornerRadius::same(4.0),
-            stroke: Stroke::new(1.0, if is_primary { palette.accent } else { palette.border }),
+            stroke: Stroke::new(
+                1.0,
+                if is_primary {
+                    palette.accent
+                } else {
+                    palette.border
+                },
+            ),
         });
         buf.push(DrawCommand::Text {
             text: label.to_string(),
             pos: rect.min + Vec2::new(8.0, 7.0),
             size: 11.0,
-            color: if is_primary { palette.accent } else { palette.text },
+            color: if is_primary {
+                palette.accent
+            } else {
+                palette.text
+            },
             strong: is_primary,
         });
     }
@@ -387,7 +423,11 @@ pub fn render_search_overlay(
         text: search_label,
         pos: menu_screen + Vec2::new(12.0, 10.0),
         size: 12.0,
-        color: if search.query.is_empty() { palette.text_muted } else { palette.accent },
+        color: if search.query.is_empty() {
+            palette.text_muted
+        } else {
+            palette.accent
+        },
         strong: !search.query.is_empty(),
     });
 
@@ -397,7 +437,10 @@ pub fn render_search_overlay(
 
     for (idx, preset) in filtered.iter().take(6).enumerate() {
         let y = list_start_y + (idx as f32 * row_height);
-        let row_rect = Rect::from_min_size(Vec2::new(menu_screen.x + 4.0, y), Vec2::new(menu_size.x - 8.0, row_height));
+        let row_rect = Rect::from_min_size(
+            Vec2::new(menu_screen.x + 4.0, y),
+            Vec2::new(menu_size.x - 8.0, row_height),
+        );
         let is_selected = idx == search.selected_index;
 
         if is_selected {
@@ -411,7 +454,10 @@ pub fn render_search_overlay(
 
         let cat_color = category_color(preset.category(), palette);
         buf.push(DrawCommand::Rect {
-            rect: Rect::from_min_size(Vec2::new(menu_screen.x + 8.0, y + 6.0), Vec2::new(3.0, 16.0)),
+            rect: Rect::from_min_size(
+                Vec2::new(menu_screen.x + 8.0, y + 6.0),
+                Vec2::new(3.0, 16.0),
+            ),
             fill: cat_color,
             radius: CornerRadius::same(1.0),
             stroke: Stroke::NONE,
@@ -421,7 +467,11 @@ pub fn render_search_overlay(
             text: preset.title().into(),
             pos: Vec2::new(menu_screen.x + 18.0, y + 7.0),
             size: 11.5,
-            color: if is_selected { palette.accent } else { palette.text },
+            color: if is_selected {
+                palette.accent
+            } else {
+                palette.text
+            },
             strong: is_selected,
         });
     }

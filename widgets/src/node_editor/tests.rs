@@ -18,8 +18,14 @@ fn offscreen_nodes_do_not_generate_gpu_draw_commands() {
     let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1920.0, 1080.0));
     let mut buffer = CommandBuffer::new();
     render_nodes(
-        &mut buffer, &[visible, invisible], &[], Vec2::ZERO, 1.0,
-        viewport.min, viewport, &ThemePalette::dark(),
+        &mut buffer,
+        &[visible, invisible],
+        &[],
+        Vec2::ZERO,
+        1.0,
+        viewport.min,
+        viewport,
+        &ThemePalette::dark(),
     );
     assert!(!buffer.commands().iter().any(|cmd| matches!(
         cmd, DrawCommand::Text { text, .. } if text == "Offscreen Marker"
@@ -43,13 +49,23 @@ fn graph_224_nodes_at_1080p_has_bounded_draw_commands() {
     let mut buffer = CommandBuffer::new();
     let start = std::time::Instant::now();
     render_nodes(
-        &mut buffer, &nodes, &[], Vec2::ZERO, 0.30,
-        viewport.min, viewport, &ThemePalette::dark(),
+        &mut buffer,
+        &nodes,
+        &[],
+        Vec2::ZERO,
+        0.30,
+        viewport.min,
+        viewport,
+        &ThemePalette::dark(),
     );
     let elapsed = start.elapsed();
     assert!(buffer.len() > 224, "No visible node drawing");
     assert!(buffer.len() < 10_000, "Command buffer grew unexpectedly");
-    println!("224 visible graph nodes at 1920x1080: {} draw commands, CPU encode {:?}", buffer.len(), elapsed);
+    println!(
+        "224 visible graph nodes at 1920x1080: {} draw commands, CPU encode {:?}",
+        buffer.len(),
+        elapsed
+    );
 }
 
 #[test]
@@ -69,7 +85,10 @@ fn test_topological_execution_order() {
     let idx_stylize = order.iter().position(|id| id == "node_stylize").unwrap();
     let idx_seamless = order.iter().position(|id| id == "node_seamless").unwrap();
     let idx_pbr = order.iter().position(|id| id == "node_pbr").unwrap();
-    let idx_video = order.iter().position(|id| id == "node_presentation").unwrap();
+    let idx_video = order
+        .iter()
+        .position(|id| id == "node_presentation")
+        .unwrap();
 
     assert!(idx_source < idx_stylize);
     assert!(idx_stylize < idx_seamless);
@@ -124,7 +143,11 @@ fn test_pin_wiring_and_connection() {
     editor.handle_mouse_down(screen_start, PointerButton::Primary, viewport);
     assert!(editor.pending_wire.is_some());
 
-    let to_node = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap();
+    let to_node = editor
+        .nodes
+        .iter()
+        .find(|n| n.id == "node_stylize")
+        .unwrap();
     let in_pos = editor.input_pin_world_pos(to_node, 0);
     let screen_end = editor.world_to_screen(in_pos, viewport.min);
 
@@ -146,7 +169,11 @@ fn test_type_safety_rejects_mismatched_pins() {
     let from_node = editor.nodes.iter().find(|n| n.id == "node_source").unwrap();
     let out_pos = editor.output_pin_world_pos(from_node, 1); // "Mask" type
 
-    let to_node = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap();
+    let to_node = editor
+        .nodes
+        .iter()
+        .find(|n| n.id == "node_stylize")
+        .unwrap();
     let in_pos = editor.input_pin_world_pos(to_node, 0); // "Image" type
 
     let screen_start = editor.world_to_screen(out_pos, viewport.min);
@@ -293,7 +320,10 @@ fn test_multi_node_dragging() {
         .pos;
 
     assert_eq!(src_pos_after - src_pos_before, Vec2::new(40.0, 30.0));
-    assert_eq!(stylize_pos_after - stylize_pos_before, Vec2::new(40.0, 30.0));
+    assert_eq!(
+        stylize_pos_after - stylize_pos_before,
+        Vec2::new(40.0, 30.0)
+    );
 }
 
 #[test]

@@ -346,7 +346,7 @@ impl NodeEditor {
                         let pos = self.screen_to_world(viewport.center(), viewport.min);
                         self.spawn_preset(PresetNode::TextureSource, pos);
                     }
-                    ToolbarAction::AddStylize => {
+                    ToolbarAction::AddStylize | ToolbarAction::AddFilter => {
                         let pos = self.screen_to_world(viewport.center(), viewport.min);
                         self.spawn_preset(PresetNode::StylizeColor, pos);
                     }
@@ -362,7 +362,7 @@ impl NodeEditor {
                         let pos = self.screen_to_world(viewport.center(), viewport.min);
                         self.spawn_preset(PresetNode::HeightToNormal, pos);
                     }
-                    ToolbarAction::AddVideo => {
+                    ToolbarAction::AddVideo | ToolbarAction::AddExport => {
                         let pos = self.screen_to_world(viewport.center(), viewport.min);
                         self.spawn_preset(PresetNode::PresentationVideo, pos);
                     }

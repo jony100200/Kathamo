@@ -1,15 +1,14 @@
 use super::editor::NodeEditor;
-use super::types::PresetNode;
-use super::types::{category_color, NodeAlignment, ToolbarAction};
+use super::types::{category_color, NodeAlignment, PresetNode, ToolbarAction};
+use crate::theme::ThemePalette;
 use ui_core::{Rect, Vec2};
 use ui_platform::{Key, PointerButton};
-use ui_themes::ThemePalette;
 
 #[test]
 fn test_node_editor_defaults() {
     let editor = NodeEditor::default();
-    assert_eq!(editor.nodes.len(), 4);
-    assert_eq!(editor.connections.len(), 3);
+    assert_eq!(editor.nodes.len(), 5);
+    assert_eq!(editor.connections.len(), 4);
     assert!(editor.selected_node.is_none());
 }
 
@@ -17,13 +16,15 @@ fn test_node_editor_defaults() {
 fn test_topological_execution_order() {
     let editor = NodeEditor::default();
     let order = editor.execution_order();
-    assert_eq!(order.len(), 4);
+    assert_eq!(order.len(), 5);
     let idx_source = order.iter().position(|id| id == "node_source").unwrap();
+    let idx_stylize = order.iter().position(|id| id == "node_stylize").unwrap();
     let idx_seamless = order.iter().position(|id| id == "node_seamless").unwrap();
     let idx_pbr = order.iter().position(|id| id == "node_pbr").unwrap();
-    let idx_video = order.iter().position(|id| id == "node_video").unwrap();
+    let idx_video = order.iter().position(|id| id == "node_presentation").unwrap();
 
-    assert!(idx_source < idx_seamless);
+    assert!(idx_source < idx_stylize);
+    assert!(idx_stylize < idx_seamless);
     assert!(idx_seamless < idx_pbr);
     assert!(idx_pbr < idx_video);
 
@@ -51,7 +52,7 @@ fn test_node_dragging() {
 
     assert!(editor.dragging_node.is_none());
     let source_node = editor.nodes.iter().find(|n| n.id == "node_source").unwrap();
-    assert_eq!(source_node.pos, Vec2::new(130.0, 150.0));
+    assert_eq!(source_node.pos, Vec2::new(110.0, 110.0));
 }
 
 #[test]
@@ -68,14 +69,14 @@ fn test_pin_wiring_and_connection() {
     let pin_hit = editor.hit_test_pin(out_pos);
     assert_eq!(
         pin_hit,
-        Some(("node_source".into(), "albedo_out".into(), true))
+        Some(("node_source".into(), "out_rgb".into(), true))
     );
 
     let screen_start = editor.world_to_screen(out_pos, viewport.min);
     editor.handle_mouse_down(screen_start, PointerButton::Primary, viewport);
     assert!(editor.pending_wire.is_some());
 
-    let to_node = editor.nodes.iter().find(|n| n.id == "node_seamless").unwrap();
+    let to_node = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap();
     let in_pos = editor.input_pin_world_pos(to_node, 0);
     let screen_end = editor.world_to_screen(in_pos, viewport.min);
 
@@ -85,7 +86,7 @@ fn test_pin_wiring_and_connection() {
     assert!(editor.pending_wire.is_none());
     assert_eq!(editor.connections.len(), 1);
     assert_eq!(editor.connections[0].from_node, "node_source");
-    assert_eq!(editor.connections[0].to_node, "node_seamless");
+    assert_eq!(editor.connections[0].to_node, "node_stylize");
 }
 
 #[test]
@@ -95,10 +96,10 @@ fn test_type_safety_rejects_mismatched_pins() {
     editor.connections.clear();
 
     let from_node = editor.nodes.iter().find(|n| n.id == "node_source").unwrap();
-    let out_pos = editor.output_pin_world_pos(from_node, 0); // Image type
+    let out_pos = editor.output_pin_world_pos(from_node, 1); // "Mask" type
 
-    let to_node = editor.nodes.iter().find(|n| n.id == "node_video").unwrap();
-    let in_pos = editor.input_pin_world_pos(to_node, 0); // PbrSet type
+    let to_node = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap();
+    let in_pos = editor.input_pin_world_pos(to_node, 0); // "Image" type
 
     let screen_start = editor.world_to_screen(out_pos, viewport.min);
     editor.handle_mouse_down(screen_start, PointerButton::Primary, viewport);
@@ -123,7 +124,7 @@ fn test_spawn_preset_and_toolbar() {
         .iter()
         .find(|(act, _, _)| *act == ToolbarAction::AddTexture)
         .unwrap();
-    let click_pos: Vec2 = rect.center();
+    let click_pos = rect.center();
 
     editor.handle_mouse_down(click_pos, PointerButton::Primary, viewport);
     assert_eq!(editor.nodes.len(), initial_count + 1);
@@ -136,11 +137,13 @@ fn test_delete_selected_node_cleans_connections() {
     assert_eq!(editor.selected_node, Some("node_seamless".into()));
 
     editor.handle_key_down(Key::Delete);
-    assert_eq!(editor.nodes.len(), 3);
+    assert_eq!(editor.nodes.len(), 4);
     assert!(editor.nodes.iter().all(|n| n.id != "node_seamless"));
-    assert_eq!(editor.connections.len(), 1);
-    assert_eq!(editor.connections[0].from_node, "node_pbr");
-    assert_eq!(editor.connections[0].to_node, "node_video");
+    assert_eq!(editor.connections.len(), 2);
+    assert_eq!(editor.connections[0].from_node, "node_source");
+    assert_eq!(editor.connections[0].to_node, "node_stylize");
+    assert_eq!(editor.connections[1].from_node, "node_pbr");
+    assert_eq!(editor.connections[1].to_node, "node_presentation");
 }
 
 #[test]
@@ -195,7 +198,7 @@ fn test_marquee_box_selection() {
 
     assert!(editor.marquee_start.is_none());
     assert!(editor.is_node_selected("node_source"));
-    assert!(editor.is_node_selected("node_seamless"));
+    assert!(editor.is_node_selected("node_stylize"));
 }
 
 #[test]
@@ -204,7 +207,7 @@ fn test_multi_node_dragging() {
     let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1000.0, 800.0));
 
     editor.select_node("node_source", false);
-    editor.select_node("node_seamless", true);
+    editor.select_node("node_stylize", true);
     assert_eq!(editor.selected_nodes.len(), 2);
 
     let src_pos_before = editor
@@ -213,10 +216,10 @@ fn test_multi_node_dragging() {
         .find(|n| n.id == "node_source")
         .unwrap()
         .pos;
-    let seam_pos_before = editor
+    let stylize_pos_before = editor
         .nodes
         .iter()
-        .find(|n| n.id == "node_seamless")
+        .find(|n| n.id == "node_stylize")
         .unwrap()
         .pos;
 
@@ -234,22 +237,22 @@ fn test_multi_node_dragging() {
         .find(|n| n.id == "node_source")
         .unwrap()
         .pos;
-    let seam_pos_after = editor
+    let stylize_pos_after = editor
         .nodes
         .iter()
-        .find(|n| n.id == "node_seamless")
+        .find(|n| n.id == "node_stylize")
         .unwrap()
         .pos;
 
     assert_eq!(src_pos_after - src_pos_before, Vec2::new(40.0, 30.0));
-    assert_eq!(seam_pos_after - seam_pos_before, Vec2::new(40.0, 30.0));
+    assert_eq!(stylize_pos_after - stylize_pos_before, Vec2::new(40.0, 30.0));
 }
 
 #[test]
 fn test_node_alignment() {
     let mut editor = NodeEditor::default();
     editor.select_node("node_source", false);
-    editor.select_node("node_seamless", true);
+    editor.select_node("node_stylize", true);
 
     editor.align_selected(NodeAlignment::Left);
     let src_x = editor
@@ -259,14 +262,14 @@ fn test_node_alignment() {
         .unwrap()
         .pos
         .x;
-    let seam_x = editor
+    let stylize_x = editor
         .nodes
         .iter()
-        .find(|n| n.id == "node_seamless")
+        .find(|n| n.id == "node_stylize")
         .unwrap()
         .pos
         .x;
-    assert_eq!(src_x, seam_x);
+    assert_eq!(src_x, stylize_x);
 }
 
 #[test]

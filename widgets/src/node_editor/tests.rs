@@ -27,7 +27,7 @@ fn offscreen_nodes_do_not_generate_gpu_draw_commands() {
 }
 
 #[test]
-fn 224_node_1080p_graph_render_is_bounded() {
+fn graph_224_nodes_at_1080p_has_bounded_draw_commands() {
     use super::render::render_nodes;
     use ui_render::CommandBuffer;
     let editor = NodeEditor::default();

@@ -22,6 +22,7 @@ pub enum ToolbarAction {
     AddExport,
     ResetView,
     DeleteSelected,
+    SearchAdd,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,58 @@ pub enum PresetNode {
     PbrGenerator,
     HeightToNormal,
     PresentationVideo,
+    Reroute,
+}
+
+impl PresetNode {
+    pub const ALL: [PresetNode; 7] = [
+        PresetNode::TextureSource,
+        PresetNode::StylizeColor,
+        PresetNode::MakeSeamless,
+        PresetNode::PbrGenerator,
+        PresetNode::HeightToNormal,
+        PresetNode::PresentationVideo,
+        PresetNode::Reroute,
+    ];
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            PresetNode::TextureSource => "Texture Source",
+            PresetNode::StylizeColor => "Stylize & Color",
+            PresetNode::MakeSeamless => "Make Seamless",
+            PresetNode::PbrGenerator => "PBR Generator",
+            PresetNode::HeightToNormal => "Height to Normal",
+            PresetNode::PresentationVideo => "Presentation & Video",
+            PresetNode::Reroute => "Reroute Knot",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeAlignment {
+    AlignLeft,
+    AlignRight,
+    AlignTop,
+    AlignBottom,
+    DistributeHorizontally,
+    DistributeVertically,
+}
+
+#[inline]
+pub fn category_color(category: &str, palette: &ThemePalette) -> Color {
+    match category {
+        "Source" | "Input" => Color::rgb(217, 119, 6),    // Amber / Gold
+        "Filter" | "Adjustment" => Color::rgb(147, 51, 234), // Purple
+        "Processing" | "Math" => Color::rgb(16, 185, 129),  // Emerald Green
+        "PBR" | "Material" => Color::rgb(37, 99, 235),      // Blue
+        "Media" | "Video" | "Export" => Color::rgb(225, 29, 72), // Rose / Red
+        "Shader" => Color::rgb(6, 182, 212),                // Cyan
+        "VFX" => Color::rgb(249, 115, 22),                  // Orange
+        "AI" | "Model" => Color::rgb(168, 85, 247),         // Violet
+        "Output" => Color::rgb(13, 148, 136),               // Teal
+        "Reroute" | "Utility" => Color::rgb(156, 163, 175), // Slate / Gray
+        _ => palette.accent,
+    }
 }
 
 #[inline]
@@ -106,6 +159,7 @@ pub struct NodeEditor {
     pub connections: Vec<NodeConnection>,
     pub groups: Vec<NodeGroup>,
     pub selected_node: Option<String>,
+    pub selected_nodes: Vec<String>,
     pub dragging_node: Option<DraggingNode>,
     pub pending_wire: Option<PendingWire>,
     pub is_panning: bool,
@@ -114,6 +168,9 @@ pub struct NodeEditor {
     pub search_query: String,
     pub search_world_pos: Vec2,
     pub search_selected_index: usize,
+    pub marquee_start: Option<Vec2>,
+    pub marquee_current: Option<Vec2>,
+    pub show_minimap: bool,
 }
 
 impl Default for NodeEditor {
@@ -312,10 +369,14 @@ impl Default for NodeEditor {
             pending_wire: None,
             is_panning: false,
             hovered_pin: None,
+            selected_nodes: Vec::new(),
             search_menu_open: false,
             search_query: String::new(),
             search_world_pos: Vec2::ZERO,
             search_selected_index: 0,
+            marquee_start: None,
+            marquee_current: None,
+            show_minimap: true,
         }
     }
 }
@@ -326,6 +387,134 @@ impl NodeEditor {
     // -------------------------------------------------------------------------
 
     #[inline]
+    pub fn is_node_selected(&self, id: &str) -> bool {
+        self.selected_node.as_deref() == Some(id) || self.selected_nodes.iter().any(|s| s == id)
+    }
+
+    pub fn select_node(&mut self, id: &str, multi: bool) {
+        if multi {
+            if !self.selected_nodes.iter().any(|s| s == id) {
+                self.selected_nodes.push(id.to_string());
+            }
+            if self.selected_node.is_none() {
+                self.selected_node = Some(id.to_string());
+            }
+        } else {
+            self.selected_nodes = vec![id.to_string()];
+            self.selected_node = Some(id.to_string());
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected_node = None;
+        self.selected_nodes.clear();
+    }
+
+    pub fn align_selected(&mut self, alignment: NodeAlignment) {
+        if self.selected_nodes.len() < 2 {
+            return;
+        }
+        let sel_ids = &self.selected_nodes;
+        let mut min_x = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+
+        for n in &self.nodes {
+            if sel_ids.iter().any(|id| id == &n.id) {
+                min_x = min_x.min(n.pos.x);
+                max_x = max_x.max(n.pos.x + n.size.x);
+                min_y = min_y.min(n.pos.y);
+                max_y = max_y.max(n.pos.y + n.size.y);
+            }
+        }
+
+        match alignment {
+            NodeAlignment::AlignLeft => {
+                for n in &mut self.nodes {
+                    if sel_ids.iter().any(|id| id == &n.id) {
+                        n.pos.x = min_x;
+                    }
+                }
+            }
+            NodeAlignment::AlignRight => {
+                for n in &mut self.nodes {
+                    if sel_ids.iter().any(|id| id == &n.id) {
+                        n.pos.x = max_x - n.size.x;
+                    }
+                }
+            }
+            NodeAlignment::AlignTop => {
+                for n in &mut self.nodes {
+                    if sel_ids.iter().any(|id| id == &n.id) {
+                        n.pos.y = min_y;
+                    }
+                }
+            }
+            NodeAlignment::AlignBottom => {
+                for n in &mut self.nodes {
+                    if sel_ids.iter().any(|id| id == &n.id) {
+                        n.pos.y = max_y - n.size.y;
+                    }
+                }
+            }
+            NodeAlignment::DistributeHorizontally => {
+                let mut sorted: Vec<(usize, f32)> = self.nodes.iter().enumerate()
+                    .filter(|(_, n)| sel_ids.iter().any(|id| id == &n.id))
+                    .map(|(idx, n)| (idx, n.pos.x))
+                    .collect();
+                sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+                if sorted.len() > 1 {
+                    let total_span = max_x - min_x;
+                    let step = total_span / (sorted.len() - 1) as f32;
+                    for (i, (idx, _)) in sorted.iter().enumerate() {
+                        self.nodes[*idx].pos.x = min_x + (i as f32 * step);
+                    }
+                }
+            }
+            NodeAlignment::DistributeVertically => {
+                let mut sorted: Vec<(usize, f32)> = self.nodes.iter().enumerate()
+                    .filter(|(_, n)| sel_ids.iter().any(|id| id == &n.id))
+                    .map(|(idx, n)| (idx, n.pos.y))
+                    .collect();
+                sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+                if sorted.len() > 1 {
+                    let total_span = max_y - min_y;
+                    let step = total_span / (sorted.len() - 1) as f32;
+                    for (i, (idx, _)) in sorted.iter().enumerate() {
+                        self.nodes[*idx].pos.y = min_y + (i as f32 * step);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn open_search_menu(&mut self, world_pos: Vec2) {
+        self.search_menu_open = true;
+        self.search_query.clear();
+        self.search_world_pos = world_pos;
+        self.search_selected_index = 0;
+    }
+
+    pub fn close_search_menu(&mut self) {
+        self.search_menu_open = false;
+        self.search_query.clear();
+        self.search_selected_index = 0;
+    }
+
+    pub fn filter_presets(&self) -> Vec<PresetNode> {
+        let q = self.search_query.trim().to_lowercase();
+        if q.is_empty() {
+            PresetNode::ALL.to_vec()
+        } else {
+            PresetNode::ALL
+                .iter()
+                .copied()
+                .filter(|p| p.display_name().to_lowercase().contains(&q))
+                .collect()
+        }
+    }
+
     pub fn world_to_screen(&self, world: Vec2, viewport_origin: Vec2) -> Vec2 {
         Vec2::new(
             viewport_origin.x + (world.x + self.pan.x) * self.zoom,
@@ -383,6 +572,7 @@ impl NodeEditor {
             (ToolbarAction::AddSeamless, 95.0, "+ Seamless"),
             (ToolbarAction::AddPbr, 75.0, "+ PBR"),
             (ToolbarAction::AddExport, 85.0, "+ Export"),
+            (ToolbarAction::SearchAdd, 85.0, "+ Search"),
             (ToolbarAction::ResetView, 85.0, "Reset View"),
             (ToolbarAction::DeleteSelected, 95.0, "Delete Node"),
         ];
@@ -587,6 +777,23 @@ impl NodeEditor {
                 }],
                 world_pos,
             ),
+            PresetNode::Reroute => self.spawn_node(
+                "Reroute",
+                "Reroute",
+                vec![NodePin {
+                    id: "in".into(),
+                    name: "In".into(),
+                    is_output: false,
+                    pin_type: "Any".into(),
+                }],
+                vec![NodePin {
+                    id: "out".into(),
+                    name: "Out".into(),
+                    is_output: true,
+                    pin_type: "Any".into(),
+                }],
+                world_pos,
+            ),
         }
     }
 
@@ -728,6 +935,9 @@ impl NodeEditor {
                     ToolbarAction::AddExport => {
                         self.spawn_preset(PresetNode::PresentationVideo, center_world);
                     }
+                    ToolbarAction::SearchAdd => {
+                        self.open_search_menu(center_world);
+                    }
                     ToolbarAction::ResetView => {
                         self.pan = Vec2::new(40.0, 40.0);
                         self.zoom = 1.0;
@@ -781,7 +991,9 @@ impl NodeEditor {
 
             // 3. Check Node Hit (Node Dragging & Selection)
             if let Some(node_id) = self.hit_test_node(world_pos) {
-                self.selected_node = Some(node_id.clone());
+                if !self.is_node_selected(&node_id) {
+                    self.select_node(&node_id, false);
+                }
 
                 // Bring clicked node to the top of the stack
                 if let Some(pos) = self.nodes.iter().position(|n| n.id == node_id) {
@@ -793,11 +1005,19 @@ impl NodeEditor {
                         click_offset,
                     });
                 }
+                if self.search_menu_open {
+                    self.close_search_menu();
+                }
                 return true;
             }
 
-            // 4. Clicked Canvas Background = Deselect
-            self.selected_node = None;
+            // 4. Clicked Canvas Background = Marquee Selection Start
+            self.clear_selection();
+            self.marquee_start = Some(world_pos);
+            self.marquee_current = Some(world_pos);
+            if self.search_menu_open {
+                self.close_search_menu();
+            }
             return true;
         }
 
@@ -813,9 +1033,24 @@ impl NodeEditor {
         }
 
         if let Some(drag) = &self.dragging_node {
-            if let Some(node) = self.nodes.iter_mut().find(|n| n.id == drag.node_id) {
-                node.pos = world_pos - drag.click_offset;
+            if let Some(node_idx) = self.nodes.iter().position(|n| n.id == drag.node_id) {
+                let target_pos = world_pos - drag.click_offset;
+                let delta = target_pos - self.nodes[node_idx].pos;
+                if self.selected_nodes.len() > 1 && self.selected_nodes.contains(&drag.node_id) {
+                    for n in &mut self.nodes {
+                        if self.selected_nodes.contains(&n.id) {
+                            n.pos = n.pos + delta;
+                        }
+                    }
+                } else {
+                    self.nodes[node_idx].pos = target_pos;
+                }
             }
+            return;
+        }
+
+        if self.marquee_start.is_some() {
+            self.marquee_current = Some(world_pos);
             return;
         }
 
@@ -836,6 +1071,22 @@ impl NodeEditor {
 
         if button == PointerButton::Primary {
             self.dragging_node = None;
+
+            if let (Some(start), Some(curr)) = (self.marquee_start.take(), self.marquee_current.take()) {
+                let p_min = Vec2::new(start.x.min(curr.x), start.y.min(curr.y));
+                let p_max = Vec2::new(start.x.max(curr.x), start.y.max(curr.y));
+                let marquee_rect = Rect::from_min_max(p_min, p_max);
+                if marquee_rect.width() > 6.0 || marquee_rect.height() > 6.0 {
+                    self.clear_selection();
+                    for n in &self.nodes {
+                        let n_rect = Rect::from_min_size(n.pos, n.size);
+                        if marquee_rect.intersects(n_rect) {
+                            self.selected_nodes.push(n.id.clone());
+                        }
+                    }
+                    self.selected_node = self.selected_nodes.first().cloned();
+                }
+            }
 
             if let Some(wire) = self.pending_wire.take() {
                 let world_pos = self.screen_to_world(screen_pos, viewport.min);
@@ -911,18 +1162,70 @@ impl NodeEditor {
     }
 
     pub fn handle_key_down(&mut self, key: Key) -> bool {
+        if self.search_menu_open {
+            match key {
+                Key::Escape => {
+                    self.close_search_menu();
+                    return true;
+                }
+                Key::ArrowUp => {
+                    let filtered = self.filter_presets();
+                    if !filtered.is_empty() {
+                        self.search_selected_index = self
+                            .search_selected_index
+                            .checked_sub(1)
+                            .unwrap_or(filtered.len() - 1);
+                    }
+                    return true;
+                }
+                Key::ArrowDown => {
+                    let filtered = self.filter_presets();
+                    if !filtered.is_empty() {
+                        self.search_selected_index = (self.search_selected_index + 1) % filtered.len();
+                    }
+                    return true;
+                }
+                Key::Enter => {
+                    let filtered = self.filter_presets();
+                    if let Some(preset) = filtered.get(self.search_selected_index) {
+                        self.spawn_preset(*preset, self.search_world_pos);
+                    }
+                    self.close_search_menu();
+                    return true;
+                }
+                Key::Backspace => {
+                    self.search_query.pop();
+                    self.search_selected_index = 0;
+                    return true;
+                }
+                Key::Character(c) => {
+                    if !c.is_control() {
+                        self.search_query.push(c);
+                        self.search_selected_index = 0;
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+            return false;
+        }
+
         match key {
             Key::Delete | Key::Backspace => {
-                if self.selected_node.is_some() {
+                if self.selected_node.is_some() || !self.selected_nodes.is_empty() {
                     self.delete_selected();
                     return true;
                 }
             }
             Key::Escape => {
-                let changed = self.pending_wire.is_some() || self.selected_node.is_some();
+                let changed = self.pending_wire.is_some() || self.selected_node.is_some() || !self.selected_nodes.is_empty();
                 self.pending_wire = None;
-                self.selected_node = None;
+                self.clear_selection();
                 return changed;
+            }
+            Key::Space | Key::Tab => {
+                self.open_search_menu(self.pan);
+                return true;
             }
             _ => {}
         }
@@ -935,11 +1238,18 @@ impl NodeEditor {
     }
 
     pub fn delete_selected(&mut self) {
-        if let Some(sel_id) = self.selected_node.take() {
-            self.nodes.retain(|n| n.id != sel_id);
-            self.connections
-                .retain(|c| c.from_node != sel_id && c.to_node != sel_id);
+        let mut to_delete = self.selected_nodes.clone();
+        if let Some(sel) = &self.selected_node {
+            if !to_delete.contains(sel) {
+                to_delete.push(sel.clone());
+            }
         }
+        for id in &to_delete {
+            self.nodes.retain(|n| &n.id != id);
+            self.connections
+                .retain(|c| &c.from_node != id && &c.to_node != id);
+        }
+        self.clear_selection();
     }
 
     // -------------------------------------------------------------------------
@@ -1078,6 +1388,22 @@ impl NodeEditor {
             }
         }
 
+        // 3.5 Draw Marquee Box Selection
+        if let (Some(start), Some(curr)) = (self.marquee_start, self.marquee_current) {
+            let p1 = self.world_to_screen(start, viewport.min);
+            let p2 = self.world_to_screen(curr, viewport.min);
+            let box_rect = Rect::from_min_max(
+                Vec2::new(p1.x.min(p2.x), p1.y.min(p2.y)),
+                Vec2::new(p1.x.max(p2.x), p1.y.max(p2.y)),
+            );
+            buf.push(DrawCommand::Rect {
+                rect: box_rect,
+                fill: palette.accent.with_alpha(30),
+                radius: CornerRadius::ZERO,
+                stroke: Stroke::new(1.0, palette.accent.with_alpha(180)),
+            });
+        }
+
         // 4. Draw Graph Nodes
         for node in &self.nodes {
             let screen_pos = self.world_to_screen(node.pos, viewport.min);
@@ -1088,7 +1414,7 @@ impl NodeEditor {
                 continue;
             }
 
-            let is_sel = self.selected_node.as_deref() == Some(&node.id);
+            let is_sel = self.is_node_selected(&node.id);
 
             // Node Body Card
             buf.push(DrawCommand::Rect {
@@ -1122,11 +1448,29 @@ impl NodeEditor {
                 stroke: Stroke::NONE,
             });
 
+            // Colored category header accent bar (Unreal / Graphite style)
+            let cat_col = category_color(&node.category, palette);
+            let accent_bar = Rect::from_min_size(
+                node_rect.min,
+                Vec2::new(node_rect.width(), 3.5 * self.zoom),
+            );
+            buf.push(DrawCommand::Rect {
+                rect: accent_bar,
+                fill: cat_col,
+                radius: CornerRadius {
+                    top_left: 8.0 * self.zoom,
+                    top_right: 8.0 * self.zoom,
+                    bottom_left: 0.0,
+                    bottom_right: 0.0,
+                },
+                stroke: Stroke::NONE,
+            });
+
             buf.push(DrawCommand::Text {
                 text: node.title.clone(),
                 pos: Vec2::new(
                     header_rect.min.x + 10.0 * self.zoom,
-                    header_rect.min.y + 6.0 * self.zoom,
+                    header_rect.min.y + 8.0 * self.zoom,
                 ),
                 size: (12.0 * self.zoom).clamp(9.0, 18.0),
                 color: palette.text,
@@ -1285,6 +1629,122 @@ impl NodeEditor {
             color: palette.text,
             strong: true,
         });
+
+        // 7. Search-To-Add Overlay
+        if self.search_menu_open {
+            let menu_pos = self.world_to_screen(self.search_world_pos, viewport.min);
+            let menu_w = 220.0;
+            let item_h = 24.0;
+            let filtered = self.filter_presets();
+            let total_h = 36.0 + (filtered.len() as f32 * item_h) + 8.0;
+            let menu_rect = Rect::from_min_size(menu_pos, Vec2::new(menu_w, total_h));
+
+            buf.push(DrawCommand::Rect {
+                rect: menu_rect,
+                fill: palette.surface,
+                radius: CornerRadius::same(6.0),
+                stroke: Stroke::new(1.0, palette.border),
+            });
+
+            let search_box = Rect::from_min_size(
+                Vec2::new(menu_pos.x + 6.0, menu_pos.y + 6.0),
+                Vec2::new(menu_w - 12.0, 24.0),
+            );
+            buf.push(DrawCommand::Rect {
+                rect: search_box,
+                fill: palette.elevated,
+                radius: CornerRadius::same(4.0),
+                stroke: Stroke::new(1.0, palette.accent),
+            });
+            let query_display = if self.search_query.is_empty() {
+                "Search nodes...".to_string()
+            } else {
+                self.search_query.clone()
+            };
+            buf.push(DrawCommand::Text {
+                text: query_display,
+                pos: Vec2::new(search_box.min.x + 6.0, search_box.min.y + 5.0),
+                size: 11.0,
+                color: if self.search_query.is_empty() {
+                    palette.text_muted
+                } else {
+                    palette.text
+                },
+                strong: !self.search_query.is_empty(),
+            });
+
+            let mut item_y = menu_pos.y + 36.0;
+            for (idx, preset) in filtered.iter().enumerate() {
+                let is_hovered = idx == self.search_selected_index;
+                let item_rect = Rect::from_min_size(
+                    Vec2::new(menu_pos.x + 6.0, item_y),
+                    Vec2::new(menu_w - 12.0, item_h),
+                );
+                if is_hovered {
+                    buf.push(DrawCommand::Rect {
+                        rect: item_rect,
+                        fill: palette.accent.with_alpha(50),
+                        radius: CornerRadius::same(4.0),
+                        stroke: Stroke::NONE,
+                    });
+                }
+                buf.push(DrawCommand::Text {
+                    text: preset.display_name().to_string(),
+                    pos: Vec2::new(item_rect.min.x + 8.0, item_rect.min.y + 5.0),
+                    size: 11.0,
+                    color: if is_hovered { palette.text } else { palette.text_muted },
+                    strong: is_hovered,
+                });
+                item_y += item_h;
+            }
+        }
+
+        // 8. Minimap
+        if self.show_minimap && !self.nodes.is_empty() {
+            let map_w = 160.0;
+            let map_h = 100.0;
+            let map_rect = Rect::from_min_size(
+                Vec2::new(viewport.min.x + 16.0, viewport.max.y - map_h - 16.0),
+                Vec2::new(map_w, map_h),
+            );
+
+            buf.push(DrawCommand::Rect {
+                rect: map_rect,
+                fill: palette.surface.with_alpha(220),
+                radius: CornerRadius::same(6.0),
+                stroke: Stroke::new(1.0, palette.border),
+            });
+
+            let mut min_bound = self.nodes[0].pos;
+            let mut max_bound = self.nodes[0].pos + self.nodes[0].size;
+            for n in &self.nodes {
+                min_bound.x = min_bound.x.min(n.pos.x);
+                min_bound.y = min_bound.y.min(n.pos.y);
+                max_bound.x = max_bound.x.max(n.pos.x + n.size.x);
+                max_bound.y = max_bound.y.max(n.pos.y + n.size.y);
+            }
+            min_bound = min_bound - Vec2::splat(100.0);
+            max_bound = max_bound + Vec2::splat(100.0);
+            let span = max_bound - min_bound;
+            if span.x > 0.0 && span.y > 0.0 {
+                let scale = (map_w / span.x).min(map_h / span.y);
+                for n in &self.nodes {
+                    let norm_pos = (n.pos - min_bound) * scale;
+                    let norm_size = Vec2::new((n.size.x * scale).max(3.0), (n.size.y * scale).max(3.0));
+                    let dot_rect = Rect::from_min_size(
+                        Vec2::new(map_rect.min.x + norm_pos.x, map_rect.min.y + norm_pos.y),
+                        norm_size,
+                    );
+                    let col = category_color(&n.category, palette);
+                    buf.push(DrawCommand::Rect {
+                        rect: dot_rect,
+                        fill: col,
+                        radius: CornerRadius::same(1.0),
+                        stroke: Stroke::NONE,
+                    });
+                }
+            }
+        }
 
         buf.push(DrawCommand::ClipPop);
     }
@@ -1465,4 +1925,113 @@ mod tests {
         editor.pan_by(Vec2::new(20.0, -10.0));
         assert_ne!(editor.pan, orig_pan);
     }
+
+    #[test]
+    fn test_category_header_colors() {
+        let palette = ThemePalette::dark();
+        let src_col = category_color("Source", &palette);
+        let filter_col = category_color("Filter", &palette);
+        let pbr_col = category_color("PBR", &palette);
+        let reroute_col = category_color("Reroute", &palette);
+
+        assert_ne!(src_col, filter_col);
+        assert_ne!(filter_col, pbr_col);
+        assert_ne!(pbr_col, reroute_col);
+    }
+
+    #[test]
+    fn test_marquee_box_selection() {
+        let mut editor = NodeEditor::default();
+        let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1440.0, 900.0));
+
+        // Click on empty canvas at (0, 0)
+        assert!(editor.handle_mouse_down(Vec2::new(10.0, 10.0), PointerButton::Primary, viewport));
+        assert!(editor.marquee_start.is_some());
+
+        // Drag to encompass node_source at (60, 80) and node_stylize at (300, 80)
+        let end_screen = editor.world_to_screen(Vec2::new(500.0, 300.0), viewport.min);
+        editor.handle_mouse_move(end_screen, Vec2::new(490.0, 290.0), viewport);
+        editor.handle_mouse_up(end_screen, PointerButton::Primary, viewport);
+
+        assert!(editor.marquee_start.is_none());
+        assert!(editor.selected_nodes.len() >= 2);
+        assert!(editor.is_node_selected("node_source"));
+        assert!(editor.is_node_selected("node_stylize"));
+    }
+
+    #[test]
+    fn test_multi_node_dragging() {
+        let mut editor = NodeEditor::default();
+        let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1440.0, 900.0));
+
+        editor.select_node("node_source", false);
+        editor.select_node("node_stylize", true);
+        assert_eq!(editor.selected_nodes.len(), 2);
+
+        let n1_orig = editor.nodes.iter().find(|n| n.id == "node_source").unwrap().pos;
+        let n2_orig = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap().pos;
+
+        // Click on node_source to begin multi-drag
+        let click_screen = editor.world_to_screen(n1_orig + Vec2::new(20.0, 10.0), viewport.min);
+        editor.handle_mouse_down(click_screen, PointerButton::Primary, viewport);
+
+        let move_screen = click_screen + Vec2::new(40.0, 25.0);
+        editor.handle_mouse_move(move_screen, Vec2::new(40.0, 25.0), viewport);
+        editor.handle_mouse_up(move_screen, PointerButton::Primary, viewport);
+
+        let n1_now = editor.nodes.iter().find(|n| n.id == "node_source").unwrap().pos;
+        let n2_now = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap().pos;
+
+        assert_eq!(n1_now, n1_orig + Vec2::new(40.0, 25.0));
+        assert_eq!(n2_now, n2_orig + Vec2::new(40.0, 25.0));
+    }
+
+    #[test]
+    fn test_node_alignment() {
+        let mut editor = NodeEditor::default();
+        editor.select_node("node_source", false);
+        editor.select_node("node_stylize", true);
+
+        editor.align_selected(NodeAlignment::AlignTop);
+        let y1 = editor.nodes.iter().find(|n| n.id == "node_source").unwrap().pos.y;
+        let y2 = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap().pos.y;
+        assert_eq!(y1, y2);
+
+        editor.align_selected(NodeAlignment::AlignLeft);
+        let x1 = editor.nodes.iter().find(|n| n.id == "node_source").unwrap().pos.x;
+        let x2 = editor.nodes.iter().find(|n| n.id == "node_stylize").unwrap().pos.x;
+        assert_eq!(x1, x2);
+    }
+
+    #[test]
+    fn test_search_to_add_filter_and_spawn() {
+        let mut editor = NodeEditor::default();
+        editor.open_search_menu(Vec2::new(200.0, 200.0));
+        assert!(editor.search_menu_open);
+
+        editor.search_query = "pbr".into();
+        let filtered = editor.filter_presets();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0], PresetNode::PbrGenerator);
+
+        editor.handle_key_down(Key::Enter);
+        assert!(!editor.search_menu_open);
+        assert!(editor.nodes.iter().any(|n| n.title == "PBR Generator"));
+    }
+
+    #[test]
+    fn test_reroute_knot() {
+        let mut editor = NodeEditor::default();
+        let initial_count = editor.nodes.len();
+        let id = editor.spawn_preset(PresetNode::Reroute, Vec2::new(100.0, 100.0));
+        assert_eq!(editor.nodes.len(), initial_count + 1);
+
+        let node = editor.nodes.iter().find(|n| n.id == id).unwrap();
+        assert_eq!(node.category, "Reroute");
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.outputs.len(), 1);
+        assert_eq!(node.inputs[0].pin_type, "Any");
+        assert_eq!(node.outputs[0].pin_type, "Any");
+    }
+
 }

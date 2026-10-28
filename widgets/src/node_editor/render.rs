@@ -170,13 +170,19 @@ pub fn render_nodes(
     pan: Vec2,
     zoom: f32,
     viewport_origin: Vec2,
+    viewport: Rect,
     palette: &ThemePalette,
 ) {
     for node in nodes {
-        let is_selected = selected_nodes.contains(&node.id);
         let screen_pos = world_to_screen(node.pos, pan, zoom, viewport_origin);
         let screen_size = node.size * zoom;
         let node_rect = Rect::from_min_size(screen_pos, screen_size);
+        // Avoid generating GPU commands for offscreen nodes. The canvas and
+        // graph data remain intact; only presentation is culled.
+        if !node_rect.intersects(viewport) {
+            continue;
+        }
+        let is_selected = selected_nodes.contains(&node.id);
 
         if node.is_reroute() {
             let radius = 7.0 * zoom;

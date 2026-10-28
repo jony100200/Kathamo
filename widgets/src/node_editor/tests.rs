@@ -5,6 +5,54 @@ use ui_core::{Rect, Vec2};
 use ui_platform::{Key, PointerButton};
 
 #[test]
+fn offscreen_nodes_do_not_generate_gpu_draw_commands() {
+    use super::render::render_nodes;
+    use ui_render::{CommandBuffer, DrawCommand};
+    let editor = NodeEditor::default();
+    let original = editor.nodes[0].clone();
+    let visible = original.clone();
+    let mut invisible = original.clone();
+    invisible.id = "offscreen".into();
+    invisible.title = "Offscreen Marker".into();
+    invisible.pos = Vec2::new(40_000.0, 40_000.0);
+    let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1920.0, 1080.0));
+    let mut buffer = CommandBuffer::new();
+    render_nodes(
+        &mut buffer, &[visible, invisible], &[], Vec2::ZERO, 1.0,
+        viewport.min, viewport, &ThemePalette::dark(),
+    );
+    assert!(!buffer.commands().iter().any(|cmd| matches!(
+        cmd, DrawCommand::Text { text, .. } if text == "Offscreen Marker"
+    )));
+}
+
+#[test]
+fn 224_node_1080p_graph_render_is_bounded() {
+    use super::render::render_nodes;
+    use ui_render::CommandBuffer;
+    let editor = NodeEditor::default();
+    let template = editor.nodes[0].clone();
+    let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1920.0, 1080.0));
+    let mut nodes = Vec::with_capacity(224);
+    for i in 0..224 {
+        let mut node = template.clone();
+        node.id = format!("stress_{i}");
+        node.pos = Vec2::new((i % 16) as f32 * 230.0, (i / 16) as f32 * 160.0);
+        nodes.push(node);
+    }
+    let mut buffer = CommandBuffer::new();
+    let start = std::time::Instant::now();
+    render_nodes(
+        &mut buffer, &nodes, &[], Vec2::ZERO, 0.30,
+        viewport.min, viewport, &ThemePalette::dark(),
+    );
+    let elapsed = start.elapsed();
+    assert!(buffer.len() > 224, "No visible node drawing");
+    assert!(buffer.len() < 10_000, "Command buffer grew unexpectedly");
+    println!("224 visible graph nodes at 1920x1080: {} draw commands, CPU encode {:?}", buffer.len(), elapsed);
+}
+
+#[test]
 fn test_node_editor_defaults() {
     let editor = NodeEditor::default();
     assert_eq!(editor.nodes.len(), 5);

@@ -9,7 +9,7 @@ pub mod controls;
 pub mod mascot;
 mod mascot_draw;
 
-pub use cards::{agent_card, model_card, task_card};
+pub use cards::{agent_card, agent_card_with_mood, model_card, task_card};
 pub use chat::{code_block, composer, message_block, ComposerOut, MessageRole};
 pub use controls::{channel_row, chip, search_field, segmented};
 pub use mascot::{identity as mascot_identity, mascot, Mood};

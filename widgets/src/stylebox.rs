@@ -34,6 +34,8 @@ impl Default for Shadow {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StyleBox {
     pub bg_color: Color,
+    pub gradient_end: Option<Color>,
+    pub rim_strength: f32,
     pub border: Stroke,
     pub corner_radius: CornerRadius,
     pub shadow: Option<Shadow>,
@@ -42,8 +44,10 @@ pub struct StyleBox {
 impl Default for StyleBox {
     fn default() -> Self {
         Self {
-            bg_color: Color::rgb(24, 29, 42),
-            border: Stroke::new(1.0, Color::rgb(45, 54, 76)),
+            bg_color: Color::rgb(25, 27, 28),
+            gradient_end: None,
+            rim_strength: 0.0,
+            border: Stroke::new(1.0, Color::rgb(65, 69, 70)),
             corner_radius: CornerRadius::same(6.0),
             shadow: None,
         }
@@ -54,6 +58,8 @@ impl StyleBox {
     pub fn new(bg: Color) -> Self {
         Self {
             bg_color: bg,
+            gradient_end: None,
+            rim_strength: 0.0,
             border: Stroke::NONE,
             corner_radius: CornerRadius::ZERO,
             shadow: None,
@@ -70,6 +76,17 @@ impl StyleBox {
         self
     }
 
+    /// Opt in to an analytical vertical gradient without creating an image texture.
+    pub fn with_gradient(mut self, bottom: Color) -> Self {
+        self.gradient_end = Some(bottom);
+        self
+    }
+
+    pub fn with_rim(mut self, strength: f32) -> Self {
+        self.rim_strength = strength.clamp(0.0, 1.0);
+        self
+    }
+
     pub fn with_shadow(mut self, shadow: Shadow) -> Self {
         self.shadow = Some(shadow);
         self
@@ -83,17 +100,15 @@ impl StyleBox {
         state: InteractionState,
         accent_color: Color,
     ) {
-        // 1. Draw ambient drop shadow if configured
-        if let Some(ref shadow) = self.shadow {
-            let shadow_rect = Rect::from_min_max(
-                rect.min + shadow.offset - Vec2::splat(shadow.blur * 0.25),
-                rect.max + shadow.offset + Vec2::splat(shadow.blur * 0.25),
-            );
-            buf.push(DrawCommand::Rect {
-                rect: shadow_rect,
-                fill: shadow.color,
-                radius: CornerRadius::same(self.corner_radius.top_left + 2.0),
-                stroke: Stroke::NONE,
+        // A feathered SDF shadow; no separately blurred texture.
+        if let Some(shadow) = &self.shadow {
+            buf.push(DrawCommand::SoftShadow {
+                rect,
+                radius: self.corner_radius,
+                color: shadow.color,
+                offset: shadow.offset,
+                blur: shadow.blur,
+                spread: 0.0,
             });
         }
 
@@ -135,18 +150,49 @@ impl StyleBox {
             _ => self.border,
         };
 
-        buf.push(DrawCommand::Rect {
-            rect,
-            fill,
-            radius: self.corner_radius,
-            stroke,
-        });
+        if self.gradient_end.is_some() || self.rim_strength > 0.0 {
+            let bottom = self.gradient_end.unwrap_or(fill);
+            buf.push(DrawCommand::Surface {
+                rect,
+                fill_top: fill,
+                fill_bottom: bottom,
+                radius: self.corner_radius,
+                stroke,
+                rim_strength: self.rim_strength,
+            });
+        } else {
+            buf.push(DrawCommand::Rect {
+                rect,
+                fill,
+                radius: self.corner_radius,
+                stroke,
+            });
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn styled_surface_emits_shadow_then_one_sdf_surface() {
+        let box_style = StyleBox::new(Color::rgb(46, 45, 43))
+            .with_radius(12.0)
+            .with_gradient(Color::rgb(26, 26, 25))
+            .with_rim(0.6)
+            .with_shadow(Shadow::default());
+        let mut buf = CommandBuffer::new();
+        box_style.render(
+            &mut buf,
+            Rect::from_min_size(Vec2::ZERO, Vec2::new(160.0, 90.0)),
+            InteractionState::Default,
+            Color::WHITE,
+        );
+        assert_eq!(buf.len(), 2);
+        assert!(matches!(buf.commands()[0], DrawCommand::SoftShadow { .. }));
+        assert!(matches!(buf.commands()[1], DrawCommand::Surface { .. }));
+    }
 
     #[test]
     fn stylebox_renders_state_layers_accurately() {

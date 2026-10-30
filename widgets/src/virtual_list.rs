@@ -44,17 +44,36 @@ impl VirtualListState {
         self.velocity = initial_velocity.clamp(-3000.0, 3000.0);
     }
 
-    /// Advances kinetic friction physics for the current frame.
-    /// Damps velocity by 0.94 each frame until it naturally comes to rest.
-    pub fn tick_physics(&mut self, viewport_height: f32) -> bool {
-        if self.velocity.abs() > 0.5 {
-            self.scroll_by(self.velocity * (1.0 / 60.0), viewport_height);
-            self.velocity *= 0.94; // Exponential friction decay
-            true // Still moving
-        } else {
+    /// Advances inertial scrolling by elapsed seconds, independently of refresh rate.
+    /// A bounded delta avoids giant jumps after a suspended or obscured window.
+    pub fn tick_physics_elapsed(&mut self, viewport_height: f32, delta_seconds: f32) -> bool {
+        if !delta_seconds.is_finite() || self.velocity.abs() <= 0.5 {
             self.velocity = 0.0;
-            false
+            return false;
         }
+        let dt = delta_seconds.clamp(0.0, 0.25);
+        if dt == 0.0 {
+            return true;
+        }
+        let friction_per_second = -0.94_f32.ln() * 60.0;
+        let next_velocity = self.velocity * (-friction_per_second * dt).exp();
+        let distance = (self.velocity - next_velocity) / friction_per_second;
+        let before = self.scroll_offset;
+        self.scroll_by(distance, viewport_height);
+        self.velocity = if (self.scroll_offset - before).abs() < 0.001 {
+            0.0
+        } else {
+            next_velocity
+        };
+        if self.velocity.abs() <= 0.5 {
+            self.velocity = 0.0;
+        }
+        self.velocity != 0.0
+    }
+
+    /// Compatibility helper for existing 60 Hz callers.
+    pub fn tick_physics(&mut self, viewport_height: f32) -> bool {
+        self.tick_physics_elapsed(viewport_height, 1.0 / 60.0)
     }
 
     /// Renders only visible rows in the viewport + 2 overscan rows.
@@ -163,6 +182,22 @@ mod tests {
 
         list.scroll_by(1000.0, 500.0);
         assert_eq!(list.scroll_offset, 1000.0);
+    }
+
+    #[test]
+    fn kinetic_fling_is_refresh_rate_independent() {
+        let mut sixty = VirtualListState::default();
+        let mut one_twenty = VirtualListState::default();
+        sixty.fling(750.0);
+        one_twenty.fling(750.0);
+        for _ in 0..60 {
+            sixty.tick_physics_elapsed(600.0, 1.0 / 60.0);
+        }
+        for _ in 0..120 {
+            one_twenty.tick_physics_elapsed(600.0, 1.0 / 120.0);
+        }
+        assert!((sixty.scroll_offset - one_twenty.scroll_offset).abs() < 0.2);
+        assert!((sixty.velocity - one_twenty.velocity).abs() < 0.2);
     }
 
     #[test]

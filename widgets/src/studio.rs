@@ -54,6 +54,21 @@ pub mod glyphs {
     glyph!(LAYERS, "layers-intersect");
     glyph!(DESKTOP, "device-desktop");
     glyph!(REFRESH, "refresh");
+    glyph!(CHAT, "message");
+    glyph!(OFFICE, "users");
+    glyph!(AGENT, "robot");
+    glyph!(SUN, "sun");
+    glyph!(MOON, "moon");
+    glyph!(BELL, "bell");
+    glyph!(SEND, "send");
+    glyph!(ATTACH, "paperclip");
+    glyph!(CHANNEL, "hash");
+    glyph!(TASKS, "checklist");
+    glyph!(IMPORT, "upload-cloud");
+    glyph!(PHOTO, "photo");
+    glyph!(COPY, "copy");
+    glyph!(DOWNLOAD, "download");
+    glyph!(TRASH, "trash");
 }
 
 /// Semantic tone for status pills, dots and meters. Always paired with a text label.

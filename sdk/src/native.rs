@@ -532,7 +532,6 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                 }
             }
             WindowEvent::RedrawRequested => {
-                eprintln!("[Kathamo Native] RedrawRequested received, presenting frame...");
                 match self.present() {
                     Ok(()) => {
                         if !self.revealed

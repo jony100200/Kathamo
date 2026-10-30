@@ -75,6 +75,11 @@ pub trait Editor: Send + Sync {
     fn handle_key_down(&mut self, _key: Key, _modifiers: Modifiers) -> bool {
         false
     }
+    /// Key release for the focused editor instance (held-key input such as
+    /// game previews). Default: ignored.
+    fn handle_key_up(&mut self, _key: Key, _modifiers: Modifiers) -> bool {
+        false
+    }
     fn handle_text_input(&mut self, _text: &str) -> bool {
         false
     }

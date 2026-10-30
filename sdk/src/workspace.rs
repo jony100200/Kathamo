@@ -240,6 +240,10 @@ impl DetachedPanel {
         self.editor.handle_key_down(key, modifiers)
     }
 
+    pub fn handle_key_up(&mut self, key: Key, modifiers: Modifiers) -> bool {
+        self.editor.handle_key_up(key, modifiers)
+    }
+
     pub fn handle_text_input(&mut self, text: &str) -> bool {
         self.editor.handle_text_input(text)
     }
@@ -785,6 +789,15 @@ impl WorkspaceHost {
             .is_some_and(|editor| editor.handle_key_down(key, modifiers))
     }
 
+    /// Key release goes to the focused panel, like key-down.
+    pub fn handle_key_up(&mut self, key: Key, modifiers: Modifiers) -> bool {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        self.focused_panel_id
+            .as_ref()
+            .and_then(|id| ws.editors.get_mut(id))
+            .is_some_and(|editor| editor.handle_key_up(key, modifiers))
+    }
+
     fn activate_tab_for_panel(node: &mut DockNode, panel_id: &str) -> bool {
         match node {
             DockNode::Leaf {
@@ -1048,6 +1061,57 @@ impl WorkspaceHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Records key events delivered to it.
+    struct KeyRecorder(std::sync::Arc<std::sync::Mutex<Vec<(bool, Key)>>>);
+
+    impl Editor for KeyRecorder {
+        fn id(&self) -> &str {
+            "key_recorder"
+        }
+        fn title(&self) -> &str {
+            "Key recorder"
+        }
+        fn render(
+            &mut self,
+            _cmd_buf: &mut CommandBuffer,
+            _viewport: Rect,
+            _ptr: &PointerState,
+            _palette: &ThemePalette,
+        ) {
+        }
+        fn handle_key_down(&mut self, key: Key, _modifiers: Modifiers) -> bool {
+            self.0.lock().unwrap().push((true, key));
+            true
+        }
+        fn handle_key_up(&mut self, key: Key, _modifiers: Modifiers) -> bool {
+            self.0.lock().unwrap().push((false, key));
+            true
+        }
+    }
+
+    #[test]
+    fn key_release_reaches_the_focused_panel_like_key_press() {
+        let tree = DockTree::new("main", DockTabPanel::new("pane", "Pane"));
+        let mut host = WorkspaceHost::from_workspace(
+            EditorRegistry::new(),
+            Workspace::new("game", "Game", tree),
+        );
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        host.workspaces[0]
+            .editors
+            .insert("pane".into(), Box::new(KeyRecorder(log.clone())));
+
+        // Unfocused: neither press nor release is delivered.
+        assert!(!host.handle_key_up(Key::Space, Modifiers::default()));
+        assert!(host.activate_panel("pane"));
+        assert!(host.handle_key_down(Key::Space, Modifiers::default()));
+        assert!(host.handle_key_up(Key::Space, Modifiers::default()));
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec![(true, Key::Space), (false, Key::Space)]
+        );
+    }
 
     #[test]
     fn workspace_layout_state_roundtrips() {

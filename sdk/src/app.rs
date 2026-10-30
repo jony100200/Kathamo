@@ -197,6 +197,11 @@ pub trait KathamoApp: 'static {
         false
     }
 
+    /// Key release. Default: ignored.
+    fn handle_key_up(&mut self, _key: Key, _modifiers: Modifiers, _ctx: &mut AppContext) -> bool {
+        false
+    }
+
     fn handle_text_input(&mut self, _text: &str, _ctx: &mut AppContext) -> bool {
         false
     }
@@ -256,6 +261,15 @@ pub trait KathamoApp: 'static {
         ctx: &mut AppContext,
     ) -> bool {
         self.handle_key_down(key, modifiers, ctx)
+    }
+    fn handle_window_key_up(
+        &mut self,
+        _id: &str,
+        key: Key,
+        modifiers: Modifiers,
+        ctx: &mut AppContext,
+    ) -> bool {
+        self.handle_key_up(key, modifiers, ctx)
     }
     fn handle_window_text_input(&mut self, _id: &str, text: &str, ctx: &mut AppContext) -> bool {
         self.handle_text_input(text, ctx)

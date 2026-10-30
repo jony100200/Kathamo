@@ -265,6 +265,11 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     command: mods.super_key(),
                 };
             }
+            WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Released => {
+                let key = key_from_winit(&event.logical_key);
+                self.app
+                    .handle_window_key_up(&child.id, key, child.modifiers, &mut child.ctx);
+            }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let key = key_from_winit(&event.logical_key);
                 let handled = self.app.handle_window_key_down(
@@ -540,6 +545,11 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     alt: state.alt_key(),
                     command: state.super_key(),
                 };
+            }
+            WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Released => {
+                let key = key_from_winit(&event.logical_key);
+                self.app.handle_key_up(key, self.modifiers, &mut self.ctx);
+                window.request_redraw();
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let key = key_from_winit(&event.logical_key);

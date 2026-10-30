@@ -14,6 +14,16 @@ pub enum ThemeMode {
     Dark,
     StudioGraphite,
     Light,
+    /// Calm blue-black workspace with a warm copper accent.
+    MidnightGraphite,
+    /// Warm light paper surfaces for daylight work.
+    WarmPaper,
+}
+
+impl ThemeMode {
+    pub const fn is_dark(self) -> bool {
+        !matches!(self, ThemeMode::Light | ThemeMode::WarmPaper)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -86,6 +96,42 @@ impl ThemePalette {
         }
     }
 
+    /// Midnight Graphite: canvas #10141B, panel #171D27, elevated #202837, accent #E5A073.
+    pub const fn midnight_graphite() -> Self {
+        Self {
+            canvas: Color::rgb(0x10, 0x14, 0x1B),
+            surface: Color::rgb(0x17, 0x1D, 0x27),
+            elevated: Color::rgb(0x20, 0x28, 0x37),
+            elevated_high: Color::rgb(0x29, 0x32, 0x43),
+            border: Color::rgb(0x31, 0x3D, 0x4C),
+            text: Color::rgb(0xE9, 0xEE, 0xF5),
+            text_muted: Color::rgb(0xA4, 0xB1, 0xC2),
+            accent: Color::rgb(0xE5, 0xA0, 0x73),
+            accent_hover: Color::rgb(0xF0, 0xB5, 0x8D),
+            danger: Color::rgb(0xEA, 0x77, 0x7E),
+            success: Color::rgb(0x68, 0xC5, 0x9E),
+            warning: Color::rgb(0xE9, 0xBE, 0x6D),
+        }
+    }
+
+    /// Warm Paper: cream surfaces, ink text and a deeper copper accent that stays legible.
+    pub const fn warm_paper() -> Self {
+        Self {
+            canvas: Color::rgb(0xF4, 0xEF, 0xE6),
+            surface: Color::rgb(0xFB, 0xF8, 0xF2),
+            elevated: Color::rgb(0xFF, 0xFD, 0xF9),
+            elevated_high: Color::rgb(0xFF, 0xFF, 0xFF),
+            border: Color::rgb(0xDD, 0xD3, 0xC4),
+            text: Color::rgb(0x26, 0x22, 0x1D),
+            text_muted: Color::rgb(0x6B, 0x62, 0x57),
+            accent: Color::rgb(0xA8, 0x5A, 0x2A),
+            accent_hover: Color::rgb(0x8E, 0x4A, 0x20),
+            danger: Color::rgb(0xB3, 0x3A, 0x40),
+            success: Color::rgb(0x2E, 0x7D, 0x5B),
+            warning: Color::rgb(0x9A, 0x6A, 0x12),
+        }
+    }
+
     /// Android Material 3 inspired surface elevation mapper (Levels 0 through 4).
     pub fn surface_at_elevation(&self, level: u8) -> Color {
         match level {
@@ -118,8 +164,55 @@ impl StudioTheme {
             ThemeMode::Dark => ThemePalette::dark(),
             ThemeMode::StudioGraphite => ThemePalette::studio_graphite(),
             ThemeMode::Light => ThemePalette::light(),
+            ThemeMode::MidnightGraphite => ThemePalette::midnight_graphite(),
+            ThemeMode::WarmPaper => ThemePalette::warm_paper(),
         };
         Self { mode, palette }
+    }
+
+    pub fn extended(&self) -> ExtendedTokens {
+        ExtendedTokens::for_mode(self.mode)
+    }
+}
+
+/// Tokens beyond the base palette. Kept separate so existing `ThemePalette` literals stay valid.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ExtendedTokens {
+    /// Keyboard focus ring.
+    pub focus: Color,
+    /// Selected row / text selection fill.
+    pub selection: Color,
+    /// Neutral informational status.
+    pub info: Color,
+    /// "Agent is working" status. Distinct from the accent so brand colour never means busy.
+    pub working: Color,
+    /// Text drawn on top of an accent fill.
+    pub on_accent: Color,
+    /// Modal backdrop.
+    pub scrim: Color,
+}
+
+impl ExtendedTokens {
+    pub const fn for_mode(mode: ThemeMode) -> Self {
+        if mode.is_dark() {
+            Self {
+                focus: Color::rgb(0xF0, 0xB5, 0x8D),
+                selection: Color::rgba(0xE5, 0xA0, 0x73, 0x2E),
+                info: Color::rgb(0x8F, 0xAE, 0xE8),
+                working: Color::rgb(0x6F, 0xC3, 0xD6),
+                on_accent: Color::rgb(0x1A, 0x12, 0x0C),
+                scrim: Color::rgba(0x05, 0x07, 0x0B, 0xB8),
+            }
+        } else {
+            Self {
+                focus: Color::rgb(0x8E, 0x4A, 0x20),
+                selection: Color::rgba(0xA8, 0x5A, 0x2A, 0x26),
+                info: Color::rgb(0x2F, 0x5C, 0xA8),
+                working: Color::rgb(0x1F, 0x72, 0x87),
+                on_accent: Color::rgb(0xFF, 0xFB, 0xF5),
+                scrim: Color::rgba(0x26, 0x22, 0x1D, 0x66),
+            }
+        }
     }
 }
 
@@ -129,7 +222,13 @@ mod tests {
 
     #[test]
     fn theme_palettes_exceed_wcag_contrast_requirements() {
-        for mode in [ThemeMode::Dark, ThemeMode::StudioGraphite, ThemeMode::Light] {
+        for mode in [
+            ThemeMode::Dark,
+            ThemeMode::StudioGraphite,
+            ThemeMode::Light,
+            ThemeMode::MidnightGraphite,
+            ThemeMode::WarmPaper,
+        ] {
             let t = StudioTheme::new(mode);
             let text_contrast = t.palette.text.contrast_ratio(t.palette.canvas);
             assert!(
@@ -143,9 +242,37 @@ mod tests {
 
     #[test]
     fn surface_elevations_increase_depth_monotonically() {
-        for p in [ThemePalette::dark(), ThemePalette::studio_graphite()] {
+        for p in [
+            ThemePalette::dark(),
+            ThemePalette::studio_graphite(),
+            ThemePalette::midnight_graphite(),
+        ] {
             assert_ne!(p.surface_at_elevation(0), p.surface_at_elevation(1));
             assert_ne!(p.surface_at_elevation(1), p.surface_at_elevation(2));
+        }
+    }
+
+    #[test]
+    fn workspace_themes_keep_muted_text_and_status_legible() {
+        for mode in [ThemeMode::MidnightGraphite, ThemeMode::WarmPaper] {
+            let t = StudioTheme::new(mode);
+            let p = t.palette;
+            let x = t.extended();
+            let checks = [
+                ("text_muted/canvas", p.text_muted.contrast_ratio(p.canvas)),
+                ("text_muted/surface", p.text_muted.contrast_ratio(p.surface)),
+                ("accent/surface", p.accent.contrast_ratio(p.surface)),
+                ("success/surface", p.success.contrast_ratio(p.surface)),
+                ("danger/surface", p.danger.contrast_ratio(p.surface)),
+                ("working/surface", x.working.contrast_ratio(p.surface)),
+                ("on_accent/accent", x.on_accent.contrast_ratio(p.accent)),
+            ];
+            for (name, ratio) in checks {
+                assert!(
+                    ratio >= 4.5,
+                    "{name} contrast {ratio:.2} < 4.5 for {mode:?}"
+                );
+            }
         }
     }
 }

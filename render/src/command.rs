@@ -10,6 +10,24 @@ pub enum DrawCommand {
         radius: CornerRadius,
         stroke: Stroke,
     },
+    /// Gradient surface with a subtle top-edge lighting treatment, rendered in one SDF quad.
+    Surface {
+        rect: Rect,
+        fill_top: Color,
+        fill_bottom: Color,
+        radius: CornerRadius,
+        stroke: Stroke,
+        rim_strength: f32,
+    },
+    /// Analytical feathered shadow. No intermediate shadow bitmap is required.
+    SoftShadow {
+        rect: Rect,
+        radius: CornerRadius,
+        color: Color,
+        offset: Vec2,
+        blur: f32,
+        spread: f32,
+    },
     Line {
         start: Vec2,
         end: Vec2,

@@ -50,13 +50,15 @@ cd Kathamo
 cargo run --release -p kathamo --example glass_viewport
 ```
 
-Drag to orbit the scene, scroll to zoom, and watch the glass follow. Then try:
+Drag to orbit the scene, scroll to zoom, and watch the glass follow. All twelve runnable examples live together in the [**root-level example gallery**](examples/). Then try:
 
 | Demo | What you will see |
 | :--- | :--- |
 | `cargo run --release -p kathamo --example kathamo_forge` | A game-engine editor: scene tree, inspector, asset browser, console |
 | `cargo run --release -p kathamo --example kathamo_chat` | A modern AI chat app with highlighted code blocks |
 | `cargo run --release -p kathamo --example visual_designer` | Drag-and-drop UI designer that exports Rust |
+
+Browse the [complete demo gallery](examples/) for source code, screenshots, and exact commands. The gallery separates interactive native demos from headless validation examples.
 
 ## Your first app
 

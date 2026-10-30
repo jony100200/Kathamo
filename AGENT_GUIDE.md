@@ -567,3 +567,147 @@ A studio-style desktop shell using Kathamo's native GPU surfaces, soft shadows, 
 cargo run -p kathamo --example kolpona_shell -- --native
 cargo run -p kathamo --example kolpona_shell
 ```
+
+## 10. UI Craft Playbook
+
+How to make a Kathamo screen look and feel professional, and prove it. Each `### Craft:` section stands alone, so an agent can load only the one it needs.
+
+### Craft: loop
+
+Never call a UI done from code alone. Work in this loop:
+
+1. **Measure first.** Run the app; record RAM, discrete-GPU VRAM and idle CPU (10 s, no input). Numbers beat impressions.
+2. **Look.** `KATHAMO_SNAPSHOT=shot.png` + run the app writes one GPU frame and exits. Open the PNG.
+3. **Critique like a user.** List what is wrong: overlap, clipping, misalignment, binary state flips, placeholders, missing glyph boxes, duplicated headers.
+4. **Fix the framework, not the screen,** when the cause is shared (a widget, a component, the renderer).
+5. **Re-shoot and compare.** Every fix gets a new snapshot.
+6. **Verify live** for motion: sample real screen pixels over time; a spring shows intermediate colours, a flip does not.
+7. **Measure again.** A visual win that costs idle CPU or VRAM is not a win.
+8. **Report only measured claims.** Remove any sentence you did not measure.
+
+### Craft: layout
+
+- Describe screen regions once with `kathamo::flex::Flex` and use the solved rects for **both drawing and hit-testing**. Never recompute `left_w`, `top_offset` or panel sizes inside each input handler; copies drift apart and clicks land on the wrong thing.
+- Tabs, menus and segmented controls are sized from **measured text** (`ui_render::measure_text`), never `label.len() * px`. Use `ui_widgets::tab_strip` for tab rows and multi-state selectors.
+- One header per panel. If a widget draws its own toolbar (for example `HierarchyTree`), do not draw another above it; set its `title` instead.
+- Keep floating surfaces (toasts, popovers) clear of toolbars and status bars.
+
+### Craft: text
+
+- Labels that can overflow use `ui_render::fit_text(text, px, strong, max_width)`; they end in an ellipsis, never cut mid-word or spill past a border.
+- Code, logs and aligned numbers use `DrawCommand::Code` (monospace) or `ui_widgets::code_view::render_code_line` (token colours from the theme).
+- Use `StudioIcon` vector icons, not emoji or symbol characters (➤ 📋 ⏸) that the bundled fonts may not contain; missing glyphs render as boxes.
+- Centre text vertically from the rect (`rect.center().y - px * 0.6`), not with fixed offsets.
+
+### Craft: motion
+
+- Every hover, press, toggle, selection and slide is a spring: `motion::animate_bool(motion::rect_key("kind", rect), on, motion::HOVER)` returns 0..1; blend with `Color::lerp`. Positions use `motion::animate(key, target, motion::SLIDE)`.
+- Enter transitions use `motion::animate_from(key, 0.0, 1.0, ..)`.
+- Never count frames for timers: idle apps draw no frames. Use `Instant` plus `motion::wake_at(deadline)`.
+- `wants_continuous_redraw` is `true` only while something genuinely plays (a 3D view rotating, a simulation running). The runner redraws while springs move and then sleeps at 0 % CPU.
+
+### Craft: depth
+
+- Surfaces climb the ladder `canvas → surface → elevated → elevated_high`; no pure black.
+- Shadows are `DrawCommand::SoftShadow`, never a flat black rectangle behind a card.
+- Floating surfaces (menus, popovers, toasts, viewport HUDs) are frosted glass: shadow, then `DrawCommand::Backdrop { rect, radius, tint }`, then a 1 px rim. Glass needs content behind it to read as glass.
+- The blur has no opacity: fade a glass panel by drawing a fading solid card during enter/exit, glass only when fully shown.
+
+### Craft: states
+
+Every interactive control shows: rest, hover (spring), pressed, focused (animated accent ring with soft glow, as `render_text_input` does), disabled (muted, no hover). One focus ring per field; a container around a focused input stays neutral.
+
+### Craft: honesty
+
+- No fake data on screen: no "[Thumb]" placeholders, invented metrics or simulated agents. Without a preview, show a file-type icon. Unknown values say so.
+- Stats shown in a UI are measured at runtime (frame time, triangle counts, real memory of real buffers).
+- Machine details (GPU names, paths) appear only at runtime, never in code, docs or public screenshots.
+
+### Craft: performance
+
+- The UI prefers the integrated GPU; heavy 3D opts into the discrete GPU with `WGPU_POWER_PREF=high`.
+- Shaped text is cached per frame; do not re-shape in tight loops yourself.
+- Glass costs about 1.3 frames of VRAM only while a backdrop is on screen.
+- After any visual change, re-measure idle CPU after a hover sweep: it must return to 0 %.
+
+### Craft: viewport
+
+A real 3D or video viewport renders into a wgpu texture in `KathamoApp::prepare_gpu` and is shown with `gpu.register_external_view(id, view)` plus `DrawCommand::Image` (zero copy). Output sRGB-encoded colour into `Rgba8Unorm`. See `sdk/examples/glass_viewport` for depth, MSAA, lighting and glass HUD panels over live 3D.
+
+### Craft: ux
+
+Design for the person's goal, not the feature list.
+
+- Write the screen's goal as one sentence before drawing anything. Every element must serve it; remove what does not.
+- One primary action per screen, in the accent colour. Everything else is secondary or ghost.
+- Show the common path; hide the advanced one one click away (progressive disclosure: accordion, "More", inspector).
+- Good defaults beat options. A setting nobody changes is noise.
+- Prefer undo over "Are you sure?". Confirm only what cannot be undone (delete files, publish, spend money).
+- Keep people oriented: the selected item, the current mode and the current file are always visible.
+- Speed is UX: input responds in the same frame, transitions settle in about 150-250 ms, never block the UI thread (use `TaskController`).
+
+### Craft: hierarchy
+
+- Spacing comes from the 4 px grid only: `SPACE_1` 4, `SPACE_2` 8, `SPACE_3` 12, `SPACE_4` 16, `SPACE_6` 24, `SPACE_8` 32 (`ui_themes::metrics`). Related things sit closer than unrelated things.
+- Type comes from `FluentTypographyScale`: Caption 12, Body 14, Section 16, PanelTitle 20, WorkspaceTitle 28, HeroTitle 36. At most three text sizes per panel; one title per panel.
+- Weight and colour carry hierarchy before size does: strong for titles, `text` for content, `text_muted` for labels and metadata.
+- Align to shared edges. A column of controls shares one left edge and one label width.
+- Reading text stays under `WORKSPACE_READABLE_WIDTH` (760). Pro tools may be dense (rows 28-44 px) but never cramped: every cluster keeps its padding.
+
+### Craft: color
+
+- Use palette tokens only (`canvas`, `surface`, `elevated`, `elevated_high`, `border`, `text`, `text_muted`, `accent`, `success`, `warning`, `danger`). A hard-coded colour breaks the other theme.
+- Accent means "act here" or "selected". If everything is accent, nothing is.
+- Status colours always come with a word or icon (colour-blind users, glanceability).
+- Contrast is measured, not eyeballed: `fg.contrast_ratio(bg)` at least 4.5 for body text, 3.0 for large text and control outlines. Check both dark and light themes.
+
+### Craft: feedback
+
+- Every action answers: hover and press respond instantly (springs), clicks change something visible, long work shows progress with a cancel.
+- Background results arrive as a toast (`NotificationHost`): a short title, one line of detail, the right level (info, success, warning, error).
+- Errors say what happened and what to do next, in plain words. Never show a raw error code alone.
+- Empty states teach: say what belongs here and offer the action that fills it ("No assets yet — Import files").
+- Loading has a shape: show the layout with muted placeholder blocks, not a blank panel or a spinner in the void.
+
+### Craft: input
+
+- Every command is reachable from the keyboard: a shortcut or the command palette. Show shortcuts in menus.
+- Tab moves focus in reading order, Esc closes or cancels, Enter confirms, arrows move within lists and tabs.
+- Focus is always visible (the animated focus ring).
+- Hit targets are at least 24 px; toolbar buttons use `SIZE_TOOL_BUTTON` (32).
+- Draggable things look draggable on hover (cursor, handle, highlight) and show where they will drop.
+- Right-click opens a context menu of the same commands as the main menu, never different ones.
+
+### Craft: accessibility
+
+- Give controls accessibility nodes (`KolponaUi::with_accessibility`): role, name and focus, so screen readers and agents can see the interface.
+- Respect reduced motion: when the user asks for it, call `motion::set_instant(true)` (springs snap) and use `motion_seconds(true)`.
+- Respect the system scale factor; never draw text below Caption (12) at 100 %.
+- Bilingual by design: `BilingualLabel` and the Bengali font are first-class; never cut a Bengali cluster with byte slicing.
+
+### Craft: review
+
+Answer every question about a fresh snapshot (`KATHAMO_SNAPSHOT`) before calling a screen done. A "no" is a task.
+
+1. Can you say the screen's goal and point to its one primary action in two seconds?
+2. Is anything overlapping, clipped, cut mid-word, or spilling past a border?
+3. Are there boxes instead of characters, placeholder text, or invented numbers?
+4. Do edges line up, and does spacing follow the 4 px grid?
+5. At most three text sizes per panel, with titles, content and labels clearly different?
+6. Is the selected item, the current mode and the focus visible?
+7. Do empty, loading and error states exist and say what to do?
+8. Do floating surfaces avoid covering toolbars and status bars?
+9. Does the text pass contrast in both themes?
+10. After a hover sweep, does idle CPU return to 0 %, and is the discrete GPU still free?
+
+### Craft: screen
+
+Recipe for a new screen:
+
+1. Goal sentence and primary action.
+2. Regions with `kathamo::flex::Flex` (header, body, side panels, status) — one layout for drawing and input.
+3. Fill regions from the component catalog before writing custom drawing.
+4. Add every state: hover, press, focus, selected, disabled, empty, loading, error.
+5. Snapshot, run the review checklist, fix, re-shoot.
+6. Run the audit (`kathamo.audit` in Pothik) and clear its findings.
+7. Measure RAM, VRAM and idle CPU; report only what you measured.

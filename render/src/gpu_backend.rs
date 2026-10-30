@@ -35,6 +35,8 @@ struct Vertex {
     radii: [f32; 4],
     color: [f32; 4],
     color2: [f32; 4],
+    gradient_color: [f32; 4],
+    effect: [f32; 4],
     extra: [f32; 2],
 }
 
@@ -400,7 +402,8 @@ impl DeviceState {
 
         let attributes = wgpu::vertex_attr_array![
             0 => Float32x2, 1 => Float32x4, 2 => Float32x4,
-            3 => Float32x4, 4 => Float32x4, 5 => Float32x2
+            3 => Float32x4, 4 => Float32x4, 5 => Float32x4,
+            6 => Float32x4, 7 => Float32x2
         ];
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("kolpona-ui-pipeline"),
@@ -888,11 +891,87 @@ impl GpuBackend {
             ],
             color: color_f32(fill),
             color2: color_f32(stroke.color),
+            gradient_color: color_f32(fill),
+            effect: [0.0; 4],
             extra: [bw, 0.0],
         };
         self.push_quad(
             [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)],
             template,
+            None,
+        );
+    }
+
+
+    fn tess_surface(
+        &mut self,
+        rect: Rect,
+        fill_top: Color,
+        fill_bottom: Color,
+        radius: CornerRadius,
+        stroke: Stroke,
+        rim_strength: f32,
+    ) {
+        let bw = if stroke.color.a > 0 { stroke.width.max(0.0) } else { 0.0 };
+        if fill_top.a == 0 && fill_bottom.a == 0 && bw == 0.0 { return; }
+        let aa = 1.0 / self.scale;
+        let min = rect.min - Vec2::splat(aa);
+        let max = rect.max + Vec2::splat(aa);
+        let center = rect.center();
+        let half = rect.size() * 0.5;
+        self.push_quad(
+            [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)],
+            Vertex {
+                pos: [0.0; 2],
+                shape: [center.x, center.y, half.x, half.y],
+                radii: [radius.top_left, radius.top_right, radius.bottom_right, radius.bottom_left],
+                color: color_f32(fill_top),
+                color2: color_f32(stroke.color),
+                gradient_color: color_f32(fill_bottom),
+                effect: [0.0, rim_strength.clamp(0.0, 1.0), 0.0, 0.0],
+                extra: [bw, 4.0],
+            },
+            None,
+        );
+    }
+
+    fn tess_soft_shadow(
+        &mut self,
+        rect: Rect,
+        radius: CornerRadius,
+        color: Color,
+        offset: Vec2,
+        blur: f32,
+        spread: f32,
+    ) {
+        if color.a == 0 { return; }
+        let blur = blur.clamp(0.5, 64.0);
+        let spread = spread.clamp(-32.0, 32.0);
+        let min = rect.min + offset - Vec2::splat(spread);
+        let max = rect.max + offset + Vec2::splat(spread);
+        if min.x >= max.x || min.y >= max.y { return; }
+        let center = (min + max) * 0.5;
+        let half = (max - min) * 0.5;
+        let pad = blur + 1.0 / self.scale;
+        let qmin = min - Vec2::splat(pad);
+        let qmax = max + Vec2::splat(pad);
+        self.push_quad(
+            [qmin, Vec2::new(qmax.x, qmin.y), qmax, Vec2::new(qmin.x, qmax.y)],
+            Vertex {
+                pos: [0.0; 2],
+                shape: [center.x, center.y, half.x, half.y],
+                radii: [
+                    (radius.top_left + spread).max(0.0),
+                    (radius.top_right + spread).max(0.0),
+                    (radius.bottom_right + spread).max(0.0),
+                    (radius.bottom_left + spread).max(0.0),
+                ],
+                color: color_f32(color),
+                color2: [0.0; 4],
+                gradient_color: [0.0; 4],
+                effect: [blur, 0.0, 0.0, 0.0],
+                extra: [0.0, 5.0],
+            },
             None,
         );
     }
@@ -912,6 +991,8 @@ impl GpuBackend {
             radii: [0.0; 4],
             color: color_f32(tint),
             color2: [0.0; 4],
+            gradient_color: [0.0; 4],
+            effect: [0.0; 4],
             extra: [0.0, 3.0],
         };
         self.push_quad(
@@ -949,6 +1030,8 @@ impl GpuBackend {
             radii: [hw, 0.0, 0.0, 0.0],
             color: color_f32(color),
             color2: [0.0; 4],
+            gradient_color: [0.0; 4],
+            effect: [0.0; 4],
             extra: [0.0, 2.0],
         };
         self.push_quad(
@@ -1007,6 +1090,8 @@ impl GpuBackend {
             radii: [0.0; 4],
             color: color_f32(color),
             color2: [0.0; 4],
+            gradient_color: [0.0; 4],
+            effect: [0.0; 4],
             extra: [0.0, 1.0],
         };
         self.push_quad(
@@ -1095,6 +1180,10 @@ impl GpuBackend {
                     radius,
                     stroke,
                 } => self.tess_rect(*rect, *fill, *radius, *stroke),
+                DrawCommand::Surface { rect, fill_top, fill_bottom, radius, stroke, rim_strength } =>
+                    self.tess_surface(*rect, *fill_top, *fill_bottom, *radius, *stroke, *rim_strength),
+                DrawCommand::SoftShadow { rect, radius, color, offset, blur, spread } =>
+                    self.tess_soft_shadow(*rect, *radius, *color, *offset, *blur, *spread),
                 DrawCommand::Line { start, end, stroke } => {
                     self.tess_line(*start, *end, stroke.width, stroke.color)
                 }

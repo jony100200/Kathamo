@@ -65,7 +65,11 @@ pub fn render_button(
         fill_bottom: bottom,
         radius: CornerRadius::same(7.0),
         stroke,
-        rim_strength: if style == ButtonStyle::Ghost { 0.0 } else { 0.55 },
+        rim_strength: if style == ButtonStyle::Ghost {
+            0.0
+        } else {
+            0.55
+        },
     });
 
     buf.push(DrawCommand::Text {

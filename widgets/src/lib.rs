@@ -18,6 +18,7 @@ pub mod node_editor;
 pub mod property_inspector;
 pub mod range_slider;
 pub mod rich_text;
+pub mod studio;
 pub mod stylebox;
 pub mod text_area;
 pub mod timeline;
@@ -40,6 +41,7 @@ pub use navigation_rail::{
 };
 pub use range_slider::RangeSlider;
 pub use rich_text::{ChatMessage, ChatRole, ChatTranscript, MarkdownView};
+pub use studio::{glyphs, ButtonKind, Glyph, Interaction, Studio, Tone};
 pub use tooltip::TooltipOverlay;
 pub use ui::{KathamoUi, KolponaUi, Response};
 

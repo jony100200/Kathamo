@@ -15,3 +15,6 @@ rustybuzz = "0.20.1"
 pollster = "1.0.1"
 softbuffer = "0.4"
 resvg = { version = "0.48.1", default-features = false }
+
+[dev-dependencies]
+naga = { version = "22.1", features = ["wgsl-in"] }

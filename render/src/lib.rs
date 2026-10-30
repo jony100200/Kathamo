@@ -17,3 +17,18 @@ pub use cpu_backend::CpuBackend;
 pub use gpu_backend::{GpuBackend, SharedWindow};
 pub use soft_present::SoftwarePresenter;
 pub use text::{measure as measure_text, Mask};
+
+#[cfg(test)]
+mod shader_validation {
+    #[test]
+    fn studio_shader_parses_and_validates() {
+        let module = naga::front::wgsl::parse_str(include_str!("shader.wgsl"))
+            .expect("studio shader must have valid WGSL syntax");
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .expect("studio shader must be valid for wgpu");
+    }
+}

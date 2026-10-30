@@ -51,11 +51,21 @@ pub fn render_button(
         ButtonStyle::Danger => (palette.danger, Stroke::NONE, palette.text),
     };
 
-    buf.push(DrawCommand::Rect {
+    // One GPU SDF quad for the full button treatment; no stacked rectangle layers.
+    let depth = if style == ButtonStyle::Ghost { 0 } else { 12 };
+    let bottom = ui_core::Color::rgba(
+        fill.r.saturating_sub(depth),
+        fill.g.saturating_sub(depth),
+        fill.b.saturating_sub(depth),
+        fill.a,
+    );
+    buf.push(DrawCommand::Surface {
         rect,
-        fill,
-        radius: CornerRadius::same(6.0),
+        fill_top: fill,
+        fill_bottom: bottom,
+        radius: CornerRadius::same(7.0),
         stroke,
+        rim_strength: if style == ButtonStyle::Ghost { 0.0 } else { 0.55 },
     });
 
     buf.push(DrawCommand::Text {
@@ -171,39 +181,23 @@ impl NumericScrubber {
 /// - Translucent backdrop tint
 /// - Ambient soft drop shadow
 pub fn render_glass_card(buf: &mut CommandBuffer, rect: Rect, palette: &ThemePalette, radius: f32) {
-    // 1. Ambient drop shadow
-    let shadow_rect = Rect::from_min_max(
-        rect.min + Vec2::new(0.0, 4.0),
-        rect.max + Vec2::new(0.0, 8.0),
-    );
-    buf.push(DrawCommand::Rect {
-        rect: shadow_rect,
-        fill: ui_core::Color::rgba(0, 0, 0, 45),
-        radius: CornerRadius::same(radius + 2.0),
-        stroke: Stroke::NONE,
-    });
-
-    // 2. Glassmorphic translucent body
-    buf.push(DrawCommand::Rect {
+    // The soft shadow and rim are analytical SDF passes, not opaque rectangles.
+    buf.push(DrawCommand::SoftShadow {
         rect,
-        fill: palette.surface.with_alpha(215),
         radius: CornerRadius::same(radius),
-        stroke: Stroke::new(1.0, palette.border.with_alpha(140)),
+        color: ui_core::Color::rgba(0, 0, 0, 85),
+        offset: Vec2::new(0.0, 5.0),
+        blur: 12.0,
+        spread: 0.0,
     });
-
-    // 3. Dual-stroke specular highlight: 1px hairline top rim
-    if rect.width() > 16.0 {
-        let highlight_rect = Rect::from_min_size(
-            Vec2::new(rect.min.x + radius.min(8.0), rect.min.y),
-            Vec2::new((rect.width() - (radius.min(8.0) * 2.0)).max(1.0), 1.0),
-        );
-        buf.push(DrawCommand::Rect {
-            rect: highlight_rect,
-            fill: ui_core::Color::rgba(255, 255, 255, 30),
-            radius: CornerRadius::ZERO,
-            stroke: Stroke::NONE,
-        });
-    }
+    buf.push(DrawCommand::Surface {
+        rect,
+        fill_top: palette.elevated.with_alpha(240),
+        fill_bottom: palette.surface.with_alpha(225),
+        radius: CornerRadius::same(radius),
+        stroke: Stroke::new(1.0, palette.border.with_alpha(180)),
+        rim_strength: 0.75,
+    });
 }
 
 /// Renders a status pill badge with a live glowing/solid indicator dot.

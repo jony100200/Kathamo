@@ -33,20 +33,21 @@ pub struct ThemePalette {
 }
 
 impl ThemePalette {
+    /// Warm charcoal workspace: neutral surfaces and copper accents, not blue-tinted panels.
     pub const fn dark() -> Self {
         Self {
-            canvas: Color::rgb(11, 14, 20),
-            surface: Color::rgb(18, 23, 33),
-            elevated: Color::rgb(27, 34, 49),
-            elevated_high: Color::rgb(36, 45, 65),
-            border: Color::rgb(45, 56, 80),
-            text: Color::rgb(240, 244, 253),
-            text_muted: Color::rgb(153, 164, 183),
-            accent: Color::rgb(110, 140, 255),
-            accent_hover: Color::rgb(135, 160, 255),
-            danger: Color::rgb(240, 95, 95),
-            success: Color::rgb(80, 210, 150),
-            warning: Color::rgb(255, 180, 70),
+            canvas: Color::rgb(16, 18, 19),
+            surface: Color::rgb(25, 27, 28),
+            elevated: Color::rgb(36, 39, 40),
+            elevated_high: Color::rgb(49, 52, 53),
+            border: Color::rgb(65, 69, 70),
+            text: Color::rgb(242, 239, 232),
+            text_muted: Color::rgb(168, 172, 171),
+            accent: Color::rgb(221, 170, 104),
+            accent_hover: Color::rgb(239, 191, 126),
+            danger: Color::rgb(222, 102, 95),
+            success: Color::rgb(116, 192, 153),
+            warning: Color::rgb(229, 176, 94),
         }
     }
 

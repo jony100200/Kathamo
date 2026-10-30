@@ -274,6 +274,98 @@ impl CpuBackend {
         }
     }
 
+
+    fn draw_surface(
+        &mut self,
+        rect: Rect,
+        fill_top: Color,
+        fill_bottom: Color,
+        radius: CornerRadius,
+        stroke: ui_core::Stroke,
+        rim_strength: f32,
+    ) {
+        let scale = self.scale;
+        let clip = self.clip();
+        let min = rect.min * scale;
+        let max = rect.max * scale;
+        if min.x >= max.x || min.y >= max.y { return; }
+        let center = (min + max) * 0.5;
+        let half = (max - min) * 0.5;
+        let radii = scale_radius(radius, scale);
+        let bw = if stroke.color.a > 0 { stroke.width.max(0.0) * scale } else { 0.0 };
+        let x0 = (min.x.floor() as i32).max(clip[0]);
+        let y0 = (min.y.floor() as i32).max(clip[1]);
+        let x1 = (max.x.ceil() as i32).min(clip[2]);
+        let y1 = (max.y.ceil() as i32).min(clip[3]);
+        let lerp = |a: u8, b: u8, t: f32| -> u8 {
+            (a as f32 + (b as f32 - a as f32) * t).round().clamp(0.0, 255.0) as u8
+        };
+        for y in y0..y1 {
+            let py = y as f32 + 0.5;
+            let t = ((py - min.y) / (max.y - min.y).max(1.0)).clamp(0.0, 1.0);
+            let h = ((py - min.y) / 2.0).clamp(0.0, 1.0);
+            let top_light = (1.0 - h * h * (3.0 - 2.0 * h)) * rim_strength.clamp(0.0, 1.0) * 0.12;
+            let brighten = |v: u8| -> u8 {
+                (v as f32 + (255.0 - v as f32) * top_light).round() as u8
+            };
+            let fill = Color::rgba(
+                brighten(lerp(fill_top.r, fill_bottom.r, t)),
+                brighten(lerp(fill_top.g, fill_bottom.g, t)),
+                brighten(lerp(fill_top.b, fill_bottom.b, t)),
+                lerp(fill_top.a, fill_bottom.a, t),
+            );
+            for x in x0..x1 {
+                let point = Vec2::new(x as f32 + 0.5, py);
+                let d = sd_round_box(point - center, half, radii);
+                let outer = (0.5 - d).clamp(0.0, 1.0);
+                if outer <= 0.0 { continue; }
+                let inner = if bw > 0.0 { (0.5 - (d + bw)).clamp(0.0, 1.0) } else { outer };
+                self.blend(x, y, fill, inner, clip);
+                if bw > 0.0 { self.blend(x, y, stroke.color, outer - inner, clip); }
+            }
+        }
+    }
+
+    fn draw_soft_shadow(
+        &mut self,
+        rect: Rect,
+        radius: CornerRadius,
+        color: Color,
+        offset: Vec2,
+        blur: f32,
+        spread: f32,
+    ) {
+        if color.a == 0 { return; }
+        let spread = spread.clamp(-32.0, 32.0);
+        let blur = blur.clamp(0.5, 64.0) * self.scale;
+        let min = (rect.min + offset - Vec2::splat(spread)) * self.scale;
+        let max = (rect.max + offset + Vec2::splat(spread)) * self.scale;
+        if min.x >= max.x || min.y >= max.y { return; }
+        let center = (min + max) * 0.5;
+        let half = (max - min) * 0.5;
+        let radius = CornerRadius {
+            top_left: (radius.top_left + spread).max(0.0),
+            top_right: (radius.top_right + spread).max(0.0),
+            bottom_right: (radius.bottom_right + spread).max(0.0),
+            bottom_left: (radius.bottom_left + spread).max(0.0),
+        };
+        let radii = scale_radius(radius, self.scale);
+        let clip = self.clip();
+        let pad = blur + 1.0;
+        let x0 = ((min.x - pad).floor() as i32).max(clip[0]);
+        let y0 = ((min.y - pad).floor() as i32).max(clip[1]);
+        let x1 = ((max.x + pad).ceil() as i32).min(clip[2]);
+        let y1 = ((max.y + pad).ceil() as i32).min(clip[3]);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let d = sd_round_box(Vec2::new(x as f32 + 0.5, y as f32 + 0.5) - center, half, radii);
+                let t = ((blur - d) / (2.0 * blur)).clamp(0.0, 1.0);
+                let coverage = t * t * (3.0 - 2.0 * t);
+                if coverage > 0.0 { self.blend(x, y, color, coverage, clip); }
+            }
+        }
+    }
+
     fn draw_line(&mut self, a: Vec2, b: Vec2, width: f32, color: Color) {
         let s = self.scale;
         let clip = self.clip();
@@ -411,6 +503,10 @@ impl RenderBackend for CpuBackend {
                     radius,
                     stroke,
                 } => self.draw_rect(*rect, *fill, *radius, *stroke),
+                DrawCommand::Surface { rect, fill_top, fill_bottom, radius, stroke, rim_strength } =>
+                    self.draw_surface(*rect, *fill_top, *fill_bottom, *radius, *stroke, *rim_strength),
+                DrawCommand::SoftShadow { rect, radius, color, offset, blur, spread } =>
+                    self.draw_soft_shadow(*rect, *radius, *color, *offset, *blur, *spread),
                 DrawCommand::Line { start, end, stroke } => {
                     self.draw_line(*start, *end, stroke.width, stroke.color)
                 }
@@ -504,6 +600,34 @@ mod tests {
         cpu.submit(&draw);
         assert_eq!(px(&cpu, 1, 2), Color::rgb(255, 0, 0).to_u32());
         assert_eq!(px(&cpu, 6, 2), Color::rgb(0, 255, 0).to_u32());
+    }
+
+    #[test]
+    fn premium_surface_gradient_and_shadow_are_cpu_visible() {
+        let mut cpu = CpuBackend::new();
+        cpu.begin_frame(96, 96, Color::BLACK);
+        let mut buf = CommandBuffer::new();
+        let rect = Rect::from_min_size(Vec2::new(16.0, 16.0), Vec2::new(64.0, 48.0));
+        buf.push(DrawCommand::SoftShadow {
+            rect,
+            radius: CornerRadius::same(9.0),
+            color: Color::rgba(255, 0, 0, 160),
+            offset: Vec2::new(0.0, 6.0),
+            blur: 8.0,
+            spread: 0.0,
+        });
+        buf.push(DrawCommand::Surface {
+            rect,
+            fill_top: Color::rgb(64, 56, 47),
+            fill_bottom: Color::rgb(28, 25, 24),
+            radius: CornerRadius::same(9.0),
+            stroke: ui_core::Stroke::new(1.0, Color::rgb(95, 88, 72)),
+            rim_strength: 0.65,
+        });
+        cpu.submit(&buf);
+        assert_ne!(px(&cpu, 40, 22), px(&cpu, 40, 56), "gradient must vary by row");
+        assert_ne!(px(&cpu, 40, 70), Color::BLACK.to_u32(), "soft shadow extends below surface");
+        assert_eq!(px(&cpu, 2, 2), Color::BLACK.to_u32(), "shadow stays localized");
     }
 
     #[test]

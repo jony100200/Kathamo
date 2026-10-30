@@ -400,3 +400,170 @@ assert!(snap.find("canvas").is_some());
 assert_eq!(snap.root.find_by_role("DockTab").len(), 1);
 ```
 
+
+## 9. Developer Reference
+
+The README is the introduction; this section holds the hands-on detail.
+
+### Architecture & Crates
+
+```
+Kathamo/
+├── core/       ← Layout math, anchors, docking tree, modifiers, task signals
+├── platform/   ← winit window lifecycle, DPI scaling, multi-touch/mouse, AccessKit
+├── render/     ← wgpu hardware swapchain, infallible softbuffer CPU safe mode
+├── themes/     ← Fluent 2 scale, Studio Graphite tokens, bilingual Bengali labels
+├── text/       ← HarfBuzz/rustybuzz shaping, FontRegistry, lazy fallback fonts
+├── widgets/    ← Commercial studio controls, Tabler vector atlas, KolponaUi builder
+├── testkit/    ← Frame timer, p95 benchmark recorder, offscreen pixel testing
+├── sdk/        ← Public KathamoApp, native windows, editor workspaces and UI API
+└── lab/        ← Interactive UI test harness and benchmark runner (ui-lab)
+```
+
+---
+
+### SDK Quick Start
+
+Kathamo provides the **user interface**; each application supplies its own painting, 3D, video, audio or other processing logic.
+
+Launch an interactive native SDK example:
+
+```bash
+cargo run -p kathamo --example creative_2d -- --native
+cargo run -p kathamo --example spatial_3d -- --native
+cargo run -p kathamo --example procedural_editor -- --native
+cargo run -p kathamo --example video_editor -- --native
+cargo run -p kathamo --example desktop_app -- --native
+```
+
+Omit `--native` to run the existing headless checks. Import `kathamo::prelude::*` and call `run_native(app)` to start your own application.
+
+- **Image/video/3D viewport:** Use `CanvasHost::new_texture_host(id, (width, height))` and `ctx.set_image_rgba8(id, width, height, rgba)`. The same pixels render on GPU or CPU. For zero-copy wgpu textures, implement `KathamoApp::prepare_gpu`, create textures on `gpu.device()`, and call `gpu.register_external_view(id, view)`.
+- **Dock layout:** Use `WorkspaceHost::with_preset(...)` or `from_workspace(...)`. Persist with `workspace.save_layouts_to(path)` / `load_layouts_from(path)`.
+- **Detachable panels:** In the 3D example, drag the viewport tab outside the dock or press **Ctrl+Shift+D**. Consuming apps can use `WorkspaceHost::detach_to_window`, `KathamoApp::update_window`, and `window_closed`; close the child window to reattach it.
+- **Keyboard/focus:** `WorkspaceHost::handle_key_down` supports Tab/Shift+Tab pane traversal; forward text and IME to the workspace from `KathamoApp`.
+- **Layout:** `LayoutBuilder` supports custom padding, spacing, orientation and weighted `flex_columns`.
+- **Agent API:** `InterfaceInspector::capture_workspace(&workspace, bounds)`, `InterfaceInspector::hit_test(&snapshot, pos)`, `workspace.activate_panel(id)`.
+
+Kathamo supplies the UI only; applications implement actual painting, scene rendering, video decoding, and other behavior. Full cross-platform interaction and accessibility still need testing.
+
+
+#### Visual Designer (included)
+
+```bash
+cargo run -p kathamo --example visual_designer
+# Optional: open a specific saved project
+cargo run -p kathamo --example visual_designer -- --file path/to/interface.kui
+# Non-graphical smoke check for agents
+cargo run -p kathamo --example visual_designer -- --headless
+```
+
+Build application UI layouts visually using the left-side component palette, canvas, hierarchy and editable property inspector. Choose an **Empty / Game Studio / 3D DCC / Digital Painting / Chat** starter layout, drag to place and reposition components, resize using the bottom-right handle, and edit properties by clicking their values. Scroll to zoom. **Preview** uses live Kathamo controls, not the decorative design shapes; buttons, toggles, text fields, graph widgets and other implemented controls receive real input. Set **Layout**, **State key**, and **Action ID** in the property inspector to configure responsive placement and application bindings.
+
+**Save/Open** read and write a versioned `.kui` document. **Export Rust** writes an editable `build_ui()` function using the public `DesignDocument` model. Default files go into `~/KathamoProjects` (or `%USERPROFILE%\\KathamoProjects` on Windows), not the repository. Click the project-path field to change the destination.
+
+Keyboard: **Ctrl+S** save, **Ctrl+O** open, **Ctrl+E** export, **Ctrl+Z/Y** undo/redo, **Delete** remove, **arrow keys** nudge; **Enter/Escape** apply/cancel a property. Developers and agents can use `DesignDocument::add`, `add_child`, `find_mut`, `set_parent`, `serialize`, `deserialize`, and `render` directly.
+
+The Designer exports layouts, state/action IDs and responsive placement metadata. `DesignRuntime` reads those documents and emits `UiEvent` actions; the consuming application handles actual behaviour. Register custom components with `ComponentRegistry`, inspect and invoke elements through stable IDs, and populate built-in `NodeEditor`, `ChatTranscript`, `MarkdownView`, `CanvasHost`, and other controls through the runtime.
+
+```bash
+# Public-SDK interactive chatbot-shaped UI (UI only; no model backend)
+cargo run -p kathamo --example interactive_ui
+cargo run -p kathamo --example interactive_ui -- --native
+
+# Verify all crate examples and tests after pulling
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace
+```
+
+`GraphDocument` saves and validates node positions, typed ports and links, groups, cycles and duplicate sockets. Its guided card renderer and the existing advanced `NodeEditor` use identical node IDs; application execution remains external to the framework. The framework also includes layout grid/wrap solvers, IME-aware input, event binding and a streaming-chat presentation widget.
+
+**Verification:** these latest integrations require local Rust compilation and native interaction review. Rendering a widget does not prove application-specific functionality, and the lightweight Markdown widget is not a complete rich-text editor.
+
+---
+
+### Real-World Workstation Demonstration: Ojon (ওজন)
+
+Kathamo includes a full-fidelity implementation of **Ojon (ওজন)** — Kalponic Studio's local AI model quantization workstation ([github.com/jony100200/Ojon](https://github.com/jony100200/Ojon)).
+
+Run the standalone example:
+```bash
+cargo run -p ui-lab --example ojon_workstation
+```
+
+Or open the interactive UI Lab and switch to the **Ojon Studio** tab:
+```bash
+cargo run -p ui-lab
+```
+
+---
+
+### Benchmark Gates & Measured Evidence (1,000 Frames @ 1440×900)
+
+| Metric | Measured Result | Target Gate | Verdict |
+| :--- | :--- | :--- | :--- |
+| **p50 Frame Time** | **1.22 ms** | < 8.3 ms (120 Hz) | ✅ Excellent |
+| **p90 Frame Time** | **2.64 ms** | < 16.7 ms (60 Hz) | ✅ Excellent |
+| **p95 Frame Time** | **2.79 ms** | < 16.7 ms (60 Hz) | ✅ **PASS (6.0× Headroom)** |
+| **p99 Frame Time** | **3.26 ms** | < 16.7 ms (60 Hz) | ✅ Excellent |
+| **Frame Stalls (>16.7ms)** | **0** | 0 stalls | ✅ Perfect |
+| **RAM (private, `desktop_app --native`)** | **~170–180 MB** | — | Measured; mostly GPU driver |
+| **Discrete-GPU VRAM** | **0 MB** (UI runs on the integrated GPU) | Leave VRAM for models | ✅ |
+| **Idle CPU (no input, after hover animations)** | **0.00 %** over 10 s | 0 % | ✅ |
+| **GPU Recovery Fallback** | **Instant Safe Mode** | Zero panic / crash | ✅ Seamless Recovery |
+| **Presentation Flash** | **ZERO frames** | Zero white screen | ✅ Hidden until first paint |
+
+
+RAM, VRAM and idle CPU were measured on Windows 11, on a laptop with an integrated and a discrete GPU, using Windows performance counters.
+
+#### GPU selection
+
+Kathamo asks for the **low-power (integrated) GPU** first, so its UI does not occupy the discrete GPU or its VRAM. Apps that render heavy 3D in their viewport can opt into the discrete GPU:
+
+```bash
+WGPU_POWER_PREF=high cargo run -p kathamo --example kathamo_forge
+```
+
+#### Glass viewport demo
+
+A real wgpu 3D scene (depth buffer, 4x MSAA, lit meshes, emissive orbs, grid floor) embedded through the zero-copy external-texture path, with frosted-glass panels that blur the live 3D view beneath them. Drag to orbit, scroll to zoom.
+
+```bash
+cargo run --release -p kathamo --example glass_viewport
+```
+
+Measured on an integrated GPU at 1920x974: 16.7 ms per frame (vsync-locked 60 fps), 0 MB on the discrete GPU, about 26-43 % of one CPU core while animating.
+
+#### Headless screenshots
+
+Any app started with `run_native` writes one GPU-rendered frame to a PNG and exits when `KATHAMO_SNAPSHOT` is set. No desktop session is needed, and motion is settled first so images are deterministic:
+
+```bash
+KATHAMO_SNAPSHOT=forge.png cargo run --release -p kathamo --example kathamo_forge
+```
+
+---
+
+### Platform Support
+
+Kathamo is developed primarily on Windows. **Linux has not yet been tested by the maintainer**, but it is expected to work because the framework uses cross-platform Rust windowing and rendering libraries.
+
+**Linux users:** If you'd like to use Kathamo on Linux, please try it on your machine:
+
+```bash
+cargo check --workspace
+cargo run -p ui-lab
+```
+
+If you encounter any problems, please open a GitHub issue with your Linux distribution, graphics hardware, and the error details. Linux compatibility is **community-testing welcome**, not yet maintainer-verified.
+
+
+#### Kolpona native shell showcase
+
+A studio-style desktop shell using Kathamo's native GPU surfaces, soft shadows, and warm charcoal design tokens. Select one of six application cards and toggle its inspector. This is a **UI demonstration only**; agent runtimes and application services are not simulated.
+
+```bash
+cargo run -p kathamo --example kolpona_shell -- --native
+cargo run -p kathamo --example kolpona_shell
+```

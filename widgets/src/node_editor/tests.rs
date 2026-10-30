@@ -378,3 +378,42 @@ fn test_reroute_knot() {
     assert_eq!(node.inputs[0].pin_type, "Any");
     assert_eq!(node.outputs[0].pin_type, "Any");
 }
+
+#[test]
+fn category_and_pin_colours_are_distinct_and_readable_in_every_theme() {
+    use super::types::pin_type_color;
+    let palettes = [
+        ThemePalette::dark(),
+        ThemePalette::studio_graphite(),
+        ThemePalette::light(),
+        ThemePalette::midnight_graphite(),
+        ThemePalette::warm_paper(),
+    ];
+    let categories = [
+        "Source", "Processing", "Filter", "Composite", "Material", "Shader", "Output", "AI",
+        "Utility",
+    ];
+    let pins = ["Image", "Mask", "Float", "Color", "PbrMaterial", "ShaderWgsl", "Video"];
+    for palette in &palettes {
+        let colours: Vec<_> = categories.iter().map(|c| category_color(c, palette)).collect();
+        for (i, a) in colours.iter().enumerate() {
+            for b in &colours[i + 1..] {
+                assert_ne!(a, b, "two categories share a colour");
+            }
+            // The 4px accent bar must stand out from the node body.
+            assert!(a.contrast_ratio(palette.surface) >= 2.0, "{a:?} on {:?}", palette.surface);
+        }
+        let pin_colours: Vec<_> = pins.iter().map(|p| pin_type_color(p, palette)).collect();
+        for (i, a) in pin_colours.iter().enumerate() {
+            for b in &pin_colours[i + 1..] {
+                assert_ne!(a, b, "two socket types share a colour");
+            }
+        }
+        // Unknown names are stable and case-insensitive.
+        assert_eq!(category_color("Custom", palette), category_color("custom", palette));
+    }
+    // Same hue, tuned per theme: brighter on dark canvases than on light ones.
+    let on_dark = category_color("Filter", &ThemePalette::dark());
+    let on_light = category_color("Filter", &ThemePalette::light());
+    assert!(on_dark.luminance() > on_light.luminance());
+}

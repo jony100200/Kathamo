@@ -243,9 +243,15 @@ impl MenuBar {
                     blur: 18.0,
                     spread: 0.0,
                 });
+                // Frosted glass: blurred backdrop + translucent tint, then the hairline border.
+                cmd_buf.push(DrawCommand::Backdrop {
+                    rect: dropdown_rect,
+                    radius: CornerRadius::same(5.0),
+                    tint: palette.elevated.with_alpha(200),
+                });
                 cmd_buf.push(DrawCommand::Rect {
                     rect: dropdown_rect,
-                    fill: palette.elevated,
+                    fill: Color::TRANSPARENT,
                     radius: CornerRadius::same(5.0),
                     stroke: Stroke::new(1.0, palette.border),
                 });
@@ -363,15 +369,23 @@ impl ContextMenu {
         }
 
         let b = self.bounds();
-        cmd_buf.push(DrawCommand::Rect {
-            rect: b.expand(3.0),
-            fill: Color::rgba(0, 0, 0, 90),
-            radius: CornerRadius::same(6.0),
-            stroke: Stroke::NONE,
+        cmd_buf.push(DrawCommand::SoftShadow {
+            rect: b,
+            radius: CornerRadius::same(5.0),
+            color: Color::rgba(0, 0, 0, 110),
+            offset: Vec2::new(0.0, 6.0),
+            blur: 18.0,
+            spread: 0.0,
+        });
+        // Frosted glass: blurred backdrop + translucent tint, then the hairline border.
+        cmd_buf.push(DrawCommand::Backdrop {
+            rect: b,
+            radius: CornerRadius::same(5.0),
+            tint: palette.elevated.with_alpha(200),
         });
         cmd_buf.push(DrawCommand::Rect {
             rect: b,
-            fill: palette.elevated,
+            fill: Color::TRANSPARENT,
             radius: CornerRadius::same(5.0),
             stroke: Stroke::new(1.0, palette.border),
         });
@@ -751,9 +765,23 @@ impl NotificationHost {
                 blur: 24.0,
                 spread: 0.0,
             });
+            // Frosted glass while fully shown; the blur has no opacity, so enter and
+            // fade-out use the fading solid card instead of popping.
+            let glass = alpha >= 0.999;
+            if glass {
+                cmd_buf.push(DrawCommand::Backdrop {
+                    rect: toast_rect,
+                    radius: CornerRadius::same(8.0),
+                    tint: palette.elevated.with_alpha(200),
+                });
+            }
             cmd_buf.push(DrawCommand::Rect {
                 rect: toast_rect,
-                fill: fade(palette.elevated),
+                fill: if glass {
+                    Color::TRANSPARENT
+                } else {
+                    fade(palette.elevated)
+                },
                 radius: CornerRadius::same(8.0),
                 stroke: Stroke::new(1.0, fade(palette.border)),
             });
@@ -794,6 +822,22 @@ impl NotificationHost {
 
             y -= toast_h + 8.0;
         }
+    }
+}
+
+/// File-type icon for an asset without a rendered preview.
+fn asset_icon(name: &str) -> ui_widgets::StudioIcon {
+    use ui_widgets::StudioIcon;
+    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "webp" | "exr" | "tga" => StudioIcon::Image,
+        "cs" | "rs" | "lua" | "py" | "js" => StudioIcon::Code,
+        "graph" => StudioIcon::GitBranch,
+        "scene" | "level" => StudioIcon::LayoutGrid,
+        "fbx" | "obj" | "gltf" | "glb" | "blend" => StudioIcon::Layers,
+        "mat" | "ksmat" => StudioIcon::Palette,
+        "wav" | "ogg" | "mp3" => StudioIcon::Waveform,
+        _ => StudioIcon::File,
     }
 }
 
@@ -1061,17 +1105,19 @@ impl AssetBrowser {
                     }
 
                     let is_sel = self.selected_id.as_deref() == Some(&item.id);
-                    let is_hov = r.contains(ptr.position);
+                    let hover = motion::animate_bool(
+                        motion::rect_key("asset_card", r),
+                        r.contains(ptr.position),
+                        motion::HOVER,
+                    );
 
                     // Card body
                     cmd_buf.push(DrawCommand::Rect {
                         rect: r,
                         fill: if is_sel {
                             palette.accent.with_alpha(40)
-                        } else if is_hov {
-                            palette.elevated
                         } else {
-                            palette.surface
+                            palette.surface.lerp(palette.elevated, hover)
                         },
                         radius: CornerRadius::same(6.0),
                         stroke: if is_sel {
@@ -1100,12 +1146,17 @@ impl AssetBrowser {
                             radius: CornerRadius::same(4.0),
                             stroke: Stroke::NONE,
                         });
-                        cmd_buf.push(DrawCommand::Text {
-                            text: "[Thumb]".into(),
-                            pos: Vec2::new(thumb_r.min.x + 18.0, thumb_r.min.y + 28.0),
-                            size: 10.0,
-                            color: palette.text_muted.with_alpha(100),
-                            strong: false,
+                        // No preview yet: show the file type, never a fake picture.
+                        let icon = asset_icon(&item.name);
+                        let c = thumb_r.center();
+                        cmd_buf.push(DrawCommand::Icon {
+                            id: icon.name(),
+                            svg: icon.svg_str(),
+                            rect: Rect::from_min_size(
+                                Vec2::new(c.x - 14.0, c.y - 14.0),
+                                Vec2::new(28.0, 28.0),
+                            ),
+                            color: palette.text_muted.with_alpha(150),
                         });
                     }
 

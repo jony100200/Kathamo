@@ -1,6 +1,8 @@
 //! `ui-render`: Real `wgpu` GPU pipeline and safe-mode CPU fallback rasterizer,
 //! sharing one Unicode text stack (rustybuzz + ab_glyph) and one SVG icon pipeline (resvg).
 
+mod atlas_pack;
+mod backdrop;
 pub mod backend;
 pub mod command;
 pub mod cpu_backend;
@@ -30,5 +32,17 @@ mod shader_validation {
         )
         .validate(&module)
         .expect("studio shader must be valid for wgpu");
+    }
+
+    #[test]
+    fn backdrop_blur_shader_parses_and_validates() {
+        let module = naga::front::wgsl::parse_str(include_str!("blur.wgsl"))
+            .expect("blur shader must have valid WGSL syntax");
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .expect("blur shader must be valid for wgpu");
     }
 }

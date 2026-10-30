@@ -163,31 +163,51 @@ impl<'a> RangeSlider<'a> {
             stroke: Stroke::NONE,
         });
 
-        // Draw Min Thumb
-        let min_thumb_hovered = min_thumb_rect.contains(ui.pointer.position);
-        let min_thumb_color = if min_thumb_hovered || dragging {
-            Color::WHITE
-        } else {
-            palette.text
-        };
+        // Draw Min Thumb: grows slightly and gains a soft accent halo on hover/drag.
+        let min_t = ui_core::motion::animate_bool(
+            ui_core::motion::rect_key("range_thumb_min", min_thumb_rect),
+            min_thumb_rect.contains(ui.pointer.position) || dragging,
+            ui_core::motion::HOVER,
+        );
+        let min_r = min_thumb_rect.expand(1.5 * min_t);
+        if min_t > 0.0 {
+            ui.cmd_buf.push(DrawCommand::SoftShadow {
+                rect: min_r,
+                radius: CornerRadius::same(thumb_radius + 1.5),
+                color: palette.accent.with_alpha((90.0 * min_t) as u8),
+                offset: Vec2::ZERO,
+                blur: 6.0,
+                spread: 1.0,
+            });
+        }
         ui.cmd_buf.push(DrawCommand::Rect {
-            rect: min_thumb_rect,
-            fill: min_thumb_color,
-            radius: CornerRadius::same(thumb_radius),
+            rect: min_r,
+            fill: palette.text.lerp(Color::WHITE, min_t),
+            radius: CornerRadius::same(thumb_radius + 1.5 * min_t),
             stroke: Stroke::new(1.5, palette.border),
         });
 
-        // Draw Max Thumb
-        let max_thumb_hovered = max_thumb_rect.contains(ui.pointer.position);
-        let max_thumb_color = if max_thumb_hovered || dragging {
-            Color::WHITE
-        } else {
-            palette.text
-        };
+        // Draw Max Thumb: grows slightly and gains a soft accent halo on hover/drag.
+        let max_t = ui_core::motion::animate_bool(
+            ui_core::motion::rect_key("range_thumb_max", max_thumb_rect),
+            max_thumb_rect.contains(ui.pointer.position) || dragging,
+            ui_core::motion::HOVER,
+        );
+        let max_r = max_thumb_rect.expand(1.5 * max_t);
+        if max_t > 0.0 {
+            ui.cmd_buf.push(DrawCommand::SoftShadow {
+                rect: max_r,
+                radius: CornerRadius::same(thumb_radius + 1.5),
+                color: palette.accent.with_alpha((90.0 * max_t) as u8),
+                offset: Vec2::ZERO,
+                blur: 6.0,
+                spread: 1.0,
+            });
+        }
         ui.cmd_buf.push(DrawCommand::Rect {
-            rect: max_thumb_rect,
-            fill: max_thumb_color,
-            radius: CornerRadius::same(thumb_radius),
+            rect: max_r,
+            fill: palette.text.lerp(Color::WHITE, max_t),
+            radius: CornerRadius::same(thumb_radius + 1.5 * max_t),
             stroke: Stroke::new(1.5, palette.border),
         });
 

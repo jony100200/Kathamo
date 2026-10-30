@@ -224,6 +224,8 @@ When an agent writes or modifies Kathamo code:
 5. Time-based UI (toasts, timers): call `motion::wake_at(deadline)` instead of redrawing continuously; the runner sleeps until then.
 6. Tab rows and multi-state selectors: `ui_widgets::tab_strip` (measured widths, sliding pill, shared `tab_rects`/`hit` so clicks match drawing). Never size tabs with `len() * px`.
 7. Code, logs and aligned numbers: `DrawCommand::Code` (monospace face) or `ui_widgets::code_view::render_code_line` for token colouring from the theme.
+8. Screen regions: describe them once with `kathamo::flex::Flex` (CSS flexbox via taffy) and use the solved rects for both drawing and hit-testing. Never recompute `left_w`/`top_offset` in each input handler.
+9. Floating surfaces (menus, popovers, toasts): `DrawCommand::Backdrop { rect, radius, tint }` gives frosted glass; draw the shadow first and the border after.
 
 ## 8. High-Level Kathamo SDK (`kathamo` Crate)
 

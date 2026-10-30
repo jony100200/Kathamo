@@ -95,6 +95,13 @@ fn fs_main(i: VsOut) -> @location(0) vec4<f32> {
         let coverage = p * p * (3.0 - 2.0 * p);
         return out_color(i.color.rgb, i.color.a * coverage);
     }
+    if (mode == 6) {
+        // Frosted glass: blurred frame copy under a rounded mask, then the tint.
+        let d = sd_round_box(i.world - i.shape.xy, i.shape.zw, i.radii);
+        let cov = clamp(0.5 - d / aa, 0.0, 1.0);
+        let blurred = textureSample(image_tex, image_smp, i.world / globals.viewport).rgb;
+        return out_color(mix(blurred, i.color.rgb, i.color.a), cov);
+    }
     if (mode == 1) {
         let cov = textureSample(atlas_tex, atlas_smp, i.shape.xy).r;
         return out_color(i.color.rgb, i.color.a * cov);

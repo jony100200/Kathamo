@@ -529,6 +529,10 @@ impl RenderBackend for CpuBackend {
                     color,
                     strong,
                 } => self.draw_text(text, *pos, *size, *color, Face::from_strong(*strong)),
+                DrawCommand::Backdrop { rect, radius, tint } => {
+                    // No frame copy on the CPU path: a near-opaque tinted panel.
+                    self.draw_rect(*rect, tint.with_alpha(tint.a.max(235)), *radius, ui_core::Stroke::NONE)
+                }
                 DrawCommand::Code {
                     text,
                     pos,

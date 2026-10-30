@@ -63,6 +63,8 @@ pub struct HierarchyTree {
     pub selected_id: Option<String>,
     pub renaming_id: Option<String>,
     pub rename_buffer: TextEditBuffer,
+    /// Toolbar title; empty shows "LAYERS". A 3D editor sets "Scene Hierarchy".
+    pub title: String,
 }
 
 impl HierarchyTree {
@@ -80,6 +82,7 @@ impl HierarchyTree {
             selected_id,
             renaming_id: None,
             rename_buffer: TextEditBuffer::new(""),
+            title: String::new(),
         }
     }
 
@@ -319,7 +322,15 @@ impl HierarchyTree {
         });
 
         buf.push(DrawCommand::Text {
-            text: format!("LAYERS ({})", self.items.len()),
+            text: format!(
+                "{} ({})",
+                if self.title.is_empty() {
+                    "LAYERS"
+                } else {
+                    &self.title
+                },
+                self.items.len()
+            ),
             pos: Vec2::new(toolbar_rect.min.x + 10.0, toolbar_rect.min.y + 9.0),
             size: 11.5,
             color: palette.text,

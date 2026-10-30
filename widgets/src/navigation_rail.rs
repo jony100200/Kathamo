@@ -241,34 +241,29 @@ impl NavigationRail {
     ) -> bool {
         let is_selected = self.selected_id == Some(item.id);
         let hovered = rect.contains(pointer_pos);
+        let key = ui_core::motion::rect_key("nav_rail", rect);
+        let hover = ui_core::motion::animate_bool(key, hovered, ui_core::motion::HOVER);
+        let select = ui_core::motion::animate_bool(key ^ 1, is_selected, ui_core::motion::TOGGLE);
 
-        // Background pill
-        if is_selected {
-            // Selected active pill with accent fill
+        // Background pill: hover fades in, selection cross-fades to the accent.
+        let pill = palette
+            .elevated
+            .with_alpha((255.0 * hover) as u8)
+            .lerp(palette.accent, select);
+        if pill.a > 0 {
             cmd_buf.push(DrawCommand::Rect {
                 rect,
-                fill: palette.accent,
-                radius: CornerRadius::same(6.0),
-                stroke: Stroke::NONE,
-            });
-        } else if hovered {
-            // Hover pill
-            cmd_buf.push(DrawCommand::Rect {
-                rect,
-                fill: palette.elevated,
+                fill: pill,
                 radius: CornerRadius::same(6.0),
                 stroke: Stroke::NONE,
             });
         }
 
         // Center icon
-        let icon_color = if is_selected {
-            Color::WHITE
-        } else if hovered {
-            palette.text
-        } else {
-            palette.text_muted
-        };
+        let icon_color = palette
+            .text_muted
+            .lerp(palette.text, hover)
+            .lerp(Color::WHITE, select);
 
         let icon_size = 20.0;
         let icon_y = match self.label_mode {

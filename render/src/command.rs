@@ -47,6 +47,13 @@ pub enum DrawCommand {
         color: Color,
         strong: bool,
     },
+    /// Frosted glass: blurs what is already drawn beneath `rect`, then tints it.
+    /// Backends without frame copies draw the tint as a near-opaque panel.
+    Backdrop {
+        rect: Rect,
+        radius: CornerRadius,
+        tint: Color,
+    },
     /// Monospace text for code, logs and aligned numbers.
     Code {
         text: String,

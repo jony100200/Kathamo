@@ -21,6 +21,7 @@
 //! - 100% deterministic local mock state; zero backend or GPU engine requirement.
 
 use kathamo::prelude::*;
+use kathamo::flex::{Flex, FlexLayout};
 use kathamo::widgets::tab_strip;
 use ui_core::motion;
 
@@ -154,6 +155,35 @@ pub struct KathamoForgeApp {
 }
 
 impl KathamoForgeApp {
+    /// Every editor region, solved once by flexbox; drawing and input share it.
+    fn regions(bounds: Rect) -> FlexLayout {
+        let left = Flex::column()
+            .basis(310.0)
+            .shrink(0.0)
+            .key("left")
+            .child(Flex::grow_by(52.0).key("hierarchy"))
+            .child(Flex::grow_by(48.0).key("assets"));
+        let center = Flex::column()
+            .basis(0.0)
+            .grow(1.0)
+            .min_main(400.0)
+            .key("center")
+            .child(Flex::grow_by(1.0).key("viewport"))
+            .child(Flex::fixed(210.0).key("dock"));
+        let right = Flex::column()
+            .basis(340.0)
+            .shrink(0.0)
+            .key("right")
+            .child(Flex::fixed(32.0).key("inspector_header"))
+            .child(Flex::grow_by(1.0).key("inspector_body"));
+        Flex::column()
+            .child(Flex::fixed(28.0).key("menu"))
+            .child(Flex::fixed(38.0).key("ribbon"))
+            .child(Flex::row().grow(1.0).child(left).child(center).child(right))
+            .child(Flex::fixed(24.0).key("status"))
+            .layout(bounds)
+    }
+
     /// Transport strip, right-aligned in the ribbon.
     fn transport_layout(ribbon: Rect) -> (Vec<Rect>, Rect) {
         let probe = tab_strip::tab_rects(&SIM_LABELS, Vec2::ZERO, 28.0);
@@ -374,6 +404,7 @@ impl KathamoForgeApp {
         }
         let hierarchy = HierarchyTree {
             items: hierarchy_items,
+            title: "Scene Hierarchy".into(),
             ..Default::default()
         };
 
@@ -1176,17 +1207,15 @@ impl KathamoApp for KathamoForgeApp {
         // ---------------------------------------------------------------------
         // 1. TOP MENU BAR (H = 28)
         // ---------------------------------------------------------------------
-        let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
+        let regions = Self::regions(bounds);
+        let menu_rect = regions.get("menu");
         self.menu_bar
             .render(&mut ctx.cmd_buf, menu_rect, &ctx.pointer, &palette);
 
         // ---------------------------------------------------------------------
         // 2. SCENE TABS, WORKSPACE MODES & SIMULATION RIBBON (H = 38)
         // ---------------------------------------------------------------------
-        let ribbon_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x, bounds.min.y + 28.0),
-            Vec2::new(bounds.width(), 38.0),
-        );
+        let ribbon_rect = regions.get("ribbon");
         ctx.cmd_buf.push(DrawCommand::Rect {
             rect: ribbon_rect,
             fill: palette.surface,
@@ -1263,94 +1292,15 @@ impl KathamoApp for KathamoForgeApp {
         // ---------------------------------------------------------------------
         // 3. MAIN WORKSPACE GEOMETRY LAYOUT
         // ---------------------------------------------------------------------
-        let top_offset = 66.0;
-        let status_h = 24.0;
-        let work_h = bounds.height() - top_offset - status_h;
-
-        let left_w = 310.0;
-        let right_w = 340.0;
-        let center_w = (bounds.width() - left_w - right_w).max(400.0);
-
-        let left_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x, bounds.min.y + top_offset),
-            Vec2::new(left_w, work_h),
-        );
-        let center_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x + left_w, bounds.min.y + top_offset),
-            Vec2::new(center_w, work_h),
-        );
-        let right_rect = Rect::from_min_size(
-            Vec2::new(bounds.max.x - right_w, bounds.min.y + top_offset),
-            Vec2::new(right_w, work_h),
-        );
+        let right_rect = regions.get("right");
 
         // ---------------------------------------------------------------------
         // 3A. LEFT PANEL: SCENE HIERARCHY (Top) + ASSET BROWSER (Bottom)
         // ---------------------------------------------------------------------
-        let left_split_h = work_h * 0.52;
-        let hier_rect = Rect::from_min_size(left_rect.min, Vec2::new(left_w, left_split_h));
-        let asset_rect = Rect::from_min_size(
-            Vec2::new(left_rect.min.x, left_rect.min.y + left_split_h),
-            Vec2::new(left_w, work_h - left_split_h),
-        );
+        let hier_rect = regions.get("hierarchy");
+        let asset_rect = regions.get("assets");
 
-        // Header for Scene Hierarchy
-        ctx.cmd_buf.push(DrawCommand::Rect {
-            rect: Rect::from_min_size(hier_rect.min, Vec2::new(left_w, 28.0)),
-            fill: palette.elevated,
-            radius: CornerRadius::ZERO,
-            stroke: Stroke::new(1.0, palette.border),
-        });
-        ctx.cmd_buf.push(DrawCommand::Text {
-            text: format!("Scene Hierarchy ({})", self.hierarchy.items.len()),
-            pos: Vec2::new(hier_rect.min.x + 10.0, hier_rect.min.y + 6.0),
-            size: 11.5,
-            color: palette.text,
-            strong: true,
-        });
-
-        // Buttons (+ Add / - Del) in Hierarchy Header
-        let add_btn = Rect::from_min_size(
-            Vec2::new(hier_rect.max.x - 52.0, hier_rect.min.y + 4.0),
-            Vec2::new(22.0, 20.0),
-        );
-        let del_btn = Rect::from_min_size(
-            Vec2::new(hier_rect.max.x - 26.0, hier_rect.min.y + 4.0),
-            Vec2::new(22.0, 20.0),
-        );
-        ctx.cmd_buf.push(DrawCommand::Rect {
-            rect: add_btn,
-            fill: palette.elevated_high,
-            radius: CornerRadius::same(3.0),
-            stroke: Stroke::new(1.0, palette.border),
-        });
-        ctx.cmd_buf.push(DrawCommand::Text {
-            text: "+".into(),
-            pos: Vec2::new(add_btn.min.x + 6.0, add_btn.min.y + 2.0),
-            size: 13.0,
-            color: palette.accent,
-            strong: true,
-        });
-        ctx.cmd_buf.push(DrawCommand::Rect {
-            rect: del_btn,
-            fill: palette.elevated_high,
-            radius: CornerRadius::same(3.0),
-            stroke: Stroke::new(1.0, palette.border),
-        });
-        ctx.cmd_buf.push(DrawCommand::Text {
-            text: "-".into(),
-            pos: Vec2::new(del_btn.min.x + 7.0, del_btn.min.y + 1.0),
-            size: 13.0,
-            color: Color::rgb(239, 68, 68),
-            strong: true,
-        });
-
-        // Hierarchy Body
-        let hier_body = Rect::from_min_size(
-            Vec2::new(hier_rect.min.x, hier_rect.min.y + 28.0),
-            Vec2::new(left_w, left_split_h - 28.0),
-        );
-        self.hierarchy.render(&mut ctx.cmd_buf, hier_body, &palette);
+        self.hierarchy.render(&mut ctx.cmd_buf, hier_rect, &palette);
 
         // Asset Browser (Bottom Left)
         self.asset_browser
@@ -1359,13 +1309,8 @@ impl KathamoApp for KathamoForgeApp {
         // ---------------------------------------------------------------------
         // 3B. CENTER WORKSPACE: ACTIVE VIEWPORT (Top) + BOTTOM DOCK (Bottom)
         // ---------------------------------------------------------------------
-        let bottom_dock_h = 210.0;
-        let viewport_h = center_rect.height() - bottom_dock_h;
-        let viewport_rect = Rect::from_min_size(center_rect.min, Vec2::new(center_w, viewport_h));
-        let bottom_rect = Rect::from_min_size(
-            Vec2::new(center_rect.min.x, center_rect.min.y + viewport_h),
-            Vec2::new(center_w, bottom_dock_h),
-        );
+        let viewport_rect = regions.get("viewport");
+        let bottom_rect = regions.get("dock");
 
         // Render Active Viewport according to Workspace Mode
         match self.active_mode {
@@ -1416,7 +1361,7 @@ impl KathamoApp for KathamoForgeApp {
         });
 
         // Inspector Header
-        let insp_header = Rect::from_min_size(right_rect.min, Vec2::new(right_w, 32.0));
+        let insp_header = regions.get("inspector_header");
         ctx.cmd_buf.push(DrawCommand::Rect {
             rect: insp_header,
             fill: palette.elevated,
@@ -1431,19 +1376,13 @@ impl KathamoApp for KathamoForgeApp {
             strong: true,
         });
 
-        let insp_body = Rect::from_min_size(
-            Vec2::new(right_rect.min.x, right_rect.min.y + 32.0),
-            Vec2::new(right_w, work_h - 32.0),
-        );
+        let insp_body = regions.get("inspector_body");
         self.inspector.render(&mut ctx.cmd_buf, insp_body, &palette);
 
         // ---------------------------------------------------------------------
         // 4. BOTTOM STATUS BAR (H = 24)
         // ---------------------------------------------------------------------
-        let status_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x, bounds.max.y - status_h),
-            Vec2::new(bounds.width(), status_h),
-        );
+        let status_rect = regions.get("status");
         ctx.cmd_buf.push(DrawCommand::Rect {
             rect: status_rect,
             fill: palette.elevated_high,
@@ -1550,7 +1489,8 @@ impl KathamoApp for KathamoForgeApp {
         }
 
         // 3. Menu Bar
-        let menu_rect = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), 28.0));
+        let regions = Self::regions(bounds);
+        let menu_rect = regions.get("menu");
         if menu_rect.contains(pos) {
             if let Some(action_id) = self.menu_bar.handle_mouse_down(pos, button, menu_rect) {
                 self.trigger_action(&action_id);
@@ -1559,10 +1499,7 @@ impl KathamoApp for KathamoForgeApp {
         }
 
         // 4. Ribbon Controls
-        let ribbon_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x, bounds.min.y + 28.0),
-            Vec2::new(bounds.width(), 38.0),
-        );
+        let ribbon_rect = regions.get("ribbon");
         if ribbon_rect.contains(pos) {
             let (doc_tabs, mode_rects, _) = self.ribbon_layout(ribbon_rect, bounds);
             if let Some(i) = tab_strip::hit(&mode_rects, pos) {
@@ -1593,35 +1530,9 @@ impl KathamoApp for KathamoForgeApp {
         }
 
         // 5. Left Hierarchy + Buttons
-        let top_offset = 66.0;
-        let left_w = 310.0;
-        let left_split_h = (bounds.height() - top_offset - 24.0) * 0.52;
-        let hier_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x, bounds.min.y + top_offset),
-            Vec2::new(left_w, left_split_h),
-        );
+        let hier_rect = regions.get("hierarchy");
 
-        let add_btn = Rect::from_min_size(
-            Vec2::new(hier_rect.max.x - 52.0, hier_rect.min.y + 4.0),
-            Vec2::new(22.0, 20.0),
-        );
-        let del_btn = Rect::from_min_size(
-            Vec2::new(hier_rect.max.x - 26.0, hier_rect.min.y + 4.0),
-            Vec2::new(22.0, 20.0),
-        );
-        if add_btn.contains(pos) {
-            self.add_new_object("Actor");
-            return true;
-        }
-        if del_btn.contains(pos) {
-            self.delete_selected_object();
-            return true;
-        }
-
-        let hier_body = Rect::from_min_size(
-            Vec2::new(hier_rect.min.x, hier_rect.min.y + 28.0),
-            Vec2::new(left_w, left_split_h - 28.0),
-        );
+        let hier_body = hier_rect;
         if hier_body.contains(pos) {
             if let Some(event) =
                 self.hierarchy
@@ -1641,6 +1552,8 @@ impl KathamoApp for KathamoForgeApp {
                             );
                         }
                     }
+                    HierarchyEvent::AddLayer => self.add_new_object("Actor"),
+                    HierarchyEvent::DeleteSelected => self.delete_selected_object(),
                     _ => {}
                 }
                 return true;
@@ -1648,10 +1561,7 @@ impl KathamoApp for KathamoForgeApp {
         }
 
         // 6. Bottom Asset Browser
-        let asset_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x, bounds.min.y + top_offset + left_split_h),
-            Vec2::new(left_w, bounds.height() - top_offset - 24.0 - left_split_h),
-        );
+        let asset_rect = regions.get("assets");
         if asset_rect.contains(pos) {
             if let Some(id) = self
                 .asset_browser
@@ -1667,11 +1577,7 @@ impl KathamoApp for KathamoForgeApp {
         }
 
         // 7. Right Inspector
-        let right_w = 340.0;
-        let right_rect = Rect::from_min_size(
-            Vec2::new(bounds.max.x - right_w, bounds.min.y + top_offset),
-            Vec2::new(right_w, bounds.height() - top_offset - 24.0),
-        );
+        let right_rect = regions.get("right");
         if right_rect.contains(pos) {
             if let Some(_evt) = self.inspector.handle_mouse_down(pos, button, right_rect) {
                 self.console
@@ -1681,16 +1587,7 @@ impl KathamoApp for KathamoForgeApp {
         }
 
         // 8. Bottom Dock tabs & controls
-        let center_w = (bounds.width() - left_w - right_w).max(400.0);
-        let bottom_dock_h = 210.0;
-        let viewport_h = bounds.height() - top_offset - 24.0 - bottom_dock_h;
-        let bottom_rect = Rect::from_min_size(
-            Vec2::new(
-                bounds.min.x + left_w,
-                bounds.min.y + top_offset + viewport_h,
-            ),
-            Vec2::new(center_w, bottom_dock_h),
-        );
+        let bottom_rect = regions.get("dock");
         if bottom_rect.contains(pos) {
             // Tab clicks along top of bottom dock
             let tab_y = bottom_rect.min.y + 4.0;
@@ -1746,10 +1643,7 @@ impl KathamoApp for KathamoForgeApp {
         }
 
         // 9. Center Viewport Graph mode interactions
-        let viewport_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x + left_w, bounds.min.y + top_offset),
-            Vec2::new(center_w, viewport_h),
-        );
+        let viewport_rect = regions.get("viewport");
         if viewport_rect.contains(pos) && self.active_mode == EditorWorkspaceMode::ModeGraph {
             // Mode toggle in graph header
             let toggle_simple = Rect::from_min_size(
@@ -1785,16 +1679,7 @@ impl KathamoApp for KathamoForgeApp {
     fn handle_mouse_up(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
         self.inspector.handle_mouse_up(pos, button);
         let bounds = ctx.bounds();
-        let top_offset = 66.0;
-        let left_w = 310.0;
-        let right_w = 340.0;
-        let center_w = (bounds.width() - left_w - right_w).max(400.0);
-        let bottom_dock_h = 210.0;
-        let viewport_h = bounds.height() - top_offset - 24.0 - bottom_dock_h;
-        let viewport_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x + left_w, bounds.min.y + top_offset),
-            Vec2::new(center_w, viewport_h),
-        );
+        let viewport_rect = Self::regions(bounds).get("viewport");
 
         if self.active_mode == EditorWorkspaceMode::ModeGraph
             && self.graph_view_mode == GraphViewMode::AdvancedNodes
@@ -1811,16 +1696,7 @@ impl KathamoApp for KathamoForgeApp {
 
     fn handle_mouse_move(&mut self, pos: Vec2, delta: Vec2, ctx: &mut AppContext) -> bool {
         let bounds = ctx.bounds();
-        let top_offset = 66.0;
-        let left_w = 310.0;
-        let right_w = 340.0;
-        let center_w = (bounds.width() - left_w - right_w).max(400.0);
-        let bottom_dock_h = 210.0;
-        let viewport_h = bounds.height() - top_offset - 24.0 - bottom_dock_h;
-        let viewport_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x + left_w, bounds.min.y + top_offset),
-            Vec2::new(center_w, viewport_h),
-        );
+        let viewport_rect = Self::regions(bounds).get("viewport");
 
         // Drag node in Advanced Graph Editor
         if self.active_mode == EditorWorkspaceMode::ModeGraph
@@ -1844,16 +1720,7 @@ impl KathamoApp for KathamoForgeApp {
 
     fn handle_scroll(&mut self, delta: Vec2, pos: Vec2, ctx: &mut AppContext) -> bool {
         let bounds = ctx.bounds();
-        let top_offset = 66.0;
-        let left_w = 310.0;
-        let right_w = 340.0;
-        let center_w = (bounds.width() - left_w - right_w).max(400.0);
-        let bottom_dock_h = 210.0;
-        let viewport_h = bounds.height() - top_offset - 24.0 - bottom_dock_h;
-        let viewport_rect = Rect::from_min_size(
-            Vec2::new(bounds.min.x + left_w, bounds.min.y + top_offset),
-            Vec2::new(center_w, viewport_h),
-        );
+        let viewport_rect = Self::regions(bounds).get("viewport");
 
         if viewport_rect.contains(pos) {
             if self.active_mode == EditorWorkspaceMode::ModeGraph {

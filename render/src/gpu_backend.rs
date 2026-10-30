@@ -10,6 +10,8 @@
 //! * detects genuine device loss (driver reset, `Device::destroy`, validation
 //!   failure) and recreates adapter, device, pipeline and surface in `recover()`.
 
+use crate::atlas_pack::{AtlasKey, ShelfPacker, Slot, ATLAS_SIZE};
+use crate::backdrop::BackdropBlur;
 use crate::backend::{BackendKind, RenderBackend, RenderStats};
 use crate::command::{CommandBuffer, DrawCommand};
 use crate::shapes::flatten_cubic;
@@ -25,7 +27,8 @@ use ui_core::{Color, CornerRadius, Rect, Stroke, Vec2};
 /// Any OS window usable as a render target (e.g. `Arc<winit::window::Window>`).
 pub type SharedWindow = Arc<dyn wgpu::WindowHandle>;
 
-const ATLAS_SIZE: u32 = 2048;
+/// Batch marker: sample the blurred frame copy instead of an uploaded image.
+const BACKDROP_TEXTURE: u64 = u64::MAX;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -63,51 +66,6 @@ struct GpuImage {
     size: (u32, u32),
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Slot {
-    x: u32,
-    y: u32,
-    w: u32,
-    h: u32,
-    left: i32,
-    top: i32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum AtlasKey {
-    Glyph(GlyphKey),
-    Icon(IconKey),
-}
-
-/// Simple shelf packer for the glyph/icon atlas.
-#[derive(Debug, Default)]
-struct ShelfPacker {
-    x: u32,
-    y: u32,
-    row_h: u32,
-}
-
-impl ShelfPacker {
-    fn alloc(&mut self, w: u32, h: u32) -> Option<(u32, u32)> {
-        let (w, h) = (w + 1, h + 1); // 1px gutter against sampling bleed
-        if w > ATLAS_SIZE || h > ATLAS_SIZE {
-            return None;
-        }
-        if self.x + w > ATLAS_SIZE {
-            self.x = 0;
-            self.y += self.row_h;
-            self.row_h = 0;
-        }
-        if self.y + h > ATLAS_SIZE {
-            return None;
-        }
-        let pos = (self.x, self.y);
-        self.x += w;
-        self.row_h = self.row_h.max(h);
-        Some(pos)
-    }
-}
-
 enum Target {
     Surface {
         surface: wgpu::Surface<'static>,
@@ -136,6 +94,8 @@ struct DeviceState {
     vbuf: wgpu::Buffer,
     ibuf: wgpu::Buffer,
     format: wgpu::TextureFormat,
+    /// The target can be copied from, which backdrop blur needs.
+    copy_src: bool,
 }
 
 pub struct GpuBackend {
@@ -156,6 +116,7 @@ pub struct GpuBackend {
     batches: Vec<Batch>,
     clip_stack: Vec<Rect>,
     images: HashMap<u64, GpuImage>,
+    backdrop: Option<(BackdropBlur, wgpu::BindGroup)>,
 
     packer: ShelfPacker,
     slots: HashMap<AtlasKey, Option<Slot>>,
@@ -238,6 +199,11 @@ impl DeviceState {
             flag.store(true, Ordering::SeqCst);
         });
 
+        let copy_src = surface.map_or(true, |s| {
+            s.get_capabilities(&adapter)
+                .usages
+                .contains(wgpu::TextureUsages::COPY_SRC)
+        });
         let format = match surface {
             Some(s) => {
                 let caps = s.get_capabilities(&adapter);
@@ -462,6 +428,7 @@ impl DeviceState {
             vbuf,
             ibuf,
             format,
+            copy_src,
         })
     }
 
@@ -527,6 +494,7 @@ impl GpuBackend {
             batches: Vec::new(),
             clip_stack: Vec::new(),
             images: HashMap::new(),
+            backdrop: None,
             packer: ShelfPacker::default(),
             slots: HashMap::new(),
             uploads: Vec::new(),
@@ -553,8 +521,12 @@ impl GpuBackend {
                     .create_surface(win.clone())
                     .map_err(|e| format!("create_surface failed: {e}"))?;
                 let dev = DeviceState::create(instance, Some(&surface), lost)?;
+                let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
+                if dev.copy_src {
+                    usage |= wgpu::TextureUsages::COPY_SRC;
+                }
                 let config = wgpu::SurfaceConfiguration {
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    usage,
                     format: dev.format,
                     width: width.max(1),
                     height: height.max(1),
@@ -1015,6 +987,45 @@ impl GpuBackend {
         );
     }
 
+    fn tess_backdrop(&mut self, rect: Rect, radius: CornerRadius, tint: Color) {
+        if !self.dev.copy_src {
+            self.tess_rect(rect, tint.with_alpha(tint.a.max(235)), radius, Stroke::NONE);
+            return;
+        }
+        let aa = 1.0 / self.scale;
+        let (min, max) = (rect.min - Vec2::splat(aa), rect.max + Vec2::splat(aa));
+        let (c, half) = (rect.center(), rect.size() * 0.5);
+        let r = [radius.top_left, radius.top_right, radius.bottom_right, radius.bottom_left];
+        let template = Vertex {
+            pos: [0.0; 2],
+            shape: [c.x, c.y, half.x, half.y],
+            radii: r,
+            color: color_f32(tint),
+            color2: [0.0; 4],
+            gradient_color: [0.0; 4],
+            effect: [0.0; 4],
+            extra: [0.0, 6.0],
+        };
+        self.start_image_batch(BACKDROP_TEXTURE);
+        let corners = [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)];
+        self.push_quad(corners, template, None);
+        self.start_batch();
+    }
+
+    /// Creates (or resizes) the blur chain when this frame uses a backdrop.
+    fn prepare_backdrop(&mut self) {
+        if !self.batches.iter().any(|b| b.texture_id == Some(BACKDROP_TEXTURE)) {
+            return;
+        }
+        let size = (self.width, self.height);
+        if self.backdrop.as_ref().is_some_and(|(b, _)| b.size() == size) {
+            return;
+        }
+        let blur = BackdropBlur::new(&self.dev.device, self.dev.format, size.0, size.1);
+        let bind = self.make_image_bind_group(blur.result());
+        self.backdrop = Some((blur, bind));
+    }
+
     fn tess_line(&mut self, a: Vec2, b: Vec2, width: f32, color: Color) {
         if color.a == 0 {
             return;
@@ -1220,6 +1231,7 @@ impl GpuBackend {
                     size,
                     color,
                 } => self.tess_text(text, *pos, *size, *color, Face::Mono),
+                DrawCommand::Backdrop { rect, radius, tint } => self.tess_backdrop(*rect, *radius, *tint),
                 DrawCommand::Icon {
                     id,
                     svg,
@@ -1304,7 +1316,14 @@ impl GpuBackend {
         }
     }
 
-    fn encode_pass(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    /// Records the frame. Each backdrop splits the pass: what is drawn so far is
+    /// copied and blurred, then drawing resumes on top with `LoadOp::Load`.
+    fn encode_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        frame: &wgpu::Texture,
+    ) {
         let srgb = self.dev.format.is_srgb();
         let c = self.clear_color.to_f32_rgba();
         let conv = |v: f32| -> f64 {
@@ -1314,48 +1333,67 @@ impl GpuBackend {
                 v as f64
             }
         };
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("kolpona-ui-pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: conv(c[0]),
-                        g: conv(c[1]),
-                        b: conv(c[2]),
-                        a: 1.0,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
+        let mut load = wgpu::LoadOp::Clear(wgpu::Color {
+            r: conv(c[0]),
+            g: conv(c[1]),
+            b: conv(c[2]),
+            a: 1.0,
         });
-        if self.indices.is_empty() {
+        let cuts = self
+            .batches
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.texture_id == Some(BACKDROP_TEXTURE))
+            .map(|(i, _)| i);
+        let mut from = 0;
+        for cut in cuts.chain(std::iter::once(self.batches.len())) {
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("kolpona-ui-pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                self.draw_batches(&mut pass, from..cut);
+            }
+            if cut < self.batches.len() {
+                if let Some((blur, _)) = &self.backdrop {
+                    blur.run(encoder, frame);
+                }
+            }
+            load = wgpu::LoadOp::Load;
+            from = cut;
+        }
+    }
+
+    fn draw_batches(&self, pass: &mut wgpu::RenderPass<'_>, range: std::ops::Range<usize>) {
+        if self.indices.is_empty() || range.is_empty() {
             return;
         }
         pass.set_pipeline(&self.dev.pipeline);
-        pass.set_bind_group(0, &self.dev.bind_group, &[]);
         let vbytes = (self.vertices.len() * std::mem::size_of::<Vertex>()) as u64;
         let ibytes = (self.indices.len() * 4) as u64;
         pass.set_vertex_buffer(0, self.dev.vbuf.slice(..vbytes));
         pass.set_index_buffer(self.dev.ibuf.slice(..ibytes), wgpu::IndexFormat::Uint32);
-        for b in &self.batches {
+        for b in &self.batches[range] {
             if b.end <= b.start || b.scissor[2] == 0 || b.scissor[3] == 0 {
                 continue;
             }
             pass.set_scissor_rect(b.scissor[0], b.scissor[1], b.scissor[2], b.scissor[3]);
-            if let Some(id) = b.texture_id {
-                if let Some(image) = self.images.get(&id) {
-                    pass.set_bind_group(0, &image.bind_group, &[]);
-                } else {
-                    pass.set_bind_group(0, &self.dev.bind_group, &[]);
-                }
-            } else {
-                pass.set_bind_group(0, &self.dev.bind_group, &[]);
-            }
+            let bind = match b.texture_id {
+                Some(BACKDROP_TEXTURE) => self.backdrop.as_ref().map(|(_, g)| g),
+                Some(id) => self.images.get(&id).map(|i| &i.bind_group),
+                None => None,
+            };
+            pass.set_bind_group(0, bind.unwrap_or(&self.dev.bind_group), &[]);
             pass.draw_indexed(b.start..b.end, 0, 0..1);
         }
     }
@@ -1508,6 +1546,7 @@ impl RenderBackend for GpuBackend {
                 .write_buffer(&self.dev.ibuf, 0, bytemuck::cast_slice(&self.indices));
         }
 
+        self.prepare_backdrop();
         let mut encoder = self
             .dev
             .device
@@ -1533,12 +1572,12 @@ impl RenderBackend for GpuBackend {
                 let view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
-                self.encode_pass(&mut encoder, &view);
+                self.encode_pass(&mut encoder, &view, &frame.texture);
                 self.dev.queue.submit(Some(encoder.finish()));
                 frame.present();
             }
-            Some(Target::Offscreen { view, .. }) => {
-                self.encode_pass(&mut encoder, view);
+            Some(Target::Offscreen { view, texture }) => {
+                self.encode_pass(&mut encoder, view, texture);
                 let idx = self.dev.queue.submit(Some(encoder.finish()));
                 // Wait for the GPU so headless timings include real GPU execution.
                 self.dev.device.poll(wgpu::Maintain::wait_for(idx));
@@ -1569,95 +1608,12 @@ impl RenderBackend for GpuBackend {
         self.target = Some(target);
         self.lost = lost;
         self.images.clear(); // Texture views belong to the old device; register again after recovery.
+        self.backdrop = None;
         self.reset_atlas();
         Ok(())
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn headless() -> Option<GpuBackend> {
-        match GpuBackend::new_headless(320, 200) {
-            Ok(g) => Some(g),
-            Err(e) => {
-                eprintln!("skipping GPU test: {e}");
-                None
-            }
-        }
-    }
-
-    #[test]
-    fn gpu_backend_samples_application_rgba_texture() {
-        let Some(mut gpu) = headless() else { return };
-        let texels = [255u8, 0, 0, 255, 0, 255, 0, 255];
-        gpu.upload_rgba8_image(77, 2, 1, &texels).unwrap();
-        let mut commands = CommandBuffer::new();
-        commands.push(DrawCommand::Image {
-            rect: Rect::from_min_size(Vec2::ZERO, Vec2::new(320.0, 200.0)),
-            texture_id: 77,
-            uv_rect: Rect::from_min_max(Vec2::ZERO, Vec2::new(1.0, 1.0)),
-            tint: Color::WHITE,
-        });
-        gpu.begin_frame(320, 200, Color::BLACK);
-        gpu.submit(&commands);
-        gpu.end_frame().unwrap();
-        let pixels = gpu.read_pixels().unwrap();
-        assert_eq!(pixels[100 * 320 + 60], 0xFFFF_0000);
-        assert_eq!(pixels[100 * 320 + 260], 0xFF00_FF00);
-        gpu.upload_rgba8_image(77, 2, 1, &texels).unwrap();
-        assert_eq!(gpu.images.len(), 1, "video frames should update in-place");
-    }
-
-    #[test]
-    fn gpu_backend_renders_real_pixels_and_recovers_from_real_device_loss() {
-        let Some(mut gpu) = headless() else { return };
-        let mut buf = CommandBuffer::new();
-        buf.push(DrawCommand::Rect {
-            rect: Rect::from_min_size(Vec2::new(20.0, 20.0), Vec2::new(100.0, 60.0)),
-            fill: Color::rgb(255, 0, 0),
-            radius: CornerRadius::same(8.0),
-            stroke: Stroke::NONE,
-        });
-        buf.push(DrawCommand::Text {
-            text: "GPU কল্পনা".into(),
-            pos: Vec2::new(20.0, 120.0),
-            size: 18.0,
-            color: Color::WHITE,
-            strong: false,
-        });
-
-        gpu.begin_frame(320, 200, Color::BLACK);
-        let stats = gpu.submit(&buf);
-        assert!(stats.vertices > 8);
-        assert!(gpu.end_frame().is_ok());
-        let pixels = gpu.read_pixels().unwrap();
-        assert_eq!(
-            pixels[50 * 320 + 70],
-            0xFFFF_0000,
-            "rect centre must be red"
-        );
-        assert_eq!(
-            pixels[5 * 320 + 5],
-            0xFF00_0000,
-            "background must be clear colour"
-        );
-        let text_lit = pixels[110 * 320..150 * 320]
-            .iter()
-            .filter(|&&p| p & 0xFF > 0)
-            .count();
-        assert!(text_lit > 50, "text must be drawn on the GPU");
-
-        gpu.simulate_device_loss();
-        assert!(
-            gpu.end_frame().is_err(),
-            "destroyed device must fail the frame"
-        );
-        gpu.recover().expect("device must be recreated");
-        gpu.begin_frame(320, 200, Color::BLACK);
-        gpu.submit(&buf);
-        assert!(gpu.end_frame().is_ok());
-        assert_eq!(gpu.read_pixels().unwrap()[50 * 320 + 70], 0xFFFF_0000);
-    }
-}
+#[path = "gpu_backend_tests.rs"]
+mod tests;

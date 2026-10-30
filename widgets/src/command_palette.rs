@@ -101,9 +101,23 @@ impl CommandPalette {
             Vec2::new(dialog_w, dialog_h),
         );
 
+        buf.push(DrawCommand::SoftShadow {
+            rect: dialog_rect,
+            radius: CornerRadius::same(10.0),
+            color: ui_core::Color::rgba(0, 0, 0, 140),
+            offset: Vec2::new(0.0, 12.0),
+            blur: 32.0,
+            spread: 0.0,
+        });
+        // Frosted glass: blurred backdrop + translucent tint, then the hairline border.
+        buf.push(DrawCommand::Backdrop {
+            rect: dialog_rect,
+            radius: CornerRadius::same(10.0),
+            tint: palette.surface.with_alpha(205),
+        });
         buf.push(DrawCommand::Rect {
             rect: dialog_rect,
-            fill: palette.surface,
+            fill: ui_core::Color::TRANSPARENT,
             radius: CornerRadius::same(10.0),
             stroke: Stroke::new(1.0, palette.border),
         });

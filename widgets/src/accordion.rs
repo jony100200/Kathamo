@@ -123,12 +123,12 @@ impl Accordion {
                 Vec2::new(bounds.width(), self.header_height),
             );
             let hovered = header_rect.contains(pointer_pos);
-
-            let bg_fill = if hovered {
-                palette.elevated
-            } else {
-                palette.surface
-            };
+            let hover = ui_core::motion::animate_bool(
+                ui_core::motion::rect_key("accordion", header_rect),
+                hovered,
+                ui_core::motion::HOVER,
+            );
+            let bg_fill = palette.surface.lerp(palette.elevated, hover);
 
             // Header background
             cmd_buf.push(DrawCommand::Rect {
@@ -138,14 +138,21 @@ impl Accordion {
                 stroke: Stroke::new(1.0, palette.border),
             });
 
-            // Chevron indicator (> or v)
-            let chevron = if item.is_open { "v" } else { ">" };
-            cmd_buf.push(DrawCommand::Text {
-                pos: Vec2::new(header_rect.min.x + 8.0, header_rect.min.y + 6.0),
-                text: chevron.to_string(),
-                color: palette.accent,
-                size: 12.0,
-                strong: true,
+            // Chevron indicator: real vector icons instead of "v" / ">" letters.
+            let chevron = if item.is_open {
+                StudioIcon::ChevronDown
+            } else {
+                StudioIcon::ChevronRight
+            };
+            let chevron_y = header_rect.min.y + (header_rect.height() - 14.0) * 0.5;
+            cmd_buf.push(DrawCommand::Icon {
+                id: chevron.name(),
+                svg: chevron.svg_str(),
+                rect: Rect::from_min_size(
+                    Vec2::new(header_rect.min.x + 6.0, chevron_y),
+                    Vec2::new(14.0, 14.0),
+                ),
+                color: palette.text_muted.lerp(palette.accent, hover),
             });
 
             let mut text_x = header_rect.min.x + 22.0;

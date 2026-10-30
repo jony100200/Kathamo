@@ -33,6 +33,8 @@ Kathamo/
 
 | Modern Web (React / Vue / Tailwind) | Traditional Desktop (egui / Qt) | **Kathamo (কাঠামো) in Rust** |
 | :--- | :--- | :--- |
+| **Frosted-Glass Popovers (`backdrop-filter`)** | Opaque menus | **`DrawCommand::Backdrop`: dual-Kawase blur at reduced resolution, only allocated while used** |
+| **Flexbox Layout** | Hand-placed pixel offsets | **`kathamo::flex` (CSS flexbox via taffy) — one solved layout for drawing and input** |
 | **Layered Dual-Stroke Elevation** | Flat solid 1px borders | **Subtle rim stroke (`rgba(255,255,255,0.06)`) + ambient occlusion** |
 | **Spring Micro-Interactions** | 0ms binary hover/click flips | **Critically damped springs (`ui_core::motion`), frame-rate independent, zero cost once settled** |
 | **Typography-First Architecture** | Unshaped pixel/bitmap fonts | **HarfBuzz bilingual shaping with cached layouts, ellipsis fitting, and a monospace face with token-coloured code** |

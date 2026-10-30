@@ -72,20 +72,25 @@ impl<'a> TooltipOverlay<'a> {
         );
 
         // Draw shadow / dark background
-        ui.cmd_buf.push(DrawCommand::Rect {
-            rect: Rect::from_min_size(
-                Vec2::new(tooltip_x + 1.0, tooltip_y + 1.5),
-                Vec2::new(tooltip_width, tooltip_height),
-            ),
-            fill: Color::rgba(0, 0, 0, 140),
+        ui.cmd_buf.push(DrawCommand::SoftShadow {
+            rect: tooltip_rect,
             radius: CornerRadius::same(4.0),
-            stroke: Stroke::NONE,
+            color: Color::rgba(0, 0, 0, 120),
+            offset: Vec2::new(0.0, 3.0),
+            blur: 8.0,
+            spread: 0.0,
         });
 
         // Tooltip container
+        // Frosted glass: blurred backdrop + translucent tint, then the hairline border.
+        ui.cmd_buf.push(DrawCommand::Backdrop {
+            rect: tooltip_rect,
+            radius: CornerRadius::same(4.0),
+            tint: palette.elevated_high.with_alpha(215),
+        });
         ui.cmd_buf.push(DrawCommand::Rect {
             rect: tooltip_rect,
-            fill: palette.elevated_high,
+            fill: Color::TRANSPARENT,
             radius: CornerRadius::same(4.0),
             stroke: Stroke::new(1.0, palette.border),
         });

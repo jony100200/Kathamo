@@ -114,21 +114,22 @@ impl ThemePalette {
         }
     }
 
-    /// Warm Paper: cream surfaces, ink text and a deeper copper accent that stays legible.
+    /// Warm Paper: soft sand surfaces (no glaring white), ink text and a deeper copper
+    /// accent that stays legible.
     pub const fn warm_paper() -> Self {
         Self {
-            canvas: Color::rgb(0xF4, 0xEF, 0xE6),
-            surface: Color::rgb(0xFB, 0xF8, 0xF2),
-            elevated: Color::rgb(0xFF, 0xFD, 0xF9),
-            elevated_high: Color::rgb(0xFF, 0xFF, 0xFF),
-            border: Color::rgb(0xDD, 0xD3, 0xC4),
-            text: Color::rgb(0x26, 0x22, 0x1D),
-            text_muted: Color::rgb(0x6B, 0x62, 0x57),
-            accent: Color::rgb(0xA8, 0x5A, 0x2A),
-            accent_hover: Color::rgb(0x8E, 0x4A, 0x20),
-            danger: Color::rgb(0xB3, 0x3A, 0x40),
-            success: Color::rgb(0x2E, 0x7D, 0x5B),
-            warning: Color::rgb(0x9A, 0x6A, 0x12),
+            canvas: Color::rgb(0xE4, 0xDD, 0xD1),
+            surface: Color::rgb(0xEB, 0xE5, 0xDA),
+            elevated: Color::rgb(0xF0, 0xEB, 0xE2),
+            elevated_high: Color::rgb(0xF4, 0xF0, 0xE8),
+            border: Color::rgb(0xCB, 0xC0, 0xAF),
+            text: Color::rgb(0x24, 0x20, 0x1B),
+            text_muted: Color::rgb(0x5C, 0x54, 0x4A),
+            accent: Color::rgb(0x97, 0x4E, 0x22),
+            accent_hover: Color::rgb(0x7E, 0x40, 0x1B),
+            danger: Color::rgb(0xA3, 0x34, 0x3A),
+            success: Color::rgb(0x27, 0x6E, 0x50),
+            warning: Color::rgb(0x86, 0x5C, 0x0F),
         }
     }
 
@@ -205,10 +206,10 @@ impl ExtendedTokens {
             }
         } else {
             Self {
-                focus: Color::rgb(0x8E, 0x4A, 0x20),
-                selection: Color::rgba(0xA8, 0x5A, 0x2A, 0x26),
+                focus: Color::rgb(0x7E, 0x40, 0x1B),
+                selection: Color::rgba(0x97, 0x4E, 0x22, 0x26),
                 info: Color::rgb(0x2F, 0x5C, 0xA8),
-                working: Color::rgb(0x1F, 0x72, 0x87),
+                working: Color::rgb(0x1A, 0x66, 0x79),
                 on_accent: Color::rgb(0xFF, 0xFB, 0xF5),
                 scrim: Color::rgba(0x26, 0x22, 0x1D, 0x66),
             }

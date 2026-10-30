@@ -36,6 +36,8 @@ pub struct NodeEditor {
     pub marquee_current: Option<Vec2>,
     pub search_state: SearchMenuState,
     pub show_minimap: bool,
+    /// Quick-add toolbar across the top. Hosts with their own controls can hide it.
+    pub show_toolbar: bool,
 }
 
 impl Default for NodeEditor {
@@ -55,6 +57,7 @@ impl Default for NodeEditor {
             marquee_current: None,
             search_state: SearchMenuState::default(),
             show_minimap: true,
+            show_toolbar: true,
         }
     }
 }
@@ -335,7 +338,12 @@ impl NodeEditor {
         }
 
         if button == PointerButton::Primary {
-            if let Some(action) = self.hit_test_toolbar(screen_pos, viewport) {
+            let toolbar_hit = if self.show_toolbar {
+                self.hit_test_toolbar(screen_pos, viewport)
+            } else {
+                None
+            };
+            if let Some(action) = toolbar_hit {
                 match action {
                     ToolbarAction::SearchAdd => {
                         let center_world = self.screen_to_world(viewport.center(), viewport.min);
@@ -629,7 +637,9 @@ impl NodeEditor {
         );
 
         // 5. Toolbar
-        render_toolbar(buf, viewport, palette);
+        if self.show_toolbar {
+            render_toolbar(buf, viewport, palette);
+        }
 
         // 6. HUD
         render_hud(

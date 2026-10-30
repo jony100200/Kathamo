@@ -244,12 +244,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn glass_card_emits_shadow_body_and_specular_highlight() {
+    fn glass_card_emits_shadow_then_lit_surface() {
         let mut buf = CommandBuffer::new();
         let palette = ThemePalette::dark();
         let rect = Rect::from_min_size(Vec2::ZERO, Vec2::new(200.0, 100.0));
         render_glass_card(&mut buf, rect, &palette, 8.0);
-        assert_eq!(buf.len(), 3);
+        assert_eq!(buf.len(), 2);
+        assert!(matches!(buf.commands()[0], DrawCommand::SoftShadow { .. }));
+        assert!(matches!(buf.commands()[1], DrawCommand::Surface { .. }));
     }
 
     #[test]

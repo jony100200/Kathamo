@@ -19,6 +19,7 @@ pub mod property_inspector;
 pub mod range_slider;
 pub mod rich_text;
 pub mod studio;
+pub mod studio_parts;
 pub mod stylebox;
 pub mod text_area;
 pub mod timeline;
@@ -42,6 +43,10 @@ pub use navigation_rail::{
 pub use range_slider::RangeSlider;
 pub use rich_text::{ChatMessage, ChatRole, ChatTranscript, MarkdownView};
 pub use studio::{glyphs, ButtonKind, Glyph, Interaction, Studio, Tone};
+pub use studio_parts::{
+    agent_card, channel_row, chip, code_block, composer, message_block, model_card, search_field,
+    segmented, task_card, ComposerOut, MessageRole,
+};
 pub use tooltip::TooltipOverlay;
 pub use ui::{KathamoUi, KolponaUi, Response};
 

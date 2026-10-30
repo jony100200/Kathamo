@@ -640,7 +640,7 @@ pub fn initials(name: &str) -> String {
     out.to_uppercase()
 }
 
-fn name_tint(name: &str) -> Color {
+pub fn name_tint(name: &str) -> Color {
     const TINTS: [Color; 6] = [
         Color::rgb(0xE5, 0xA0, 0x73),
         Color::rgb(0x6F, 0xC3, 0xD6),

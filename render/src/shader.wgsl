@@ -128,7 +128,7 @@ fn fs_main(i: VsOut) -> @location(0) vec4<f32> {
         let top_light = 1.0 - smoothstep(0.0, aa * 2.0, i.world.y - top);
         fill_rgb = mix(fill_rgb, vec3<f32>(1.0), top_light * clamp(i.effect.y, 0.0, 1.0) * 0.12);
     }
-    let inner = if (bw > 0.0) { clamp(0.5 - (d + bw) / aa, 0.0, 1.0) } else { outer };
+    let inner = select(outer, clamp(0.5 - (d + bw) / aa, 0.0, 1.0), bw > 0.0);
     let fill_a = fill_alpha * inner;
     let ring_a = i.color2.a * (outer - inner);
     var ring_rgb = i.color2.rgb;

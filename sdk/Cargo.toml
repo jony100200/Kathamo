@@ -20,3 +20,12 @@ taffy = { version = "0.15.1", default-features = false, features = ["std", "flex
 [[example]]
 name = "kathamo_chat"
 path = "examples/kathamo_chat/main.rs"
+
+[[example]]
+name = "glass_viewport"
+path = "examples/glass_viewport/main.rs"
+
+# Only the glass_viewport example renders its own 3D scene; same versions as ui-render.
+[dev-dependencies]
+wgpu = { version = "22.1", default-features = false, features = ["wgsl", "dx12", "metal"] }
+bytemuck = { version = "1.18", features = ["derive"] }

@@ -124,6 +124,16 @@ Kathamo asks for the **low-power (integrated) GPU** first, so its UI does not oc
 WGPU_POWER_PREF=high cargo run -p kathamo --example kathamo_forge
 ```
 
+### Glass viewport demo
+
+A real wgpu 3D scene (depth buffer, 4x MSAA, lit meshes, emissive orbs, grid floor) embedded through the zero-copy external-texture path, with frosted-glass panels that blur the live 3D view beneath them. Drag to orbit, scroll to zoom.
+
+```bash
+cargo run --release -p kathamo --example glass_viewport
+```
+
+Measured on an integrated GPU at 1920x974: 16.7 ms per frame (vsync-locked 60 fps), 0 MB on the discrete GPU, about 26-43 % of one CPU core while animating.
+
 ### Headless screenshots
 
 Any app started with `run_native` writes one GPU-rendered frame to a PNG and exits when `KATHAMO_SNAPSHOT` is set. No desktop session is needed, and motion is settled first so images are deterministic:

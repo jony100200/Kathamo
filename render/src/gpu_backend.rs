@@ -195,6 +195,9 @@ impl DeviceState {
         }));
         let flag = lost.clone();
         device.set_device_lost_callback(move |reason, msg| {
+            if reason == wgpu::DeviceLostReason::Dropped {
+                return; // normal shutdown, not a loss
+            }
             eprintln!("[kolpona-gpu] device lost ({reason:?}): {msg}");
             flag.store(true, Ordering::SeqCst);
         });

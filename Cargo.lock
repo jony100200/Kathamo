@@ -1323,6 +1323,7 @@ dependencies = [
 name = "kathamo"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "taffy",
  "ui-core",
  "ui-platform",
@@ -1331,6 +1332,7 @@ dependencies = [
  "ui-text",
  "ui-themes",
  "ui-widgets",
+ "wgpu",
 ]
 
 [[package]]

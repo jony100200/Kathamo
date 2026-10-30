@@ -18,13 +18,15 @@ const WARMUP_FRAMES: usize = 3;
 pub fn snapshot_png<A: KathamoApp>(app: A, path: &Path) -> Result<(), String> {
     ui_core::motion::set_instant(true);
     let mut runner = HeadlessAppRunner::new(app);
-    for _ in 0..WARMUP_FRAMES {
-        runner.step_frame();
-    }
     let (width, height) = runner.ctx.physical_size;
     let mut gpu = GpuBackend::new_headless(width, height)?;
     gpu.set_scale_factor(runner.ctx.scale);
+    // GPU first, so apps that build GPU state (3D viewports) show it in the capture.
     runner.app.prepare_gpu(&mut gpu);
+    for _ in 0..WARMUP_FRAMES {
+        runner.step_frame();
+        runner.app.prepare_gpu(&mut gpu);
+    }
     for (id, image) in &runner.ctx.images {
         gpu.upload_rgba8_image(*id, image.width, image.height, &image.rgba)?;
     }

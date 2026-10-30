@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use ui_core::Vec2;
 use ui_platform::{
@@ -21,6 +22,9 @@ use crate::app::{AppContext, KathamoApp, WindowRequest};
 
 /// Runs a `KathamoApp` in a real OS window, with GPU rendering and CPU fallback.
 pub fn run_native<A: KathamoApp>(app: A) -> Result<(), String> {
+    if let Some(path) = std::env::var_os("KATHAMO_SNAPSHOT") {
+        return crate::snapshot::snapshot_png(app, std::path::Path::new(&path));
+    }
     let event_loop = EventLoop::new().map_err(|e| e.to_string())?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let mut runner = NativeAppRunner::new(app);
@@ -40,6 +44,7 @@ pub struct NativeAppRunner<A: KathamoApp> {
     children: HashMap<WindowId, SecondaryWindow>,
     gpu_images_uploaded: HashMap<u64, u64>,
     cpu_images_uploaded: HashMap<u64, u64>,
+    last_frame: Option<Instant>,
 }
 
 impl<A: KathamoApp> NativeAppRunner<A> {
@@ -47,6 +52,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         let (width, height) = app.default_size();
         let mut ctx = AppContext::new(width, height, 1.0);
         app.init(&mut ctx);
+        ui_core::motion::set_instant(false);
         Self {
             app,
             ctx,
@@ -59,7 +65,13 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             children: HashMap::new(),
             gpu_images_uploaded: HashMap::new(),
             cpu_images_uploaded: HashMap::new(),
+            last_frame: None,
         }
+    }
+
+    /// True while the app or any widget transition needs another frame.
+    fn needs_next_frame(&self) -> bool {
+        self.app.wants_continuous_redraw() || ui_core::motion::is_animating()
     }
 
     fn update_size(&mut self, window: &Window) {
@@ -288,7 +300,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     }
                     Err(error) => eprintln!("Kathamo secondary window frame: {error}"),
                 }
-                if self.app.wants_continuous_redraw() {
+                if self.app.wants_continuous_redraw() || ui_core::motion::is_animating() {
                     window.request_redraw();
                 }
             }
@@ -303,6 +315,13 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         if width == 0 || height == 0 {
             return Ok(());
         }
+
+        // After an idle gap (no redraws), step one nominal frame instead of jumping.
+        let now = Instant::now();
+        let gap = self.last_frame.map_or(0.0, |t| (now - t).as_secs_f32());
+        let dt = if gap > 0.1 { 1.0 / 60.0 } else { gap };
+        self.last_frame = Some(now);
+        ui_core::motion::begin_frame(dt);
 
         self.ctx.cmd_buf.clear();
         self.ctx.frame_count = self.ctx.frame_count.wrapping_add(1);
@@ -544,7 +563,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     }
                     Err(err) => eprintln!("Kathamo frame presentation failed: {err}"),
                 }
-                if self.app.wants_continuous_redraw() {
+                if self.needs_next_frame() {
                     window.request_redraw();
                 }
             }
@@ -555,7 +574,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if !self.revealed || self.app.wants_continuous_redraw() {
+        if !self.revealed || self.needs_next_frame() {
             if let Some(window) = &self.window {
                 window.request_redraw();
             }

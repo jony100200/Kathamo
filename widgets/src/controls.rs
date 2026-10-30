@@ -20,36 +20,39 @@ pub fn render_button(
     is_hovered: bool,
     palette: &ThemePalette,
 ) {
-    let (fill, stroke, text_color) = match style {
+    // Hover is a short spring between the rest and hover fills, not a binary flip.
+    let t = ui_core::motion::animate_bool(
+        ui_core::motion::rect_key("button", rect),
+        is_hovered,
+        ui_core::motion::HOVER,
+    );
+    let (rest, hover, stroke, text_color) = match style {
         ButtonStyle::Primary => (
-            if is_hovered {
-                palette.accent_hover
-            } else {
-                palette.accent
-            },
+            palette.accent,
+            palette.accent_hover,
             Stroke::NONE,
             palette.canvas,
         ),
         ButtonStyle::Secondary => (
-            if is_hovered {
-                palette.elevated
-            } else {
-                palette.surface
-            },
-            Stroke::new(1.0, palette.border),
+            palette.surface,
+            palette.elevated,
+            Stroke::new(1.0, palette.border.lerp(palette.text_muted, t * 0.35)),
             palette.text,
         ),
         ButtonStyle::Ghost => (
-            if is_hovered {
-                palette.surface
-            } else {
-                ui_core::Color::TRANSPARENT
-            },
+            palette.surface.with_alpha(0),
+            palette.surface,
             Stroke::NONE,
-            palette.text_muted,
+            palette.text_muted.lerp(palette.text, t),
         ),
-        ButtonStyle::Danger => (palette.danger, Stroke::NONE, palette.text),
+        ButtonStyle::Danger => (
+            palette.danger,
+            palette.danger.lerp(ui_core::Color::WHITE, 0.12),
+            Stroke::NONE,
+            palette.text,
+        ),
     };
+    let fill = rest.lerp(hover, t);
 
     // One GPU SDF quad for the full button treatment; no stacked rectangle layers.
     let depth = if style == ButtonStyle::Ghost { 0 } else { 12 };
@@ -65,12 +68,16 @@ pub fn render_button(
         fill_bottom: bottom,
         radius: CornerRadius::same(7.0),
         stroke,
-        rim_strength: if style == ButtonStyle::Ghost { 0.0 } else { 0.55 },
+        rim_strength: if style == ButtonStyle::Ghost {
+            0.0
+        } else {
+            0.55
+        },
     });
 
     buf.push(DrawCommand::Text {
         text: label.to_string(),
-        pos: Vec2::new(rect.min.x + 12.0, rect.min.y + 8.0),
+        pos: Vec2::new(rect.min.x + 12.0, rect.center().y - 8.0),
         size: 13.0,
         color: text_color,
         strong: style == ButtonStyle::Primary,

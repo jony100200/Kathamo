@@ -450,7 +450,7 @@ impl<'a> KolponaUi<'a> {
         let width = if label.is_empty() {
             38.0
         } else {
-            (label.len() as f32 * 8.0 + 48.0).max(120.0)
+            ui_render::measure_text(label, 13.0, false) + 48.0
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
         let hovered = rect.contains(self.pointer.position);

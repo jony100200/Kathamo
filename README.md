@@ -8,7 +8,7 @@
 
 > In traditional Bengali art and idol sculpture, **কাঠামো (Kathamo)** is the sacred bamboo and wood armature built first. Only upon a strong, balanced Kathamo can the clay, colors, ornaments, and final divine form emerge. 
 
-Kathamo bridges the gap between modern Web/React aesthetics (Linear, Vercel, Radix, Tailwind UI) and native Rust execution (120+ FPS, <15 MB RAM, sub-3ms frame times, 0ms white flash).
+Kathamo bridges the gap between modern Web/React aesthetics (Linear, Vercel, Radix, Tailwind UI) and native Rust execution: sub-3 ms frames, zero CPU while idle, the integrated GPU by default (the discrete GPU's VRAM stays free), and no white flash on launch.
 
 ---
 
@@ -34,10 +34,10 @@ Kathamo/
 | Modern Web (React / Vue / Tailwind) | Traditional Desktop (egui / Qt) | **Kathamo (কাঠামো) in Rust** |
 | :--- | :--- | :--- |
 | **Layered Dual-Stroke Elevation** | Flat solid 1px borders | **Subtle rim stroke (`rgba(255,255,255,0.06)`) + ambient occlusion** |
-| **Spring Micro-Interactions** | 0ms binary hover/click flips | **Built-in spring physics & tweening interpolation** |
+| **Spring Micro-Interactions** | 0ms binary hover/click flips | **Critically damped springs (`ui_core::motion`), frame-rate independent, zero cost once settled** |
 | **Typography-First Architecture** | Unshaped pixel/bitmap fonts | **HarfBuzz bilingual shaping + optical negative tracking** |
 | **Declarative Component Ergonomics** | Imperative immediate loops | **Composable `KolponaUi` builder API with state responses** |
-| **300 MB – 1.5 GB Electron Bloat** | Low memory but clunky visuals | **<15 MB RAM with buttery 120+ FPS native hardware performance** |
+| **300 MB – 1.5 GB Electron Bloat** | Low memory but clunky visuals | **~170 MB RAM for a full GPU app, no browser engine** |
 
 ---
 
@@ -104,9 +104,31 @@ cargo run -p ui-lab
 | **p95 Frame Time** | **2.79 ms** | < 16.7 ms (60 Hz) | ✅ **PASS (6.0× Headroom)** |
 | **p99 Frame Time** | **3.26 ms** | < 16.7 ms (60 Hz) | ✅ Excellent |
 | **Frame Stalls (>16.7ms)** | **0** | 0 stalls | ✅ Perfect |
-| **RAM Footprint** | **< 15 MB** | < 50 MB | ✅ Extremely Lightweight |
+| **RAM (private, `desktop_app --native`)** | **~170–180 MB** | — | Measured; mostly GPU driver |
+| **Discrete-GPU VRAM** | **0 MB** (UI runs on the integrated GPU) | Leave VRAM for models | ✅ |
+| **Idle CPU (no input, after hover animations)** | **0.00 %** over 10 s | 0 % | ✅ |
 | **GPU Recovery Fallback** | **Instant Safe Mode** | Zero panic / crash | ✅ Seamless Recovery |
 | **Presentation Flash** | **ZERO frames** | Zero white screen | ✅ Hidden until first paint |
+
+---
+
+RAM, VRAM and idle CPU were measured on Windows 11, on a laptop with an integrated and a discrete GPU, using Windows performance counters.
+
+### GPU selection
+
+Kathamo asks for the **low-power (integrated) GPU** first, so its UI does not occupy the discrete GPU or its VRAM. Apps that render heavy 3D in their viewport can opt into the discrete GPU:
+
+```bash
+WGPU_POWER_PREF=high cargo run -p kathamo --example kathamo_forge
+```
+
+### Headless screenshots
+
+Any app started with `run_native` writes one GPU-rendered frame to a PNG and exits when `KATHAMO_SNAPSHOT` is set. No desktop session is needed, and motion is settled first so images are deterministic:
+
+```bash
+KATHAMO_SNAPSHOT=forge.png cargo run --release -p kathamo --example kathamo_forge
+```
 
 ---
 

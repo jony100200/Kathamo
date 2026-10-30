@@ -1,5 +1,6 @@
 //! Standard reusable creative and application components for Kathamo SDK.
 
+use ui_core::motion;
 use ui_core::*;
 use ui_platform::{PointerButton, PointerState};
 use ui_render::command::DrawCommand;
@@ -9,6 +10,8 @@ use ui_themes::ThemePalette;
 // -----------------------------------------------------------------------------
 // 1. MENU SYSTEM & TOOLBAR
 // -----------------------------------------------------------------------------
+
+const MENU_TITLE_PX: f32 = 12.0;
 
 /// Item within a dropdown or context menu.
 #[derive(Debug, Clone)]
@@ -90,6 +93,44 @@ impl MenuBar {
         }
     }
 
+    /// Title hit/draw rectangles, sized from the measured title text.
+    /// Rendering and hit-testing share this so they can never disagree.
+    pub fn title_rects(&self, bounds: Rect) -> Vec<Rect> {
+        let mut x = bounds.min.x + 4.0;
+        self.menus
+            .iter()
+            .map(|menu| {
+                let w = ui_render::measure_text(&menu.title, MENU_TITLE_PX, false) + 20.0;
+                let r = Rect::from_min_size(
+                    Vec2::new(x, bounds.min.y + 2.0),
+                    Vec2::new(w, bounds.height() - 4.0),
+                );
+                x += w + 2.0;
+                r
+            })
+            .collect()
+    }
+
+    fn dropdown_rect(&self, bounds: Rect, idx: usize) -> Option<Rect> {
+        let menu = self.menus.get(idx)?;
+        let title = *self.title_rects(bounds).get(idx)?;
+        let widest = menu
+            .items
+            .iter()
+            .map(|it| {
+                let shortcut = it
+                    .shortcut
+                    .as_deref()
+                    .map_or(0.0, |sc| ui_render::measure_text(sc, 10.5, false) + 24.0);
+                ui_render::measure_text(&it.label, 11.5, false) + shortcut + 24.0
+            })
+            .fold(180.0f32, f32::max);
+        Some(Rect::from_min_size(
+            Vec2::new(title.min.x, bounds.max.y + 2.0),
+            Vec2::new(widest, menu.items.len() as f32 * 26.0 + 8.0),
+        ))
+    }
+
     pub fn handle_mouse_down(
         &mut self,
         pos: Vec2,
@@ -102,34 +143,25 @@ impl MenuBar {
 
         // Check if clicked in menubar header
         if bounds.contains(pos) {
-            let mut x = bounds.min.x + 8.0;
-            let item_width = 54.0;
-            for (idx, _menu) in self.menus.iter().enumerate() {
-                let rect = Rect::from_min_size(
-                    Vec2::new(x, bounds.min.y),
-                    Vec2::new(item_width, bounds.height()),
-                );
-                if rect.contains(pos) {
-                    if self.open_menu_idx == Some(idx) {
-                        self.open_menu_idx = None;
-                    } else {
-                        self.open_menu_idx = Some(idx);
-                    }
-                    return None;
-                }
-                x += item_width + 4.0;
+            if let Some(idx) = self
+                .title_rects(bounds)
+                .iter()
+                .position(|r| r.contains(pos))
+            {
+                self.open_menu_idx = if self.open_menu_idx == Some(idx) {
+                    None
+                } else {
+                    Some(idx)
+                };
+                return None;
             }
         }
 
         // Check if clicked inside open dropdown
         if let Some(idx) = self.open_menu_idx {
-            if let Some(menu) = self.menus.get(idx) {
-                let menu_x = bounds.min.x + 8.0 + (idx as f32 * 58.0);
-                let dropdown_rect = Rect::from_min_size(
-                    Vec2::new(menu_x, bounds.max.y),
-                    Vec2::new(180.0, menu.items.len() as f32 * 26.0 + 8.0),
-                );
-
+            if let (Some(menu), Some(dropdown_rect)) =
+                (self.menus.get(idx), self.dropdown_rect(bounds, idx))
+            {
                 if dropdown_rect.contains(pos) {
                     let rel_y = pos.y - (dropdown_rect.min.y + 4.0);
                     let item_idx = (rel_y / 26.0).floor() as usize;
@@ -163,56 +195,51 @@ impl MenuBar {
             stroke: Stroke::new(1.0, palette.border.with_alpha(100)),
         });
 
-        let mut x = bounds.min.x + 8.0;
-        let item_width = 54.0;
-
-        for (idx, menu) in self.menus.iter().enumerate() {
-            let item_rect = Rect::from_min_size(
-                Vec2::new(x, bounds.min.y + 2.0),
-                Vec2::new(item_width, bounds.height() - 4.0),
-            );
+        let text_y = bounds.min.y + (bounds.height() - MENU_TITLE_PX) * 0.5 - 1.0;
+        for (idx, (menu, item_rect)) in self.menus.iter().zip(self.title_rects(bounds)).enumerate()
+        {
             let is_open = self.open_menu_idx == Some(idx);
             let is_hovered = item_rect.contains(ptr.position);
-
-            if is_open || is_hovered {
+            let t = motion::animate_bool(
+                motion::rect_key("menubar", item_rect),
+                is_open || is_hovered,
+                motion::HOVER,
+            );
+            if t > 0.0 {
+                let fill = if is_open {
+                    palette.elevated_high
+                } else {
+                    palette.elevated
+                };
                 cmd_buf.push(DrawCommand::Rect {
                     rect: item_rect,
-                    fill: if is_open {
-                        palette.elevated_high
-                    } else {
-                        palette.elevated
-                    },
-                    radius: CornerRadius::same(3.0),
+                    fill: fill.with_alpha((fill.a as f32 * t) as u8),
+                    radius: CornerRadius::same(4.0),
                     stroke: Stroke::NONE,
                 });
             }
 
             cmd_buf.push(DrawCommand::Text {
                 text: menu.title.clone(),
-                pos: Vec2::new(x + 10.0, bounds.min.y + 6.0),
-                size: 12.0,
-                color: palette.text,
-                strong: is_open,
+                pos: Vec2::new(item_rect.min.x + 10.0, text_y),
+                size: MENU_TITLE_PX,
+                color: palette.text_muted.lerp(palette.text, t.max(0.6)),
+                strong: false,
             });
-
-            x += item_width + 4.0;
         }
 
         // Render open dropdown if active
         if let Some(idx) = self.open_menu_idx {
-            if let Some(menu) = self.menus.get(idx) {
-                let menu_x = bounds.min.x + 8.0 + (idx as f32 * 58.0);
-                let dropdown_rect = Rect::from_min_size(
-                    Vec2::new(menu_x, bounds.max.y),
-                    Vec2::new(190.0, menu.items.len() as f32 * 26.0 + 8.0),
-                );
-
-                // Dropdown shadow & card
-                cmd_buf.push(DrawCommand::Rect {
-                    rect: dropdown_rect.expand(2.0),
-                    fill: Color::rgba(0, 0, 0, 80),
-                    radius: CornerRadius::same(6.0),
-                    stroke: Stroke::NONE,
+            if let (Some(menu), Some(dropdown_rect)) =
+                (self.menus.get(idx), self.dropdown_rect(bounds, idx))
+            {
+                cmd_buf.push(DrawCommand::SoftShadow {
+                    rect: dropdown_rect,
+                    radius: CornerRadius::same(5.0),
+                    color: Color::rgba(0, 0, 0, 110),
+                    offset: Vec2::new(0.0, 6.0),
+                    blur: 18.0,
+                    spread: 0.0,
                 });
                 cmd_buf.push(DrawCommand::Rect {
                     rect: dropdown_rect,
@@ -251,9 +278,10 @@ impl MenuBar {
                     });
 
                     if let Some(sc) = &item.shortcut {
+                        let sc_w = ui_render::measure_text(sc, 10.5, false);
                         cmd_buf.push(DrawCommand::Text {
                             text: sc.clone(),
-                            pos: Vec2::new(r.max.x - 45.0, r.min.y + 5.0),
+                            pos: Vec2::new(r.max.x - 10.0 - sc_w, r.min.y + 6.0),
                             size: 10.5,
                             color: palette.text_muted,
                             strong: false,

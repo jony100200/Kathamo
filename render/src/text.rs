@@ -281,6 +281,30 @@ pub fn measure(text: &str, px: f32, strong: bool) -> f32 {
         .unwrap_or_else(|| text.chars().count() as f32 * px * 0.55)
 }
 
+/// Shortens `text` with a trailing ellipsis so it fits in `max_width`; unchanged if it fits.
+/// Cuts at char boundaries (binary search, so about log2(len) measurements).
+pub fn fit(text: &str, px: f32, strong: bool, max_width: f32) -> String {
+    if measure(text, px, strong) <= max_width {
+        return text.to_string();
+    }
+    let budget = max_width - measure("…", px, strong);
+    let mut cuts: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
+    cuts.push(text.len());
+    let (mut lo, mut hi) = (0, cuts.len() - 1);
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        if measure(&text[..cuts[mid]], px, strong) <= budget {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    if lo == 0 {
+        return String::new();
+    }
+    format!("{}…", text[..cuts[lo]].trim_end())
+}
+
 /// Cache key for a rasterized glyph. Size is quantized to 1/4 px.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GlyphKey {
@@ -365,6 +389,15 @@ impl GlyphCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fit_adds_ellipsis_only_when_text_overflows() {
+        assert_eq!(fit("Scale", 12.0, false, 500.0), "Scale");
+        let cut = fit("Rotation (Pitch, Yaw)", 12.0, false, 70.0);
+        assert!(cut.ends_with('…'), "{cut}");
+        assert!(measure(&cut, 12.0, false) <= 70.0, "{cut} too wide");
+        assert_eq!(fit("Anything", 12.0, false, 1.0), "");
+    }
 
     #[test]
     fn real_fonts_are_discovered_from_shared_collection() {

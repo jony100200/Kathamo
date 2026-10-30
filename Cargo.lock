@@ -2867,6 +2867,7 @@ version = "0.1.0"
 dependencies = [
  "ab_glyph",
  "bytemuck",
+ "naga",
  "pollster",
  "resvg",
  "rustybuzz",

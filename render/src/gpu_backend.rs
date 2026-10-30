@@ -192,19 +192,27 @@ impl DeviceState {
         surface: Option<&wgpu::Surface<'static>>,
         lost: &Arc<AtomicBool>,
     ) -> Result<Self, String> {
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            force_fallback_adapter: false,
-            compatible_surface: surface,
-        }))
-        .or_else(|| {
+        // UI drawing is light: prefer the integrated GPU so the discrete GPU's VRAM
+        // stays free for models and renders. `WGPU_POWER_PREF=high` overrides this.
+        let preferred =
+            wgpu::util::power_preference_from_env().unwrap_or(wgpu::PowerPreference::LowPower);
+        let request = |power_preference| {
             pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::LowPower,
-                force_fallback_adapter: true,
+                power_preference,
+                force_fallback_adapter: false,
                 compatible_surface: surface,
             }))
-        })
-        .ok_or_else(|| "no compatible GPU adapter found".to_string())?;
+        };
+        let adapter = request(preferred)
+            .or_else(|| request(wgpu::PowerPreference::HighPerformance))
+            .or_else(|| {
+                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    force_fallback_adapter: true,
+                    compatible_surface: surface,
+                }))
+            })
+            .ok_or_else(|| "no compatible GPU adapter found".to_string())?;
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {

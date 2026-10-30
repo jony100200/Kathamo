@@ -16,7 +16,7 @@ pub use command::{CommandBuffer, DrawCommand};
 pub use cpu_backend::CpuBackend;
 pub use gpu_backend::{GpuBackend, SharedWindow};
 pub use soft_present::SoftwarePresenter;
-pub use text::{measure as measure_text, Mask};
+pub use text::{fit as fit_text, measure as measure_text, Mask};
 
 #[cfg(test)]
 mod shader_validation {

@@ -215,6 +215,13 @@ When an agent writes or modifies Kathamo code:
 
 ---
 
+### Visual check (do this for every UI change)
+
+1. `KATHAMO_SNAPSHOT=<file>.png` + run the example: renders one GPU frame headless and exits.
+2. Look at the PNG; fix overlap, clipping and alignment; re-shoot.
+3. Long labels: `ui_render::fit_text(text, px, strong, max_width)` ends them with an ellipsis instead of cutting mid-word.
+4. Hover, toggle and slide states: `ui_core::motion::animate_bool(motion::rect_key("kind", rect), on, motion::HOVER)` returns 0..1 for `Color::lerp`. The native runner redraws only while a spring moves; tests and snapshots snap instantly.
+
 ## 8. High-Level Kathamo SDK (`kathamo` Crate)
 
 The `kathamo` crate provides a unified, production-grade SDK for composing complex desktop applications without directly assembling low-level draw calls or manual coordinate geometry.

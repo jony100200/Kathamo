@@ -281,6 +281,19 @@ impl Color {
         }
     }
 
+    /// Blends toward `other` by `t` (0 = self, 1 = other). Used for animated state changes.
+    #[inline]
+    pub fn lerp(self, other: Self, t: f32) -> Self {
+        let t = t.clamp(0.0, 1.0);
+        let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+        Self {
+            r: mix(self.r, other.r),
+            g: mix(self.g, other.g),
+            b: mix(self.b, other.b),
+            a: mix(self.a, other.a),
+        }
+    }
+
     #[inline]
     pub fn to_f32_rgba(self) -> [f32; 4] {
         [

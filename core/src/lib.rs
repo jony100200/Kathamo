@@ -9,6 +9,7 @@ pub mod inspector_api;
 pub mod layout;
 pub mod math;
 pub mod modifier;
+pub mod motion;
 pub mod redux;
 pub mod state;
 pub mod task;

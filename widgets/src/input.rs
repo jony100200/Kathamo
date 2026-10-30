@@ -339,17 +339,14 @@ pub fn render_toggle(
         Vec2::new(track_width, track_height),
     );
 
-    let (bg_color, stroke_color) = if checked {
-        if is_hovered {
-            (palette.accent_hover, Stroke::NONE)
-        } else {
-            (palette.accent, Stroke::NONE)
-        }
-    } else if is_hovered {
-        (palette.elevated, Stroke::new(1.0, palette.border))
-    } else {
-        (palette.surface, Stroke::new(1.0, palette.border))
-    };
+    // The knob slides and the track cross-fades on a spring instead of jumping.
+    let key = ui_core::motion::rect_key("toggle", track_rect);
+    let on = ui_core::motion::animate_bool(key, checked, ui_core::motion::TOGGLE);
+    let hover = ui_core::motion::animate_bool(key ^ 1, is_hovered, ui_core::motion::HOVER);
+    let off_fill = palette.surface.lerp(palette.elevated, hover);
+    let on_fill = palette.accent.lerp(palette.accent_hover, hover);
+    let bg_color = off_fill.lerp(on_fill, on);
+    let stroke_color = Stroke::new(1.0, palette.border.with_alpha((255.0 * (1.0 - on)) as u8));
 
     // Track capsule
     cmd_buf.push(DrawCommand::Rect {
@@ -361,11 +358,8 @@ pub fn render_toggle(
 
     // Knob with subtle ambient shadow
     let knob_diameter = 14.0;
-    let knob_x = if checked {
-        track_rect.min.x + track_width - knob_diameter - 3.0
-    } else {
-        track_rect.min.x + 3.0
-    };
+    let travel = track_width - knob_diameter - 6.0;
+    let knob_x = track_rect.min.x + 3.0 + travel * on;
     let knob_y = track_rect.min.y + 3.0;
     let knob_rect = Rect::from_min_size(
         Vec2::new(knob_x, knob_y),

@@ -417,7 +417,12 @@ impl MetadataPropertyInspector {
 
             // Property Label
             buf.push(DrawCommand::Text {
-                text: prop.label.clone(),
+                text: ui_render::fit_text(
+                    &prop.label,
+                    11.5,
+                    false,
+                    val_rect.min.x - row_rect.min.x - 10.0,
+                ),
                 pos: Vec2::new(row_rect.min.x + 4.0, row_rect.min.y + 7.0),
                 size: 11.5,
                 color: palette.text_muted,

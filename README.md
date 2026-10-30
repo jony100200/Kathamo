@@ -125,6 +125,15 @@ If you encounter any problems, please open a GitHub issue with your Linux distri
 
 ---
 
+### Kolpona native shell showcase
+
+A studio-style desktop shell using Kathamo's native GPU surfaces, soft shadows, and warm charcoal design tokens. Select one of six application cards and toggle its inspector. This is a **UI demonstration only**; agent runtimes and application services are not simulated.
+
+```bash
+cargo run -p kathamo --example kolpona_shell -- --native
+cargo run -p kathamo --example kolpona_shell
+```
+
 ## 7. SDK Quick Start
 
 Kathamo provides the **user interface**; each application supplies its own painting, 3D, video, audio or other processing logic.

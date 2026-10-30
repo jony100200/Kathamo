@@ -240,6 +240,13 @@ impl<'a> KolponaUi<'a> {
             Direction::Horizontal => (text.len() as f32 * 7.5 + 4.0).max(30.0),
             Direction::Vertical => self.bounds.width(),
         };
+        if let Some(tree) = &mut self.accessibility {
+            let id = tree.alloc_id();
+            let rect = Rect::from_min_size(self.cursor, Vec2::new(width, size + 4.0));
+            let node = AccessibilityNode::new(id, AccessibilityRole::StaticText, text, rect);
+            let root = tree.root_id();
+            tree.insert_child(root, node);
+        }
         self.advance(width, size + self.item_spacing);
     }
 

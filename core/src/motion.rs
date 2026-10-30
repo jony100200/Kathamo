@@ -15,6 +15,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::time::Instant;
 
 use crate::Rect;
 
@@ -67,6 +68,7 @@ struct Store {
     dt: f32,
     instant: bool,
     animating: bool,
+    wake_at: Option<Instant>,
 }
 
 thread_local! {
@@ -76,6 +78,7 @@ thread_local! {
         dt: 0.0,
         instant: true,
         animating: false,
+        wake_at: None,
     });
 }
 
@@ -105,9 +108,15 @@ pub fn is_animating() -> bool {
 /// Returns the animated value for `key` moving toward `target`.
 /// A key seen for the first time starts at its target (nothing animates in on load).
 pub fn animate(key: u64, target: f32, half_life: f32) -> f32 {
+    animate_from(key, target, target, half_life)
+}
+
+/// Like [`animate`], but a new key starts at `from`: use for enter transitions
+/// such as a toast sliding in.
+pub fn animate_from(key: u64, from: f32, target: f32, half_life: f32) -> f32 {
     STORE.with_borrow_mut(|s| {
         let (frame, dt, instant) = (s.frame, s.dt, s.instant);
-        let (spring, seen) = s.springs.entry(key).or_insert((Spring::at(target), frame));
+        let (spring, seen) = s.springs.entry(key).or_insert((Spring::at(from), frame));
         *seen = frame;
         if instant {
             *spring = Spring::at(target);
@@ -120,6 +129,22 @@ pub fn animate(key: u64, target: f32, half_life: f32) -> f32 {
         }
         value
     })
+}
+
+/// Asks for another frame without a spring.
+pub fn request_frame() {
+    STORE.with_borrow_mut(|s| s.animating = true);
+}
+
+/// Asks for one frame at `deadline` (earliest request wins), for time-based UI
+/// such as a toast expiring while the user is idle. The app sleeps until then.
+pub fn wake_at(deadline: Instant) {
+    STORE.with_borrow_mut(|s| s.wake_at = Some(s.wake_at.map_or(deadline, |w| w.min(deadline))));
+}
+
+/// Takes the pending wake-up deadline; the native runner sleeps until it.
+pub fn take_wake_deadline() -> Option<Instant> {
+    STORE.with_borrow_mut(|s| s.wake_at.take())
 }
 
 /// 0..1 transition for an on/off state such as hover or checked.
@@ -194,6 +219,16 @@ mod tests {
             animate_bool(7, true, HOVER);
         }
         assert!(!is_animating());
+        set_instant(true);
+    }
+
+    #[test]
+    fn animate_from_enters_from_start_value() {
+        set_instant(false);
+        begin_frame(1.0 / 60.0);
+        let v = animate_from(11, 0.0, 1.0, SLIDE);
+        assert!(v > 0.0 && v < 0.5, "first enter frame {v}");
+        assert!(is_animating());
         set_instant(true);
     }
 

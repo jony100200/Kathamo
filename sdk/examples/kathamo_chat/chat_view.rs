@@ -531,8 +531,11 @@ fn render_code_card(
 
     // Copy Code button in header
     buf.push(DrawCommand::Text {
-        pos: Vec2::new(header_rect.max.x - 75.0, header_rect.min.y + 7.0),
-        text: "📋 Copy code".into(),
+        pos: Vec2::new(
+            header_rect.max.x - 12.0 - ui_render::measure_text("Copy code", 10.5, false),
+            header_rect.min.y + 7.0,
+        ),
+        text: "Copy code".into(),
         color: pal.accent,
         size: 10.5,
         strong: false,
@@ -541,33 +544,20 @@ fn render_code_card(
     // Code lines with syntax coloring
     let mut code_y = header_rect.max.y + 8.0;
     for (i, line) in lines.iter().enumerate() {
-        // Line number
-        buf.push(DrawCommand::Text {
+        // Line number, right-aligned in the gutter, in the monospace face.
+        buf.push(DrawCommand::Code {
             pos: Vec2::new(card_rect.min.x + 12.0, code_y),
             text: format!("{:>2}", i + 1),
             color: pal.text_muted.with_alpha(100),
             size: 11.5,
-            strong: false,
         });
-
-        // Syntax colored text
-        let color = if line.trim().starts_with("//") || line.trim().starts_with("#") {
-            pal.text_muted
-        } else if line.contains("pub fn ") || line.contains("impl ") || line.contains("struct ") {
-            pal.accent
-        } else if line.contains("\"") {
-            pal.warning
-        } else {
-            pal.text
-        };
-
-        buf.push(DrawCommand::Text {
-            pos: Vec2::new(card_rect.min.x + 40.0, code_y),
-            text: line.to_string(),
-            color,
-            size: 11.5,
-            strong: false,
-        });
+        ui_widgets::code_view::render_code_line(
+            buf,
+            line,
+            Vec2::new(card_rect.min.x + 44.0, code_y),
+            11.5,
+            pal,
+        );
 
         code_y += line_h;
     }

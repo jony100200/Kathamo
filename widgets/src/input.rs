@@ -410,22 +410,30 @@ pub fn render_text_input(
     is_hovered: bool,
     palette: &ThemePalette,
 ) {
-    let (bg_color, stroke) = if is_focused {
-        (palette.canvas, Stroke::new(1.5, palette.accent))
-    } else if is_hovered {
-        (
-            palette.canvas,
-            Stroke::new(1.0, palette.accent.with_alpha(140)),
-        )
-    } else {
-        (palette.canvas, Stroke::new(1.0, palette.border))
-    };
+    // Focus ring: the border eases to the accent and a soft accent glow fades in.
+    let key = ui_core::motion::rect_key("text_input", bounds);
+    let focus = ui_core::motion::animate_bool(key, is_focused, ui_core::motion::HOVER);
+    let hover = ui_core::motion::animate_bool(key ^ 1, is_hovered, ui_core::motion::HOVER);
+    if focus > 0.0 {
+        cmd_buf.push(DrawCommand::SoftShadow {
+            rect: bounds,
+            radius: CornerRadius::same(6.0),
+            color: palette.accent.with_alpha((70.0 * focus) as u8),
+            offset: Vec2::ZERO,
+            blur: 8.0,
+            spread: 1.0,
+        });
+    }
+    let edge = palette
+        .border
+        .lerp(palette.accent.with_alpha(160), hover * 0.6)
+        .lerp(palette.accent, focus);
 
     cmd_buf.push(DrawCommand::Rect {
         rect: bounds,
-        fill: bg_color,
-        radius: CornerRadius::same(5.0),
-        stroke,
+        fill: palette.canvas,
+        radius: CornerRadius::same(6.0),
+        stroke: Stroke::new(1.0, edge),
     });
 
     let text_y = bounds.min.y + (bounds.height() - 13.0) * 0.5 - 1.0;
@@ -483,76 +491,20 @@ pub fn render_segmented_tabs(
     if tabs.is_empty() {
         return;
     }
-
-    // Outer container pill
-    cmd_buf.push(DrawCommand::Rect {
-        rect: bounds,
-        fill: palette.surface.with_alpha(180),
-        radius: CornerRadius::same(6.0),
-        stroke: Stroke::new(1.0, palette.border),
-    });
-
     let tab_width = (bounds.width() - 4.0) / tabs.len() as f32;
-    for (i, tab) in tabs.iter().enumerate() {
-        let tab_rect = Rect::from_min_size(
-            Vec2::new(
-                bounds.min.x + 2.0 + i as f32 * tab_width,
-                bounds.min.y + 2.0,
-            ),
-            Vec2::new(tab_width, bounds.height() - 4.0),
-        );
-
-        let is_active = i == active_idx;
-        let is_hovered = hovered_idx == Some(i);
-
-        if is_active {
-            // Elevated active pill with hairline specular top highlight
-            cmd_buf.push(DrawCommand::Rect {
-                rect: tab_rect,
-                fill: palette.elevated,
-                radius: CornerRadius::same(4.0),
-                stroke: Stroke::new(1.0, palette.border.with_alpha(180)),
-            });
-
-            // Specular highlight
-            cmd_buf.push(DrawCommand::Rect {
-                rect: Rect::from_min_size(
-                    Vec2::new(tab_rect.min.x + 2.0, tab_rect.min.y),
-                    Vec2::new((tab_rect.width() - 4.0).max(1.0), 1.0),
+    let rects: Vec<Rect> = (0..tabs.len())
+        .map(|i| {
+            Rect::from_min_size(
+                Vec2::new(
+                    bounds.min.x + 2.0 + i as f32 * tab_width,
+                    bounds.min.y + 2.0,
                 ),
-                fill: Color::rgba(255, 255, 255, 30),
-                radius: CornerRadius::ZERO,
-                stroke: Stroke::NONE,
-            });
-        } else if is_hovered {
-            cmd_buf.push(DrawCommand::Rect {
-                rect: tab_rect,
-                fill: palette.surface.with_alpha(120),
-                radius: CornerRadius::same(4.0),
-                stroke: Stroke::NONE,
-            });
-        }
-
-        let text_color = if is_active {
-            palette.text
-        } else if is_hovered {
-            palette.text.with_alpha(220)
-        } else {
-            palette.text_muted
-        };
-
-        let text_width = tab.len() as f32 * 7.2;
-        let text_x = tab_rect.min.x + (tab_rect.width() - text_width) * 0.5;
-        let text_y = tab_rect.min.y + (tab_rect.height() - 12.0) * 0.5 - 1.0;
-
-        cmd_buf.push(DrawCommand::Text {
-            pos: Vec2::new(text_x.max(tab_rect.min.x + 4.0), text_y),
-            text: tab.to_string(),
-            color: text_color,
-            size: 12.0,
-            strong: is_active,
-        });
-    }
+                Vec2::new(tab_width, bounds.height() - 4.0),
+            )
+        })
+        .collect();
+    let pointer = hovered_idx.map_or(Vec2::new(f32::MIN, f32::MIN), |i| rects[i].center());
+    crate::tab_strip::render(cmd_buf, tabs, &rects, bounds, active_idx, pointer, palette);
 }
 
 /// Renders a telemetry stat card (e.g., VRAM usage, RAM, ETA, throughput).

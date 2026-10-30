@@ -45,6 +45,7 @@ pub struct NativeAppRunner<A: KathamoApp> {
     gpu_images_uploaded: HashMap<u64, u64>,
     cpu_images_uploaded: HashMap<u64, u64>,
     last_frame: Option<Instant>,
+    wake_at: Option<Instant>,
 }
 
 impl<A: KathamoApp> NativeAppRunner<A> {
@@ -66,6 +67,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             gpu_images_uploaded: HashMap::new(),
             cpu_images_uploaded: HashMap::new(),
             last_frame: None,
+            wake_at: None,
         }
     }
 
@@ -326,6 +328,9 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         self.ctx.cmd_buf.clear();
         self.ctx.frame_count = self.ctx.frame_count.wrapping_add(1);
         self.app.update(&mut self.ctx);
+        if let Some(t) = ui_core::motion::take_wake_deadline() {
+            self.wake_at = Some(self.wake_at.map_or(t, |w| w.min(t)));
+        }
 
         if let Some(gpu) = &mut self.gpu {
             self.app.prepare_gpu(gpu);
@@ -573,12 +578,23 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
         self.process_window_requests(event_loop, requests);
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if !self.revealed || self.needs_next_frame() {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let wake_due = match self.wake_at {
+            Some(t) if Instant::now() >= t => {
+                self.wake_at = None;
+                true
+            }
+            _ => false,
+        };
+        if !self.revealed || self.needs_next_frame() || wake_due {
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
         }
+        event_loop.set_control_flow(match self.wake_at {
+            Some(t) => ControlFlow::WaitUntil(t),
+            None => ControlFlow::Wait,
+        });
         for child in self.children.values() {
             if !child.revealed || self.app.wants_continuous_redraw() {
                 child.window.request_redraw();

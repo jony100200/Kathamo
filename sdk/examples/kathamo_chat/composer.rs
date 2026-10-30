@@ -39,11 +39,8 @@ pub fn render_composer(
     let card_rect = Rect::from_min_size(Vec2::new(card_x, card_y), Vec2::new(card_w, card_h));
 
     // Outer subtle card border & elevated fill
-    let (border_col, border_w) = if ui.composer_focused {
-        (pal.accent, 1.5)
-    } else {
-        (pal.border, 1.0)
-    };
+    // The inner input draws the focus ring; the card stays neutral (one ring, not two).
+    let (border_col, border_w) = (pal.border, 1.0);
 
     buf.push(DrawCommand::Rect {
         rect: card_rect,
@@ -139,8 +136,11 @@ pub fn render_composer(
             stroke: Stroke::NONE,
         });
         buf.push(DrawCommand::Text {
-            pos: Vec2::new(btn_r.min.x + 12.0, btn_r.min.y + 6.0),
-            text: "➤ Send".into(),
+            pos: Vec2::new(
+                btn_r.min.x + (btn_r.width() - ui_render::measure_text("Send", 11.5, true)) * 0.5,
+                btn_r.min.y + 6.0,
+            ),
+            text: "Send".into(),
             color: send_fg,
             size: 11.5,
             strong: true,

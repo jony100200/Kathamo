@@ -11,7 +11,7 @@
 use crate::backend::{BackendKind, RenderBackend, RenderStats};
 use crate::command::{CommandBuffer, DrawCommand};
 use crate::shapes::{flatten_cubic, max_radius, scale_radius, sd_round_box, segment_distance};
-use crate::text::{self, GlyphCache, GlyphKey, Mask};
+use crate::text::{self, Face, GlyphCache, GlyphKey, Mask};
 use crate::vector::{IconKey, IconRasterCache};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -400,11 +400,11 @@ impl CpuBackend {
         }
     }
 
-    fn draw_text(&mut self, text: &str, pos: Vec2, size: f32, color: Color, strong: bool) {
+    fn draw_text(&mut self, text: &str, pos: Vec2, size: f32, color: Color, face: Face) {
         let s = self.scale;
         let px = size * s;
-        let Some(layout) = text::shape(text, px, strong) else {
-            self.draw_bitmap_text(text, pos, size, color, strong);
+        let Some(layout) = text::shape_face(text, px, face) else {
+            self.draw_bitmap_text(text, pos, size, color, face == Face::Strong);
             return;
         };
         let origin_x = pos.x * s;
@@ -528,7 +528,13 @@ impl RenderBackend for CpuBackend {
                     size,
                     color,
                     strong,
-                } => self.draw_text(text, *pos, *size, *color, *strong),
+                } => self.draw_text(text, *pos, *size, *color, Face::from_strong(*strong)),
+                DrawCommand::Code {
+                    text,
+                    pos,
+                    size,
+                    color,
+                } => self.draw_text(text, *pos, *size, *color, Face::Mono),
                 DrawCommand::Icon {
                     id,
                     svg,

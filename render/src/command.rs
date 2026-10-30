@@ -47,6 +47,13 @@ pub enum DrawCommand {
         color: Color,
         strong: bool,
     },
+    /// Monospace text for code, logs and aligned numbers.
+    Code {
+        text: String,
+        pos: Vec2,
+        size: f32,
+        color: Color,
+    },
     ClipPush {
         rect: Rect,
     },

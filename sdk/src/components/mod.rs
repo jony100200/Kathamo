@@ -1,5 +1,7 @@
 //! Standard reusable creative and application components for Kathamo SDK.
 
+use std::time::{Duration, Instant};
+
 use ui_core::motion;
 use ui_core::*;
 use ui_platform::{PointerButton, PointerState};
@@ -635,13 +637,19 @@ pub struct NotificationToast {
     pub title: String,
     pub message: String,
     pub level: NotificationLevel,
-    pub created_frame: u64,
+    pub created: Instant,
 }
 
+/// How long a toast stays on screen; the last part fades out.
+const TOAST_LIFETIME: Duration = Duration::from_secs(5);
+const TOAST_FADE_OUT: f32 = 0.3;
+
+/// Toast stack, bottom-right like modern web apps, so toolbars stay uncovered.
+/// Lifetime is wall-clock time, so toasts expire even while the user is idle.
 #[derive(Debug, Clone, Default)]
 pub struct NotificationHost {
     pub notifications: Vec<NotificationToast>,
-    pub current_frame: u64,
+    next_id: u64,
 }
 
 impl NotificationHost {
@@ -661,102 +669,130 @@ impl NotificationHost {
             title: title.into(),
             message: message.into(),
             level,
-            created_frame: self.current_frame,
+            created: Instant::now(),
         });
     }
 
+    fn push_auto(&mut self, title: String, message: String, level: NotificationLevel) {
+        self.next_id += 1;
+        let id = format!("toast_{}", self.next_id);
+        self.push(id, title, message, level);
+    }
+
     pub fn info(&mut self, title: impl Into<String>, message: impl Into<String>) {
-        let id = format!("toast_{}", self.notifications.len());
-        self.push(id, title, message, NotificationLevel::Info);
+        self.push_auto(title.into(), message.into(), NotificationLevel::Info);
     }
 
     pub fn success(&mut self, title: impl Into<String>, message: impl Into<String>) {
-        let id = format!("toast_{}", self.notifications.len());
-        self.push(id, title, message, NotificationLevel::Success);
+        self.push_auto(title.into(), message.into(), NotificationLevel::Success);
     }
 
     pub fn warning(&mut self, title: impl Into<String>, message: impl Into<String>) {
-        let id = format!("toast_{}", self.notifications.len());
-        self.push(id, title, message, NotificationLevel::Warning);
+        self.push_auto(title.into(), message.into(), NotificationLevel::Warning);
     }
 
     pub fn error(&mut self, title: impl Into<String>, message: impl Into<String>) {
-        let id = format!("toast_{}", self.notifications.len());
-        self.push(id, title, message, NotificationLevel::Error);
+        self.push_auto(title.into(), message.into(), NotificationLevel::Error);
     }
 
     pub fn dismiss(&mut self, id: &str) {
         self.notifications.retain(|n| n.id != id);
     }
 
+    /// Drops expired toasts. Safe to call every frame.
     pub fn tick(&mut self) {
-        self.current_frame += 1;
-        let cur = self.current_frame;
-        // Auto-dismiss after 300 frames (~5 seconds at 60fps)
         self.notifications
-            .retain(|n| cur.saturating_sub(n.created_frame) < 300);
+            .retain(|n| n.created.elapsed() < TOAST_LIFETIME);
     }
 
     pub fn render(&self, cmd_buf: &mut CommandBuffer, screen_bounds: Rect, palette: &ThemePalette) {
-        let toast_w = 300.0;
-        let toast_h = 56.0;
-        let mut y = screen_bounds.min.y + 40.0;
+        if self.notifications.is_empty() {
+            return;
+        }
+
+        let toast_w = 320.0;
+        let toast_h = 58.0;
+        // Clear a typical 24 px status bar at the bottom edge.
+        let mut y = screen_bounds.max.y - 40.0 - toast_h;
 
         for n in self.notifications.iter().rev().take(4) {
+            let key = {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                ("toast", &n.id).hash(&mut h);
+                h.finish()
+            };
+            let enter = motion::animate_from(key, 0.0, 1.0, motion::SLIDE);
+            let remaining = TOAST_LIFETIME.as_secs_f32() - n.created.elapsed().as_secs_f32();
+            let alpha = enter.min((remaining / TOAST_FADE_OUT).clamp(0.0, 1.0));
+            if remaining <= TOAST_FADE_OUT {
+                motion::request_frame();
+            } else {
+                // Sleep until the fade-out begins.
+                motion::wake_at(
+                    n.created + TOAST_LIFETIME - Duration::from_secs_f32(TOAST_FADE_OUT),
+                );
+            }
+            let fade = |c: Color| c.with_alpha((c.a as f32 * alpha) as u8);
+
             let toast_rect = Rect::from_min_size(
-                Vec2::new(screen_bounds.max.x - toast_w - 16.0, y),
+                Vec2::new(
+                    screen_bounds.max.x - toast_w - 16.0 + (1.0 - enter) * 24.0,
+                    y,
+                ),
                 Vec2::new(toast_w, toast_h),
             );
 
-            // Shadow
-            cmd_buf.push(DrawCommand::Rect {
-                rect: toast_rect.expand(2.0),
-                fill: Color::rgba(0, 0, 0, 70),
-                radius: CornerRadius::same(6.0),
-                stroke: Stroke::NONE,
+            cmd_buf.push(DrawCommand::SoftShadow {
+                rect: toast_rect,
+                radius: CornerRadius::same(8.0),
+                color: fade(Color::rgba(0, 0, 0, 120)),
+                offset: Vec2::new(0.0, 8.0),
+                blur: 24.0,
+                spread: 0.0,
             });
-
-            // Card
             cmd_buf.push(DrawCommand::Rect {
                 rect: toast_rect,
-                fill: palette.elevated,
-                radius: CornerRadius::same(5.0),
-                stroke: Stroke::new(1.0, palette.border),
+                fill: fade(palette.elevated),
+                radius: CornerRadius::same(8.0),
+                stroke: Stroke::new(1.0, fade(palette.border)),
             });
 
-            // Accent indicator bar
             let indicator_color = match n.level {
                 NotificationLevel::Info => palette.accent,
-                NotificationLevel::Success => Color::rgb(50, 180, 80),
-                NotificationLevel::Warning => Color::rgb(240, 160, 30),
-                NotificationLevel::Error => Color::rgb(230, 60, 60),
+                NotificationLevel::Success => palette.success,
+                NotificationLevel::Warning => palette.warning,
+                NotificationLevel::Error => palette.danger,
             };
+            // Status dot instead of a hard edge bar: reads as a modern, quiet signal.
             cmd_buf.push(DrawCommand::Rect {
-                rect: Rect::from_min_size(toast_rect.min, Vec2::new(4.0, toast_rect.height())),
-                fill: indicator_color,
-                radius: CornerRadius::ZERO,
+                rect: Rect::from_min_size(
+                    Vec2::new(toast_rect.min.x + 14.0, toast_rect.min.y + 15.0),
+                    Vec2::new(8.0, 8.0),
+                ),
+                fill: fade(indicator_color),
+                radius: CornerRadius::same(4.0),
                 stroke: Stroke::NONE,
             });
 
-            // Title
+            let text_x = toast_rect.min.x + 30.0;
+            let text_w = toast_rect.max.x - 14.0 - text_x;
             cmd_buf.push(DrawCommand::Text {
-                text: n.title.clone(),
-                pos: Vec2::new(toast_rect.min.x + 14.0, toast_rect.min.y + 10.0),
-                size: 12.0,
-                color: palette.text,
+                text: ui_render::fit_text(&n.title, 12.5, true, text_w),
+                pos: Vec2::new(text_x, toast_rect.min.y + 10.0),
+                size: 12.5,
+                color: fade(palette.text),
                 strong: true,
             });
-
-            // Message
             cmd_buf.push(DrawCommand::Text {
-                text: n.message.clone(),
-                pos: Vec2::new(toast_rect.min.x + 14.0, toast_rect.min.y + 28.0),
-                size: 11.0,
-                color: palette.text_muted,
+                text: ui_render::fit_text(&n.message, 11.5, false, text_w),
+                pos: Vec2::new(text_x, toast_rect.min.y + 31.0),
+                size: 11.5,
+                color: fade(palette.text_muted),
                 strong: false,
             });
 
-            y += toast_h + 8.0;
+            y -= toast_h + 8.0;
         }
     }
 }

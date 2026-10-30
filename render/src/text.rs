@@ -79,11 +79,30 @@ impl LoadedFont {
 }
 
 /// The process-wide font collection.
+/// Typeface role. `Mono` is for code, logs and tabular numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Face {
+    Regular,
+    Strong,
+    Mono,
+}
+
+impl Face {
+    pub fn from_strong(strong: bool) -> Self {
+        if strong {
+            Self::Strong
+        } else {
+            Self::Regular
+        }
+    }
+}
+
 pub struct FontSet {
     pub fonts: Vec<LoadedFont>,
     pub source_dir: Option<PathBuf>,
     regular: Option<usize>,
     strong: Option<usize>,
+    mono: Option<usize>,
     bengali: Option<usize>,
     fallbacks: Vec<usize>,
 }
@@ -91,7 +110,8 @@ pub struct FontSet {
 const REGULAR: &str = "Inter-Regular.ttf";
 const STRONG: &str = "Inter-SemiBold.ttf";
 const BENGALI: &str = "NotoSansBengali.ttf";
-const FALLBACK_CHAIN: [&str; 2] = ["JetBrainsMono-Regular.ttf", "NotoEmoji.ttf"];
+const MONO: &str = "JetBrainsMono-Regular.ttf";
+const FALLBACK_CHAIN: [&str; 2] = [MONO, "NotoEmoji.ttf"];
 
 impl FontSet {
     fn discover() -> Self {
@@ -101,6 +121,7 @@ impl FontSet {
             source_dir: dir.clone(),
             regular: None,
             strong: None,
+            mono: None,
             bengali: None,
             fallbacks: Vec::new(),
         };
@@ -116,6 +137,11 @@ impl FontSet {
         let strong = load(STRONG);
         let bengali = load(BENGALI);
         let fallbacks: Vec<usize> = FALLBACK_CHAIN.iter().filter_map(|n| load(n)).collect();
+        // The mono face is the first fallback; reuse it instead of loading it twice.
+        set.mono = fallbacks
+            .first()
+            .copied()
+            .filter(|&i| set.fonts[i].file_name == MONO);
         set.regular = regular;
         set.strong = strong.or(regular);
         set.bengali = bengali;
@@ -128,16 +154,16 @@ impl FontSet {
         self.regular.is_some()
     }
 
-    fn primary(&self, strong: bool) -> Option<usize> {
-        if strong {
-            self.strong
-        } else {
-            self.regular
+    fn primary(&self, face: Face) -> Option<usize> {
+        match face {
+            Face::Regular => self.regular,
+            Face::Strong => self.strong,
+            Face::Mono => self.mono.or(self.regular),
         }
     }
 
-    fn font_for_char(&self, c: char, strong: bool) -> Option<usize> {
-        let primary = self.primary(strong)?;
+    fn font_for_char(&self, c: char, face: Face) -> Option<usize> {
+        let primary = self.primary(face)?;
         if is_bengali(c) {
             if let Some(b) = self.bengali {
                 return Some(b);
@@ -227,8 +253,37 @@ pub struct TextLayout {
 
 /// Shapes `text` at `px` (em size in pixels). Returns `None` when no outline fonts exist.
 pub fn shape(text: &str, px: f32, strong: bool) -> Option<TextLayout> {
+    shape_face(text, px, Face::from_strong(strong))
+}
+
+/// Cached layouts; cleared wholesale when full, which is cheaper than LRU
+/// bookkeeping and only costs one re-shape per visible label.
+const LAYOUT_CACHE_LIMIT: usize = 4096;
+
+thread_local! {
+    static LAYOUT_CACHE: std::cell::RefCell<HashMap<(String, u32, Face), TextLayout>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// Shapes `text` with an explicit typeface role. Results are cached per thread.
+pub fn shape_face(text: &str, px: f32, face: Face) -> Option<TextLayout> {
+    let key = (text.to_string(), px.to_bits(), face);
+    if let Some(hit) = LAYOUT_CACHE.with_borrow(|c| c.get(&key).cloned()) {
+        return Some(hit);
+    }
+    let layout = shape_uncached(text, px, face)?;
+    LAYOUT_CACHE.with_borrow_mut(|c| {
+        if c.len() >= LAYOUT_CACHE_LIMIT {
+            c.clear();
+        }
+        c.insert(key, layout.clone());
+    });
+    Some(layout)
+}
+
+fn shape_uncached(text: &str, px: f32, face: Face) -> Option<TextLayout> {
     let set = fonts();
-    let primary = set.primary(strong)?;
+    let primary = set.primary(face)?;
     let mut layout = TextLayout {
         glyphs: Vec::with_capacity(text.len()),
         advance: 0.0,
@@ -243,7 +298,7 @@ pub fn shape(text: &str, px: f32, strong: bool) -> Option<TextLayout> {
         }
         let font = match runs.last() {
             Some(&(f, _, _)) if sticks_to_previous_run(c) => f,
-            _ => set.font_for_char(c, strong)?,
+            _ => set.font_for_char(c, face)?,
         };
         let end = i + c.len_utf8();
         match runs.last_mut() {
@@ -276,7 +331,12 @@ pub fn shape(text: &str, px: f32, strong: bool) -> Option<TextLayout> {
 
 /// Measures the advance width of `text` at `px`. Falls back to a monospace estimate.
 pub fn measure(text: &str, px: f32, strong: bool) -> f32 {
-    shape(text, px, strong)
+    measure_face(text, px, Face::from_strong(strong))
+}
+
+/// Measures with an explicit typeface role.
+pub fn measure_face(text: &str, px: f32, face: Face) -> f32 {
+    shape_face(text, px, face)
         .map(|l| l.advance)
         .unwrap_or_else(|| text.chars().count() as f32 * px * 0.55)
 }

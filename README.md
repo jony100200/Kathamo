@@ -35,7 +35,7 @@ Kathamo/
 | :--- | :--- | :--- |
 | **Layered Dual-Stroke Elevation** | Flat solid 1px borders | **Subtle rim stroke (`rgba(255,255,255,0.06)`) + ambient occlusion** |
 | **Spring Micro-Interactions** | 0ms binary hover/click flips | **Critically damped springs (`ui_core::motion`), frame-rate independent, zero cost once settled** |
-| **Typography-First Architecture** | Unshaped pixel/bitmap fonts | **HarfBuzz bilingual shaping + optical negative tracking** |
+| **Typography-First Architecture** | Unshaped pixel/bitmap fonts | **HarfBuzz bilingual shaping with cached layouts, ellipsis fitting, and a monospace face with token-coloured code** |
 | **Declarative Component Ergonomics** | Imperative immediate loops | **Composable `KolponaUi` builder API with state responses** |
 | **300 MB – 1.5 GB Electron Bloat** | Low memory but clunky visuals | **~170 MB RAM for a full GPU app, no browser engine** |
 

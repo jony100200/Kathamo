@@ -13,7 +13,7 @@
 use crate::backend::{BackendKind, RenderBackend, RenderStats};
 use crate::command::{CommandBuffer, DrawCommand};
 use crate::shapes::flatten_cubic;
-use crate::text::{self, GlyphKey, Mask};
+use crate::text::{self, Face, GlyphKey, Mask};
 use crate::vector::{IconKey, IconRasterCache};
 use bytemuck::{Pod, Zeroable};
 use std::collections::HashMap;
@@ -1109,13 +1109,13 @@ impl GpuBackend {
         );
     }
 
-    fn tess_text(&mut self, text_str: &str, pos: Vec2, size: f32, color: Color, strong: bool) {
+    fn tess_text(&mut self, text_str: &str, pos: Vec2, size: f32, color: Color, face: Face) {
         if color.a == 0 {
             return;
         }
         let s = self.scale;
         let px = size * s;
-        let Some(layout) = text::shape(text_str, px, strong) else {
+        let Some(layout) = text::shape_face(text_str, px, face) else {
             self.tess_bitmap_text(text_str, pos, size, color);
             return;
         };
@@ -1213,7 +1213,13 @@ impl GpuBackend {
                     size,
                     color,
                     strong,
-                } => self.tess_text(text, *pos, *size, *color, *strong),
+                } => self.tess_text(text, *pos, *size, *color, Face::from_strong(*strong)),
+                DrawCommand::Code {
+                    text,
+                    pos,
+                    size,
+                    color,
+                } => self.tess_text(text, *pos, *size, *color, Face::Mono),
                 DrawCommand::Icon {
                     id,
                     svg,

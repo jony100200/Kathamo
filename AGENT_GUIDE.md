@@ -221,6 +221,9 @@ When an agent writes or modifies Kathamo code:
 2. Look at the PNG; fix overlap, clipping and alignment; re-shoot.
 3. Long labels: `ui_render::fit_text(text, px, strong, max_width)` ends them with an ellipsis instead of cutting mid-word.
 4. Hover, toggle and slide states: `ui_core::motion::animate_bool(motion::rect_key("kind", rect), on, motion::HOVER)` returns 0..1 for `Color::lerp`. The native runner redraws only while a spring moves; tests and snapshots snap instantly.
+5. Time-based UI (toasts, timers): call `motion::wake_at(deadline)` instead of redrawing continuously; the runner sleeps until then.
+6. Tab rows and multi-state selectors: `ui_widgets::tab_strip` (measured widths, sliding pill, shared `tab_rects`/`hit` so clicks match drawing). Never size tabs with `len() * px`.
+7. Code, logs and aligned numbers: `DrawCommand::Code` (monospace face) or `ui_widgets::code_view::render_code_line` for token colouring from the theme.
 
 ## 8. High-Level Kathamo SDK (`kathamo` Crate)
 

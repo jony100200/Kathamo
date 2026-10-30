@@ -619,7 +619,11 @@ impl<'a> KolponaUi<'a> {
     pub fn tabs(&mut self, tabs: &[&str], selected: &mut usize) -> Response {
         let height = 28.0;
         let width = match self.direction {
-            Direction::Horizontal => (tabs.len() as f32 * 75.0 + 8.0).max(120.0),
+            Direction::Horizontal => {
+                let rects = crate::tab_strip::tab_rects(tabs, self.cursor, height);
+                let widest = rects.iter().map(|r| r.width()).fold(0.0f32, f32::max);
+                (widest * tabs.len() as f32 + 4.0).max(120.0)
+            }
             Direction::Vertical => (self.bounds.width() - 16.0).max(120.0),
         };
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));

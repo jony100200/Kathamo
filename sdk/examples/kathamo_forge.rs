@@ -21,10 +21,26 @@
 //! - 100% deterministic local mock state; zero backend or GPU engine requirement.
 
 use kathamo::prelude::*;
+use kathamo::widgets::tab_strip;
+use ui_core::motion;
 
 // =============================================================================
 // DATA MODELS & SCENE STRUCTURE
 // =============================================================================
+
+const SIM_LABELS: [&str; 3] = ["Stop", "Play", "Pause"];
+const SIM_STATES: [SimulationState; 3] = [
+    SimulationState::Stopped,
+    SimulationState::Playing,
+    SimulationState::Paused,
+];
+const MODE_LABELS: [&str; 4] = ["2D Canvas", "3D Spatial", "Script C#", "Logic Graph"];
+const MODES: [EditorWorkspaceMode; 4] = [
+    EditorWorkspaceMode::Mode2D,
+    EditorWorkspaceMode::Mode3D,
+    EditorWorkspaceMode::ModeScript,
+    EditorWorkspaceMode::ModeGraph,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorWorkspaceMode {
@@ -138,6 +154,39 @@ pub struct KathamoForgeApp {
 }
 
 impl KathamoForgeApp {
+    /// Transport strip, right-aligned in the ribbon.
+    fn transport_layout(ribbon: Rect) -> (Vec<Rect>, Rect) {
+        let probe = tab_strip::tab_rects(&SIM_LABELS, Vec2::ZERO, 28.0);
+        let w = tab_strip::strip_bounds(&probe, Vec2::ZERO, 28.0).width();
+        let origin = Vec2::new(ribbon.max.x - w - 12.0, ribbon.min.y + 5.0);
+        let rects = tab_strip::tab_rects(&SIM_LABELS, origin, 28.0);
+        let strip = tab_strip::strip_bounds(&rects, origin, 28.0);
+        (rects, strip)
+    }
+
+    /// Ribbon layout shared by drawing and hit-testing: measured document tabs,
+    /// then the mode selector, centred but never overlapping the tabs.
+    fn ribbon_layout(&self, ribbon: Rect, bounds: Rect) -> (Vec<Rect>, Vec<Rect>, Rect) {
+        let mut x = ribbon.min.x + 12.0;
+        let doc_tabs: Vec<Rect> = self
+            .open_tabs
+            .iter()
+            .map(|name| {
+                let w = ui_render::measure_text(name, 11.5, true) + 20.0;
+                let r = Rect::from_min_size(Vec2::new(x, ribbon.min.y + 6.0), Vec2::new(w, 26.0));
+                x += w + 4.0;
+                r
+            })
+            .collect();
+        let probe = tab_strip::tab_rects(&MODE_LABELS, Vec2::ZERO, 28.0);
+        let strip_w = tab_strip::strip_bounds(&probe, Vec2::ZERO, 28.0).width();
+        let centred = bounds.min.x + (bounds.width() - strip_w) * 0.5;
+        let origin = Vec2::new(centred.max(x + 16.0), ribbon.min.y + 5.0);
+        let modes = tab_strip::tab_rects(&MODE_LABELS, origin, 28.0);
+        let strip = tab_strip::strip_bounds(&modes, origin, 28.0);
+        (doc_tabs, modes, strip)
+    }
+
     pub fn new() -> Self {
         // 1. Initial Menu Bar
         let menu_bar = MenuBar::new(vec![
@@ -1145,190 +1194,71 @@ impl KathamoApp for KathamoForgeApp {
             stroke: Stroke::new(1.0, palette.border),
         });
 
-        // 2a. Document Scene Tabs (Left side of ribbon)
-        let mut tab_x = ribbon_rect.min.x + 12.0;
-        for (idx, tab_name) in self.open_tabs.iter().enumerate() {
+        // 2a. Document tabs and 2b. workspace mode selector share one layout.
+        let (doc_tabs, mode_rects, mode_strip) = self.ribbon_layout(ribbon_rect, bounds);
+        for (idx, (tab_name, tab_r)) in self.open_tabs.iter().zip(&doc_tabs).enumerate() {
             let is_active = idx == self.active_tab_idx;
-            let tab_w = (tab_name.len() as f32 * 7.5 + 24.0).max(90.0);
-            let tab_r = Rect::from_min_size(
-                Vec2::new(tab_x, ribbon_rect.min.y + 6.0),
-                Vec2::new(tab_w, 26.0),
+            let hover = motion::animate_bool(
+                motion::rect_key("forge_doc_tab", *tab_r),
+                tab_r.contains(ctx.pointer.position),
+                motion::HOVER,
             );
-            let is_hov = tab_r.contains(ctx.pointer.position);
-
+            let rest = if is_active {
+                palette.elevated_high
+            } else {
+                palette.surface
+            };
             ctx.cmd_buf.push(DrawCommand::Rect {
-                rect: tab_r,
-                fill: if is_active {
-                    palette.elevated_high
-                } else if is_hov {
-                    palette.elevated
-                } else {
-                    palette.surface
-                },
-                radius: CornerRadius::same(4.0),
+                rect: *tab_r,
+                fill: rest.lerp(palette.elevated, if is_active { 0.0 } else { hover }),
+                radius: CornerRadius::same(5.0),
                 stroke: if is_active {
-                    Stroke::new(1.0, palette.accent)
+                    Stroke::new(1.0, palette.accent.with_alpha(200))
                 } else {
                     Stroke::new(1.0, palette.border.with_alpha(100))
                 },
             });
-
             ctx.cmd_buf.push(DrawCommand::Text {
                 text: tab_name.clone(),
-                pos: Vec2::new(tab_r.min.x + 8.0, tab_r.min.y + 6.0),
+                pos: Vec2::new(tab_r.min.x + 10.0, tab_r.min.y + 6.0),
                 size: 11.5,
                 color: if is_active {
                     palette.text
                 } else {
-                    palette.text_muted
+                    palette.text_muted.lerp(palette.text, hover * 0.7)
                 },
                 strong: is_active,
             });
-
-            tab_x += tab_w + 6.0;
         }
-
-        // 2b. Workspace Mode Selector (Center of ribbon)
-        let mode_center_x = bounds.min.x + bounds.width() * 0.44;
-        let modes = [
-            (EditorWorkspaceMode::Mode2D, "2D Canvas"),
-            (EditorWorkspaceMode::Mode3D, "3D Spatial"),
-            (EditorWorkspaceMode::ModeScript, "Script C#"),
-            (EditorWorkspaceMode::ModeGraph, "Logic Graph"),
-        ];
-        let mut mode_x = mode_center_x - 170.0;
-        for (m, label) in modes {
-            let is_active = self.active_mode == m;
-            let btn_r = Rect::from_min_size(
-                Vec2::new(mode_x, ribbon_rect.min.y + 6.0),
-                Vec2::new(82.0, 26.0),
-            );
-            let is_hov = btn_r.contains(ctx.pointer.position);
-
-            ctx.cmd_buf.push(DrawCommand::Rect {
-                rect: btn_r,
-                fill: if is_active {
-                    palette.accent
-                } else if is_hov {
-                    palette.elevated_high
-                } else {
-                    palette.elevated
-                },
-                radius: CornerRadius::same(4.0),
-                stroke: if is_active {
-                    Stroke::new(1.0, Color::rgba(255, 255, 255, 120))
-                } else {
-                    Stroke::new(1.0, palette.border)
-                },
-            });
-
-            ctx.cmd_buf.push(DrawCommand::Text {
-                text: label.into(),
-                pos: Vec2::new(btn_r.min.x + 10.0, btn_r.min.y + 6.0),
-                size: 11.0,
-                color: if is_active {
-                    Color::WHITE
-                } else {
-                    palette.text
-                },
-                strong: is_active,
-            });
-
-            mode_x += 86.0;
-        }
-
-        // 2c. Simulation Transport Controls (Right of ribbon)
-        let transport_x = bounds.max.x - 280.0;
-        let play_r = Rect::from_min_size(
-            Vec2::new(transport_x, ribbon_rect.min.y + 6.0),
-            Vec2::new(64.0, 26.0),
-        );
-        let pause_r = Rect::from_min_size(
-            Vec2::new(transport_x + 68.0, ribbon_rect.min.y + 6.0),
-            Vec2::new(64.0, 26.0),
-        );
-        let stop_r = Rect::from_min_size(
-            Vec2::new(transport_x + 136.0, ribbon_rect.min.y + 6.0),
-            Vec2::new(64.0, 26.0),
+        let active_mode = MODES
+            .iter()
+            .position(|m| *m == self.active_mode)
+            .unwrap_or(0);
+        tab_strip::render(
+            &mut ctx.cmd_buf,
+            &MODE_LABELS,
+            &mode_rects,
+            mode_strip,
+            active_mode,
+            ctx.pointer.position,
+            &palette,
         );
 
-        let is_playing = self.sim_state == SimulationState::Playing;
-        let is_paused = self.sim_state == SimulationState::Paused;
-
-        // Play Button
-        ctx.cmd_buf.push(DrawCommand::Rect {
-            rect: play_r,
-            fill: if is_playing {
-                Color::rgb(22, 101, 52)
-            } else {
-                palette.elevated
-            },
-            radius: CornerRadius::same(4.0),
-            stroke: Stroke::new(
-                1.0,
-                if is_playing {
-                    Color::rgb(74, 222, 128)
-                } else {
-                    palette.border
-                },
-            ),
-        });
-        ctx.cmd_buf.push(DrawCommand::Text {
-            text: if is_playing { "▶ RUN" } else { "▶ Play" }.into(),
-            pos: Vec2::new(play_r.min.x + 12.0, play_r.min.y + 6.0),
-            size: 11.5,
-            color: if is_playing {
-                Color::rgb(74, 222, 128)
-            } else {
-                palette.text
-            },
-            strong: is_playing,
-        });
-
-        // Pause Button
-        ctx.cmd_buf.push(DrawCommand::Rect {
-            rect: pause_r,
-            fill: if is_paused {
-                Color::rgb(146, 64, 14)
-            } else {
-                palette.elevated
-            },
-            radius: CornerRadius::same(4.0),
-            stroke: Stroke::new(
-                1.0,
-                if is_paused {
-                    Color::rgb(251, 191, 36)
-                } else {
-                    palette.border
-                },
-            ),
-        });
-        ctx.cmd_buf.push(DrawCommand::Text {
-            text: "⏸ Pause".into(),
-            pos: Vec2::new(pause_r.min.x + 10.0, pause_r.min.y + 6.0),
-            size: 11.5,
-            color: if is_paused {
-                Color::rgb(251, 191, 36)
-            } else {
-                palette.text
-            },
-            strong: is_paused,
-        });
-
-        // Stop Button
-        ctx.cmd_buf.push(DrawCommand::Rect {
-            rect: stop_r,
-            fill: palette.elevated,
-            radius: CornerRadius::same(4.0),
-            stroke: Stroke::new(1.0, palette.border),
-        });
-        ctx.cmd_buf.push(DrawCommand::Text {
-            text: "⏹ Stop".into(),
-            pos: Vec2::new(stop_r.min.x + 12.0, stop_r.min.y + 6.0),
-            size: 11.5,
-            color: palette.text_muted,
-            strong: false,
-        });
+        // 2c. Simulation transport: a three-state segmented control.
+        let (sim_rects, sim_strip) = Self::transport_layout(ribbon_rect);
+        let active_sim = SIM_STATES
+            .iter()
+            .position(|st| *st == self.sim_state)
+            .unwrap_or(0);
+        tab_strip::render(
+            &mut ctx.cmd_buf,
+            &SIM_LABELS,
+            &sim_rects,
+            sim_strip,
+            active_sim,
+            ctx.pointer.position,
+            &palette,
+        );
 
         // ---------------------------------------------------------------------
         // 3. MAIN WORKSPACE GEOMETRY LAYOUT
@@ -1634,75 +1564,31 @@ impl KathamoApp for KathamoForgeApp {
             Vec2::new(bounds.width(), 38.0),
         );
         if ribbon_rect.contains(pos) {
-            // Mode buttons
-            let mode_center_x = bounds.min.x + bounds.width() * 0.44;
-            let mut mode_x = mode_center_x - 170.0;
-            let modes = [
-                EditorWorkspaceMode::Mode2D,
-                EditorWorkspaceMode::Mode3D,
-                EditorWorkspaceMode::ModeScript,
-                EditorWorkspaceMode::ModeGraph,
-            ];
-            for m in modes {
-                let btn_r = Rect::from_min_size(
-                    Vec2::new(mode_x, ribbon_rect.min.y + 6.0),
-                    Vec2::new(82.0, 26.0),
-                );
-                if btn_r.contains(pos) {
-                    self.set_workspace_mode(m);
-                    return true;
-                }
-                mode_x += 86.0;
+            let (doc_tabs, mode_rects, _) = self.ribbon_layout(ribbon_rect, bounds);
+            if let Some(i) = tab_strip::hit(&mode_rects, pos) {
+                self.set_workspace_mode(MODES[i]);
+                return true;
             }
 
             // Transport controls
-            let transport_x = bounds.max.x - 280.0;
-            let play_r = Rect::from_min_size(
-                Vec2::new(transport_x, ribbon_rect.min.y + 6.0),
-                Vec2::new(64.0, 26.0),
-            );
-            let pause_r = Rect::from_min_size(
-                Vec2::new(transport_x + 68.0, ribbon_rect.min.y + 6.0),
-                Vec2::new(64.0, 26.0),
-            );
-            let stop_r = Rect::from_min_size(
-                Vec2::new(transport_x + 136.0, ribbon_rect.min.y + 6.0),
-                Vec2::new(64.0, 26.0),
-            );
-
-            if play_r.contains(pos) {
-                self.set_sim_state(SimulationState::Playing);
-                return true;
-            }
-            if pause_r.contains(pos) {
-                self.set_sim_state(SimulationState::Paused);
-                return true;
-            }
-            if stop_r.contains(pos) {
-                self.set_sim_state(SimulationState::Stopped);
+            let (sim_rects, _) = Self::transport_layout(ribbon_rect);
+            if let Some(i) = tab_strip::hit(&sim_rects, pos) {
+                self.set_sim_state(SIM_STATES[i]);
                 return true;
             }
 
             // Document tabs
-            let mut tab_x = ribbon_rect.min.x + 12.0;
-            for (idx, tab_name) in self.open_tabs.iter().enumerate() {
-                let tab_w = (tab_name.len() as f32 * 7.5 + 24.0).max(90.0);
-                let tab_r = Rect::from_min_size(
-                    Vec2::new(tab_x, ribbon_rect.min.y + 6.0),
-                    Vec2::new(tab_w, 26.0),
-                );
-                if tab_r.contains(pos) {
-                    self.active_tab_idx = idx;
-                    if tab_name.ends_with(".cs") {
-                        self.set_workspace_mode(EditorWorkspaceMode::ModeScript);
-                    } else if tab_name.ends_with(".graph") {
-                        self.set_workspace_mode(EditorWorkspaceMode::ModeGraph);
-                    } else if tab_name.ends_with(".scene") {
-                        self.set_workspace_mode(EditorWorkspaceMode::Mode3D);
-                    }
-                    return true;
+            if let Some(idx) = doc_tabs.iter().position(|r| r.contains(pos)) {
+                self.active_tab_idx = idx;
+                let tab_name = &self.open_tabs[idx];
+                if tab_name.ends_with(".cs") {
+                    self.set_workspace_mode(EditorWorkspaceMode::ModeScript);
+                } else if tab_name.ends_with(".graph") {
+                    self.set_workspace_mode(EditorWorkspaceMode::ModeGraph);
+                } else if tab_name.ends_with(".scene") {
+                    self.set_workspace_mode(EditorWorkspaceMode::Mode3D);
                 }
-                tab_x += tab_w + 6.0;
+                return true;
             }
         }
 

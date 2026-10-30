@@ -264,7 +264,7 @@ pub fn render_sidebar(
             };
             buf.push(DrawCommand::Text {
                 pos: Vec2::new(item_r.min.x + 12.0, item_r.min.y + 8.0),
-                text: conv.title.clone(),
+                text: ui_render::fit_text(&conv.title, 12.5, is_selected, item_r.width() - 40.0),
                 color: title_color,
                 size: 12.5,
                 strong: is_selected,
@@ -273,7 +273,7 @@ pub fn render_sidebar(
             // Subtitle / preview
             buf.push(DrawCommand::Text {
                 pos: Vec2::new(item_r.min.x + 12.0, item_r.min.y + 26.0),
-                text: conv.subtitle.clone(),
+                text: ui_render::fit_text(&conv.subtitle, 10.5, false, item_r.width() - 24.0),
                 color: pal.text_muted,
                 size: 10.5,
                 strong: false,

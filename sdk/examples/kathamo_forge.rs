@@ -824,15 +824,7 @@ impl KathamoForgeApp {
             nodes: vec![n1, n2, n3, n4, n5],
             connections,
             groups,
-            selected_node: None,
-            dragging_node: None,
-            pending_wire: None,
-            is_panning: false,
-            hovered_pin: None,
-            search_menu_open: false,
-            search_query: String::new(),
-            search_world_pos: Vec2::ZERO,
-            search_selected_index: 0,
+            ..NodeEditor::default()
         };
 
         (doc, editor)
@@ -1896,7 +1888,8 @@ impl KathamoApp for KathamoForgeApp {
                     Vec2::new(viewport_rect.min.x, viewport_rect.min.y + 30.0),
                     Vec2::new(viewport_rect.width(), viewport_rect.height() - 30.0),
                 );
-                return self.node_editor.handle_mouse_down(pos, button, graph_area);
+                self.node_editor.handle_mouse_down(pos, button, graph_area);
+                return true;
             }
         }
 

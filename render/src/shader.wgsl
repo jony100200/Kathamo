@@ -22,7 +22,9 @@ struct VsIn {
     @location(2) radii: vec4<f32>,   // rect: tl tr br bl       | line: half_width
     @location(3) color: vec4<f32>,
     @location(4) color2: vec4<f32>,  // rect border colour
-    @location(5) extra: vec2<f32>,   // x: border width, y: mode
+    @location(5) gradient_color: vec4<f32>,
+    @location(6) effect: vec4<f32>,
+    @location(7) extra: vec2<f32>,   // x: border width, y: mode
 };
 
 struct VsOut {
@@ -32,7 +34,9 @@ struct VsOut {
     @location(2) radii: vec4<f32>,
     @location(3) color: vec4<f32>,
     @location(4) color2: vec4<f32>,
-    @location(5) extra: vec2<f32>,
+    @location(5) gradient_color: vec4<f32>,
+    @location(6) effect: vec4<f32>,
+    @location(7) extra: vec2<f32>,
 };
 
 @vertex
@@ -45,6 +49,8 @@ fn vs_main(v: VsIn) -> VsOut {
     o.radii = v.radii;
     o.color = v.color;
     o.color2 = v.color2;
+    o.gradient_color = v.gradient_color;
+    o.effect = v.effect;
     o.extra = v.extra;
     return o;
 }
@@ -81,6 +87,14 @@ fn out_color(rgb: vec3<f32>, a: f32) -> vec4<f32> {
 fn fs_main(i: VsOut) -> @location(0) vec4<f32> {
     let mode = i32(i.extra.y + 0.5);
     let aa = globals.aa;
+    if (mode == 5) {
+        // Distance-feathered analytical shadow: a single quad, no blur render targets.
+        let d = sd_round_box(i.world - i.shape.xy, i.shape.zw, i.radii);
+        let width = max(i.effect.x, aa);
+        let p = clamp((width - d) / (2.0 * width), 0.0, 1.0);
+        let coverage = p * p * (3.0 - 2.0 * p);
+        return out_color(i.color.rgb, i.color.a * coverage);
+    }
     if (mode == 1) {
         let cov = textureSample(atlas_tex, atlas_smp, i.shape.xy).r;
         return out_color(i.color.rgb, i.color.a * cov);
@@ -99,21 +113,28 @@ fn fs_main(i: VsOut) -> @location(0) vec4<f32> {
         let cov = clamp((i.radii.x - d) / aa + 0.5, 0.0, 1.0);
         return out_color(i.color.rgb, i.color.a * cov);
     }
-    // mode 0: rounded rect
+    // Modes 0 and 4: a single rounded SDF shape; mode 4 adds a vertical
+    // colour gradient and a restrained top-edge highlight.
     let d = sd_round_box(i.world - i.shape.xy, i.shape.zw, i.radii);
     let outer = clamp(0.5 - d / aa, 0.0, 1.0);
     let bw = i.extra.x;
-    if (bw > 0.0) {
-        let inner = clamp(0.5 - (d + bw) / aa, 0.0, 1.0);
-        let fill_a = i.color.a * inner;
-        let ring_a = i.color2.a * (outer - inner);
-        var fill_rgb = i.color.rgb;
-        var ring_rgb = i.color2.rgb;
-        if (globals.srgb_target > 0.5) {
-            fill_rgb = to_linear(fill_rgb);
-            ring_rgb = to_linear(ring_rgb);
-        }
-        return vec4<f32>(fill_rgb * fill_a + ring_rgb * ring_a, fill_a + ring_a);
+    var fill_rgb = i.color.rgb;
+    var fill_alpha = i.color.a;
+    if (mode == 4) {
+        let top = i.shape.y - i.shape.w;
+        let t = clamp((i.world.y - top) / max(i.shape.w * 2.0, aa), 0.0, 1.0);
+        fill_rgb = mix(i.color.rgb, i.gradient_color.rgb, t);
+        fill_alpha = mix(i.color.a, i.gradient_color.a, t);
+        let top_light = 1.0 - smoothstep(0.0, aa * 2.0, i.world.y - top);
+        fill_rgb = mix(fill_rgb, vec3<f32>(1.0), top_light * clamp(i.effect.y, 0.0, 1.0) * 0.12);
     }
-    return out_color(i.color.rgb, i.color.a * outer);
+    let inner = if (bw > 0.0) { clamp(0.5 - (d + bw) / aa, 0.0, 1.0) } else { outer };
+    let fill_a = fill_alpha * inner;
+    let ring_a = i.color2.a * (outer - inner);
+    var ring_rgb = i.color2.rgb;
+    if (globals.srgb_target > 0.5) {
+        fill_rgb = to_linear(fill_rgb);
+        ring_rgb = to_linear(ring_rgb);
+    }
+    return vec4<f32>(fill_rgb * fill_a + ring_rgb * ring_a, fill_a + ring_a);
 }

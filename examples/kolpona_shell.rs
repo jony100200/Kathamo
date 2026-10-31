@@ -21,12 +21,12 @@ const ACCENTS: [Color; 6] = [
     Color::rgb(197, 180, 122),
 ];
 const ICONS: [&str; 6] = [
-    include_str!("../../assets/icons/sparkles.svg"),
-    include_str!("../../assets/icons/layers-intersect.svg"),
-    include_str!("../../assets/icons/cpu.svg"),
-    include_str!("../../assets/icons/photo.svg"),
-    include_str!("../../assets/icons/movie.svg"),
-    include_str!("../../assets/icons/search.svg"),
+    include_str!("../assets/icons/sparkles.svg"),
+    include_str!("../assets/icons/layers-intersect.svg"),
+    include_str!("../assets/icons/cpu.svg"),
+    include_str!("../assets/icons/photo.svg"),
+    include_str!("../assets/icons/movie.svg"),
+    include_str!("../assets/icons/search.svg"),
 ];
 
 #[derive(Default)]
@@ -117,10 +117,10 @@ impl KathamoApp for KolponaShell {
         text(buf, "CREATIVE OPERATING WORKSPACE", 102.0, 43.0, 10.0, p.text_muted, false);
 
         let rail: [(&str, &str, &str); 4] = [
-            ("home", include_str!("../../assets/icons/home.svg"), "Home"),
-            ("apps", include_str!("../../assets/icons/layout-grid.svg"), "Apps"),
-            ("create", include_str!("../../assets/icons/bolt.svg"), "Create"),
-            ("system", include_str!("../../assets/icons/settings.svg"), "System"),
+            ("home", include_str!("../assets/icons/home.svg"), "Home"),
+            ("apps", include_str!("../assets/icons/layout-grid.svg"), "Apps"),
+            ("create", include_str!("../assets/icons/bolt.svg"), "Create"),
+            ("system", include_str!("../assets/icons/settings.svg"), "System"),
         ];
         for (idx, (id, svg, name)) in rail.iter().enumerate() {
             let y = 108.0 + idx as f32 * 83.0;

@@ -18,12 +18,52 @@ ui-testkit = { path = "../testkit" }
 taffy = { version = "0.15.1", default-features = false, features = ["std", "flexbox", "taffy_tree", "content_size"] }
 
 [[example]]
-name = "kathamo_chat"
-path = "examples/kathamo_chat/main.rs"
+name = "glass_viewport"
+path = "../examples/glass_viewport/main.rs"
 
 [[example]]
-name = "glass_viewport"
-path = "examples/glass_viewport/main.rs"
+name = "kathamo_chat"
+path = "../examples/kathamo_chat/main.rs"
+
+[[example]]
+name = "kathamo_forge"
+path = "../examples/kathamo_forge.rs"
+
+[[example]]
+name = "visual_designer"
+path = "../examples/visual_designer.rs"
+
+[[example]]
+name = "kolpona_shell"
+path = "../examples/kolpona_shell.rs"
+
+[[example]]
+name = "interactive_ui"
+path = "../examples/interactive_ui.rs"
+
+[[example]]
+name = "desktop_app"
+path = "../examples/desktop_app.rs"
+
+[[example]]
+name = "creative_2d"
+path = "../examples/creative_2d.rs"
+
+[[example]]
+name = "spatial_3d"
+path = "../examples/spatial_3d.rs"
+
+[[example]]
+name = "procedural_editor"
+path = "../examples/procedural_editor.rs"
+
+[[example]]
+name = "video_editor"
+path = "../examples/video_editor.rs"
+
+[[example]]
+name = "agent_tui"
+path = "../examples/agent_tui.rs"
 
 # Only the glass_viewport example renders its own 3D scene; same versions as ui-render.
 [dev-dependencies]

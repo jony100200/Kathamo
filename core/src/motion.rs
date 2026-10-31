@@ -67,6 +67,8 @@ struct Store {
     frame: u64,
     dt: f32,
     instant: bool,
+    reduced: bool,
+    clock: f64,
     animating: bool,
     wake_at: Option<Instant>,
 }
@@ -77,6 +79,8 @@ thread_local! {
         frame: 0,
         dt: 0.0,
         instant: true,
+        reduced: false,
+        clock: 0.0,
         animating: false,
         wake_at: None,
     });
@@ -87,12 +91,35 @@ pub fn set_instant(instant: bool) {
     STORE.with_borrow_mut(|s| s.instant = instant);
 }
 
+/// User preference: no ambient loops and no transitions. Springs snap to their
+/// targets and [`ambient_running`] turns false, so idle animations draw a still pose.
+pub fn set_reduced_motion(reduced: bool) {
+    STORE.with_borrow_mut(|s| s.reduced = reduced);
+}
+
+pub fn reduced_motion() -> bool {
+    STORE.with_borrow(|s| s.reduced)
+}
+
+/// Seconds of animated time since start: the sum of frame steps. Stays at 0 in
+/// instant mode, so headless frames are deterministic.
+pub fn clock() -> f32 {
+    STORE.with_borrow(|s| s.clock as f32)
+}
+
+/// True when looping (time-driven) animation should play: a live runner and no
+/// reduced-motion preference.
+pub fn ambient_running() -> bool {
+    STORE.with_borrow(|s| !s.instant && !s.reduced)
+}
+
 /// Starts a frame `dt` seconds after the previous one. Springs not touched last
 /// frame are dropped, so closed widgets do not leak state.
 pub fn begin_frame(dt: f32) {
     STORE.with_borrow_mut(|s| {
         s.frame += 1;
         s.dt = dt.clamp(0.0, MAX_DT);
+        s.clock += s.dt as f64;
         s.animating = false;
         let keep_after = s.frame.saturating_sub(2);
         s.springs.retain(|_, (_, seen)| *seen >= keep_after);
@@ -115,7 +142,7 @@ pub fn animate(key: u64, target: f32, half_life: f32) -> f32 {
 /// such as a toast sliding in.
 pub fn animate_from(key: u64, from: f32, target: f32, half_life: f32) -> f32 {
     STORE.with_borrow_mut(|s| {
-        let (frame, dt, instant) = (s.frame, s.dt, s.instant);
+        let (frame, dt, instant) = (s.frame, s.dt, s.instant || s.reduced);
         let (spring, seen) = s.springs.entry(key).or_insert((Spring::at(from), frame));
         *seen = frame;
         if instant {
@@ -242,5 +269,25 @@ mod tests {
             begin_frame(0.016);
         }
         STORE.with_borrow(|s| assert!(!s.springs.contains_key(&9)));
+    }
+
+    #[test]
+    fn clock_advances_with_frames_and_reduced_motion_stills_everything() {
+        set_instant(false);
+        let start = clock();
+        begin_frame(0.02);
+        begin_frame(0.02);
+        assert!((clock() - start - 0.04).abs() < 1e-5);
+        assert!(ambient_running());
+        set_reduced_motion(true);
+        assert!(!ambient_running());
+        assert_eq!(
+            animate_from(21, 0.0, 1.0, SLIDE),
+            1.0,
+            "reduced motion snaps"
+        );
+        set_reduced_motion(false);
+        set_instant(true);
+        assert!(!ambient_running(), "headless frames stay still");
     }
 }

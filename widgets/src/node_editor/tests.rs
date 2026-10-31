@@ -417,3 +417,40 @@ fn category_and_pin_colours_are_distinct_and_readable_in_every_theme() {
     let on_light = category_color("Filter", &ThemePalette::light());
     assert!(on_dark.luminance() > on_light.luminance());
 }
+
+#[test]
+fn hidden_toolbar_is_not_drawn_or_clickable() {
+    use ui_render::{CommandBuffer, DrawCommand};
+    let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1200.0, 700.0));
+    let (_, texture_btn, label) = NodeEditor::toolbar_rects(viewport)
+        .into_iter()
+        .find(|(a, _, _)| *a == ToolbarAction::AddTexture)
+        .unwrap();
+    let draws_label = |editor: &NodeEditor| {
+        let mut buf = CommandBuffer::new();
+        editor.render(&mut buf, viewport, &ThemePalette::dark());
+        buf.commands()
+            .iter()
+            .any(|c| matches!(c, DrawCommand::Text { text, .. } if text == label))
+    };
+
+    let mut editor = NodeEditor::default();
+    editor.show_toolbar = false;
+    let before = editor.nodes.len();
+    editor.handle_mouse_down(texture_btn.center(), PointerButton::Primary, viewport);
+    assert_eq!(
+        editor.nodes.len(),
+        before,
+        "a hidden toolbar must not add nodes"
+    );
+    assert!(!draws_label(&editor));
+
+    editor.show_toolbar = true;
+    assert!(draws_label(&editor));
+    editor.handle_mouse_down(texture_btn.center(), PointerButton::Primary, viewport);
+    assert_eq!(
+        editor.nodes.len(),
+        before + 1,
+        "the visible toolbar still works"
+    );
+}

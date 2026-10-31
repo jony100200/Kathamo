@@ -1,10 +1,11 @@
 //! Card components: model card, agent card, and task card.
 
-use ui_core::{Color, Rect, Vec2};
+use ui_core::{motion, Color, Rect, Vec2};
 use ui_render::measure_text;
 use ui_themes::{RADIUS_CARD, SPACE_2, SPACE_3};
 
 use super::controls::chip;
+use super::mascot::{mascot, Mood};
 use crate::studio::{
     fit_text, initials, name_tint, text_center_y, with_alpha, Interaction, Studio, Tone,
 };
@@ -84,7 +85,8 @@ pub fn task_card(
     hit
 }
 
-/// Agent card displaying avatar, source tag, readiness status, and summary detail.
+/// Agent card: animated mascot (mood follows the readiness tone), source tag,
+/// readiness status and summary detail.
 pub fn agent_card(
     studio: &mut Studio,
     rect: Rect,
@@ -94,10 +96,35 @@ pub fn agent_card(
     readiness_tone: Tone,
     detail: &str,
 ) -> Interaction {
+    let mood = Mood::from_tone(readiness_tone);
+    agent_card_with_mood(
+        studio,
+        rect,
+        name,
+        source_label,
+        readiness_label,
+        readiness_tone,
+        mood,
+        detail,
+    )
+}
+
+/// Agent card whose mascot mood is chosen by the caller, for states the tone
+/// alone cannot tell apart (a usage limit warns in the pill but the mascot sleeps).
+pub fn agent_card_with_mood(
+    studio: &mut Studio,
+    rect: Rect,
+    name: &str,
+    source_label: &str,
+    readiness_label: &str,
+    readiness_tone: Tone,
+    mood: Mood,
+    detail: &str,
+) -> Interaction {
     let hit = studio.card(rect);
     let top_y = rect.min.y + SPACE_3;
     let av_rect = r_sq(rect.min.x + SPACE_3, top_y, 36.0);
-    studio.avatar(av_rect, name);
+    mascot(studio, av_rect, name, mood, motion::clock());
 
     let pill_w = measure_text(readiness_label, 11.5, true) + 26.0;
     let pill_pos = Vec2::new(rect.max.x - SPACE_3 - pill_w, top_y);

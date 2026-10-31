@@ -46,6 +46,7 @@ pub struct NativeAppRunner<A: KathamoApp> {
     cpu_images_uploaded: HashMap<u64, u64>,
     last_frame: Option<Instant>,
     wake_at: Option<Instant>,
+    occluded: bool,
 }
 
 impl<A: KathamoApp> NativeAppRunner<A> {
@@ -68,12 +69,19 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             cpu_images_uploaded: HashMap::new(),
             last_frame: None,
             wake_at: None,
+            occluded: false,
         }
     }
 
     /// True while the app or any widget transition needs another frame.
+    /// A minimised (zero-size) or occluded window never keeps the loop spinning.
     fn needs_next_frame(&self) -> bool {
-        self.app.wants_continuous_redraw() || ui_core::motion::is_animating()
+        self.visible() && (self.app.wants_continuous_redraw() || ui_core::motion::is_animating())
+    }
+
+    fn visible(&self) -> bool {
+        let (width, height) = self.ctx.physical_size;
+        !self.occluded && width > 0 && height > 0
     }
 
     fn update_size(&mut self, window: &Window) {
@@ -256,6 +264,11 @@ impl<A: KathamoApp> NativeAppRunner<A> {
                     alt: mods.alt_key(),
                     command: mods.super_key(),
                 };
+            }
+            WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Released => {
+                let key = key_from_winit(&event.logical_key);
+                self.app
+                    .handle_window_key_up(&child.id, key, child.modifiers, &mut child.ctx);
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let key = key_from_winit(&event.logical_key);
@@ -471,6 +484,12 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Occluded(occluded) => {
+                self.occluded = occluded;
+                if !occluded {
+                    window.request_redraw();
+                }
+            }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 self.update_size(&window);
                 window.request_redraw();
@@ -527,6 +546,11 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     command: state.super_key(),
                 };
             }
+            WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Released => {
+                let key = key_from_winit(&event.logical_key);
+                self.app.handle_key_up(key, self.modifiers, &mut self.ctx);
+                window.request_redraw();
+            }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let key = key_from_winit(&event.logical_key);
                 let consumed = self
@@ -582,7 +606,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
         let wake_due = match self.wake_at {
             Some(t) if Instant::now() >= t => {
                 self.wake_at = None;
-                true
+                self.visible()
             }
             _ => false,
         };

@@ -46,3 +46,4 @@ coverage/
 **/*.bak
 .env
 .env.*
+/.agents

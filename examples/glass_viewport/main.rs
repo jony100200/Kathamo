@@ -67,7 +67,10 @@ impl Panels {
             sky_strip: tab_strip::strip_bounds(&skies, sky_origin, 30.0),
             skies,
             scene: Rect::from_min_size(b.min + Vec2::new(20.0, 82.0), Vec2::new(262.0, 252.0)),
-            view: Rect::from_min_size(Vec2::new(b.max.x - 282.0, b.min.y + 82.0), Vec2::new(262.0, 128.0)),
+            view: Rect::from_min_size(
+                Vec2::new(b.max.x - 282.0, b.min.y + 82.0),
+                Vec2::new(262.0, 128.0),
+            ),
             stats: Rect::from_min_size(
                 Vec2::new(b.center().x - 330.0, b.max.y - 58.0),
                 Vec2::new(660.0, 38.0),
@@ -76,9 +79,16 @@ impl Panels {
     }
 
     fn contains(&self, p: Vec2) -> bool {
-        [self.title, self.camera_strip, self.sky_strip, self.scene, self.view, self.stats]
-            .iter()
-            .any(|r| r.contains(p))
+        [
+            self.title,
+            self.camera_strip,
+            self.sky_strip,
+            self.scene,
+            self.view,
+            self.stats,
+        ]
+        .iter()
+        .any(|r| r.contains(p))
     }
 
     fn scene_row(&self, i: usize) -> Rect {
@@ -120,7 +130,14 @@ fn glass(buf: &mut CommandBuffer, rect: Rect, radius: f32, palette: &ThemePalett
     });
 }
 
-fn text(buf: &mut CommandBuffer, s: impl Into<String>, pos: Vec2, size: f32, color: Color, strong: bool) {
+fn text(
+    buf: &mut CommandBuffer,
+    s: impl Into<String>,
+    pos: Vec2,
+    size: f32,
+    color: Color,
+    strong: bool,
+) {
     buf.push(DrawCommand::Text {
         text: s.into(),
         pos,
@@ -133,7 +150,10 @@ fn text(buf: &mut CommandBuffer, s: impl Into<String>, pos: Vec2, size: f32, col
 impl GlassViewport {
     fn new() -> Self {
         let mut toasts = NotificationHost::new();
-        toasts.info("Real 3D under real glass", "Drag to orbit · scroll to zoom · panels blur live");
+        toasts.info(
+            "Real 3D under real glass",
+            "Drag to orbit · scroll to zoom · panels blur live",
+        );
         Self {
             scene: None,
             adapter: String::new(),
@@ -224,26 +244,72 @@ impl GlassViewport {
         let buf = &mut ctx.cmd_buf;
 
         glass(buf, p.title, 12.0, &pal);
-        text(buf, "Kathamo · Glass Viewport", p.title.min + Vec2::new(16.0, 8.0), 13.0, pal.text, true);
-        text(buf, "real wgpu 3D · live backdrop blur", p.title.min + Vec2::new(16.0, 27.0), 10.5, pal.text_muted, false);
+        text(
+            buf,
+            "Kathamo · Glass Viewport",
+            p.title.min + Vec2::new(16.0, 8.0),
+            13.0,
+            pal.text,
+            true,
+        );
+        text(
+            buf,
+            "real wgpu 3D · live backdrop blur",
+            p.title.min + Vec2::new(16.0, 27.0),
+            10.5,
+            pal.text_muted,
+            false,
+        );
 
         glass(buf, p.camera_strip.expand(4.0), 11.0, &pal);
-        tab_strip::render(buf, &CAMERAS, &p.cameras, p.camera_strip, self.camera_preset, ptr, &pal);
+        tab_strip::render(
+            buf,
+            &CAMERAS,
+            &p.cameras,
+            p.camera_strip,
+            self.camera_preset,
+            ptr,
+            &pal,
+        );
         glass(buf, p.sky_strip.expand(4.0), 11.0, &pal);
         tab_strip::render(buf, &SKIES, &p.skies, p.sky_strip, self.sky, ptr, &pal);
 
         glass(buf, p.scene, 14.0, &pal);
-        text(buf, "SCENE", p.scene.min + Vec2::new(16.0, 16.0), 11.0, pal.text_muted, true);
+        text(
+            buf,
+            "SCENE",
+            p.scene.min + Vec2::new(16.0, 16.0),
+            11.0,
+            pal.text_muted,
+            true,
+        );
         let tris = self.scene.as_ref().map_or([0; 6], |s| s.triangles);
         for (i, name) in OBJECTS.iter().enumerate() {
             let row = p.scene_row(i);
             let label = format!("{name}  ·  {} tris", tris[i]);
-            ui_widgets::input::render_toggle(buf, self.visible[i], row.contains(ptr), &label, row, &pal);
+            ui_widgets::input::render_toggle(
+                buf,
+                self.visible[i],
+                row.contains(ptr),
+                &label,
+                row,
+                &pal,
+            );
         }
 
         glass(buf, p.view, 14.0, &pal);
-        text(buf, "VIEW", p.view.min + Vec2::new(16.0, 16.0), 11.0, pal.text_muted, true);
-        let rows = [("Auto-rotate camera", self.auto_rotate), ("Animate scene", self.animate)];
+        text(
+            buf,
+            "VIEW",
+            p.view.min + Vec2::new(16.0, 16.0),
+            11.0,
+            pal.text_muted,
+            true,
+        );
+        let rows = [
+            ("Auto-rotate camera", self.auto_rotate),
+            ("Animate scene", self.animate),
+        ];
         for (i, (label, on)) in rows.into_iter().enumerate() {
             let row = p.view_row(i);
             ui_widgets::input::render_toggle(buf, on, row.contains(ptr), label, row, &pal);
@@ -263,7 +329,14 @@ impl GlassViewport {
             self.physical.0, self.physical.1, self.adapter
         );
         let stats = ui_render::fit_text(&stats, 11.0, false, p.stats.width() - 32.0);
-        text(buf, stats, p.stats.min + Vec2::new(16.0, 12.0), 11.0, pal.text, false);
+        text(
+            buf,
+            stats,
+            p.stats.min + Vec2::new(16.0, 12.0),
+            11.0,
+            pal.text,
+            false,
+        );
 
         let screen = ctx.bounds();
         self.toasts.render(&mut ctx.cmd_buf, screen, &pal);
@@ -306,15 +379,23 @@ impl KathamoApp for GlassViewport {
             sky: [Sky::Dusk, Sky::Night, Sky::Day][self.sky],
             visible: self.visible,
         };
-        let Some(scene) = self.scene.as_mut() else { return };
+        let Some(scene) = self.scene.as_mut() else {
+            return;
+        };
         if let Some(view) = scene.ensure_size(gpu.device(), self.physical) {
             gpu.register_external_view(VIEWPORT_ID, view);
         }
         scene.render(gpu.device(), gpu.queue(), &frame);
     }
 
-    fn handle_mouse_down(&mut self, pos: Vec2, button: PointerButton, ctx: &mut AppContext) -> bool {
-        self.dragging = button == PointerButton::Primary && !Panels::new(ctx.bounds()).contains(pos);
+    fn handle_mouse_down(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        ctx: &mut AppContext,
+    ) -> bool {
+        self.dragging =
+            button == PointerButton::Primary && !Panels::new(ctx.bounds()).contains(pos);
         true
     }
 
@@ -327,13 +408,19 @@ impl KathamoApp for GlassViewport {
         true
     }
 
-    fn handle_mouse_up(&mut self, _pos: Vec2, _button: PointerButton, _ctx: &mut AppContext) -> bool {
+    fn handle_mouse_up(
+        &mut self,
+        _pos: Vec2,
+        _button: PointerButton,
+        _ctx: &mut AppContext,
+    ) -> bool {
         self.dragging = false;
         true
     }
 
     fn handle_scroll(&mut self, delta: Vec2, _pos: Vec2, _ctx: &mut AppContext) -> bool {
-        self.target.distance = (self.target.distance * (1.0 - delta.y.clamp(-3.0, 3.0) * 0.08)).clamp(4.0, 22.0);
+        self.target.distance =
+            (self.target.distance * (1.0 - delta.y.clamp(-3.0, 3.0) * 0.08)).clamp(4.0, 22.0);
         true
     }
 

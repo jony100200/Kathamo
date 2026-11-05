@@ -201,9 +201,9 @@ pub fn pin_type_color(pin_type: &str, palette: &ThemePalette) -> Color {
 
 /// Stable hue for a name: one of 24 steps around the wheel (FNV-1a hash).
 fn name_hue(name: &str) -> f32 {
-    let hash = name
-        .bytes()
-        .fold(0x811c_9dc5_u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193));
+    let hash = name.bytes().fold(0x811c_9dc5_u32, |h, b| {
+        (h ^ b as u32).wrapping_mul(0x0100_0193)
+    });
     (hash % 24) as f32 * 15.0
 }
 

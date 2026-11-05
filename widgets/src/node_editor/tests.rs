@@ -390,18 +390,40 @@ fn category_and_pin_colours_are_distinct_and_readable_in_every_theme() {
         ThemePalette::warm_paper(),
     ];
     let categories = [
-        "Source", "Processing", "Filter", "Composite", "Material", "Shader", "Output", "AI",
+        "Source",
+        "Processing",
+        "Filter",
+        "Composite",
+        "Material",
+        "Shader",
+        "Output",
+        "AI",
         "Utility",
     ];
-    let pins = ["Image", "Mask", "Float", "Color", "PbrMaterial", "ShaderWgsl", "Video"];
+    let pins = [
+        "Image",
+        "Mask",
+        "Float",
+        "Color",
+        "PbrMaterial",
+        "ShaderWgsl",
+        "Video",
+    ];
     for palette in &palettes {
-        let colours: Vec<_> = categories.iter().map(|c| category_color(c, palette)).collect();
+        let colours: Vec<_> = categories
+            .iter()
+            .map(|c| category_color(c, palette))
+            .collect();
         for (i, a) in colours.iter().enumerate() {
             for b in &colours[i + 1..] {
                 assert_ne!(a, b, "two categories share a colour");
             }
             // The 4px accent bar must stand out from the node body.
-            assert!(a.contrast_ratio(palette.surface) >= 2.0, "{a:?} on {:?}", palette.surface);
+            assert!(
+                a.contrast_ratio(palette.surface) >= 2.0,
+                "{a:?} on {:?}",
+                palette.surface
+            );
         }
         let pin_colours: Vec<_> = pins.iter().map(|p| pin_type_color(p, palette)).collect();
         for (i, a) in pin_colours.iter().enumerate() {
@@ -410,7 +432,10 @@ fn category_and_pin_colours_are_distinct_and_readable_in_every_theme() {
             }
         }
         // Unknown names are stable and case-insensitive.
-        assert_eq!(category_color("Custom", palette), category_color("custom", palette));
+        assert_eq!(
+            category_color("Custom", palette),
+            category_color("custom", palette)
+        );
     }
     // Same hue, tuned per theme: brighter on dark canvases than on light ones.
     let on_dark = category_color("Filter", &ThemePalette::dark());

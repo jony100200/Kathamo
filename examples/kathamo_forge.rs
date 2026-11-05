@@ -20,8 +20,8 @@
 //! - Command Palette (`Ctrl+K`), modal dialogs, and notification toast dispatch.
 //! - 100% deterministic local mock state; zero backend or GPU engine requirement.
 
-use kathamo::prelude::*;
 use kathamo::flex::{Flex, FlexLayout};
+use kathamo::prelude::*;
 use kathamo::widgets::tab_strip;
 use ui_core::motion;
 

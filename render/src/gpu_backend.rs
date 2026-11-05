@@ -885,7 +885,6 @@ impl GpuBackend {
         );
     }
 
-
     fn tess_surface(
         &mut self,
         rect: Rect,
@@ -895,8 +894,14 @@ impl GpuBackend {
         stroke: Stroke,
         rim_strength: f32,
     ) {
-        let bw = if stroke.color.a > 0 { stroke.width.max(0.0) } else { 0.0 };
-        if fill_top.a == 0 && fill_bottom.a == 0 && bw == 0.0 { return; }
+        let bw = if stroke.color.a > 0 {
+            stroke.width.max(0.0)
+        } else {
+            0.0
+        };
+        if fill_top.a == 0 && fill_bottom.a == 0 && bw == 0.0 {
+            return;
+        }
         let aa = 1.0 / self.scale;
         let min = rect.min - Vec2::splat(aa);
         let max = rect.max + Vec2::splat(aa);
@@ -907,7 +912,12 @@ impl GpuBackend {
             Vertex {
                 pos: [0.0; 2],
                 shape: [center.x, center.y, half.x, half.y],
-                radii: [radius.top_left, radius.top_right, radius.bottom_right, radius.bottom_left],
+                radii: [
+                    radius.top_left,
+                    radius.top_right,
+                    radius.bottom_right,
+                    radius.bottom_left,
+                ],
                 color: color_f32(fill_top),
                 color2: color_f32(stroke.color),
                 gradient_color: color_f32(fill_bottom),
@@ -927,19 +937,28 @@ impl GpuBackend {
         blur: f32,
         spread: f32,
     ) {
-        if color.a == 0 { return; }
+        if color.a == 0 {
+            return;
+        }
         let blur = blur.clamp(0.5, 64.0);
         let spread = spread.clamp(-32.0, 32.0);
         let min = rect.min + offset - Vec2::splat(spread);
         let max = rect.max + offset + Vec2::splat(spread);
-        if min.x >= max.x || min.y >= max.y { return; }
+        if min.x >= max.x || min.y >= max.y {
+            return;
+        }
         let center = (min + max) * 0.5;
         let half = (max - min) * 0.5;
         let pad = blur + 1.0 / self.scale;
         let qmin = min - Vec2::splat(pad);
         let qmax = max + Vec2::splat(pad);
         self.push_quad(
-            [qmin, Vec2::new(qmax.x, qmin.y), qmax, Vec2::new(qmin.x, qmax.y)],
+            [
+                qmin,
+                Vec2::new(qmax.x, qmin.y),
+                qmax,
+                Vec2::new(qmin.x, qmax.y),
+            ],
             Vertex {
                 pos: [0.0; 2],
                 shape: [center.x, center.y, half.x, half.y],
@@ -998,7 +1017,12 @@ impl GpuBackend {
         let aa = 1.0 / self.scale;
         let (min, max) = (rect.min - Vec2::splat(aa), rect.max + Vec2::splat(aa));
         let (c, half) = (rect.center(), rect.size() * 0.5);
-        let r = [radius.top_left, radius.top_right, radius.bottom_right, radius.bottom_left];
+        let r = [
+            radius.top_left,
+            radius.top_right,
+            radius.bottom_right,
+            radius.bottom_left,
+        ];
         let template = Vertex {
             pos: [0.0; 2],
             shape: [c.x, c.y, half.x, half.y],
@@ -1017,11 +1041,19 @@ impl GpuBackend {
 
     /// Creates (or resizes) the blur chain when this frame uses a backdrop.
     fn prepare_backdrop(&mut self) {
-        if !self.batches.iter().any(|b| b.texture_id == Some(BACKDROP_TEXTURE)) {
+        if !self
+            .batches
+            .iter()
+            .any(|b| b.texture_id == Some(BACKDROP_TEXTURE))
+        {
             return;
         }
         let size = (self.width, self.height);
-        if self.backdrop.as_ref().is_some_and(|(b, _)| b.size() == size) {
+        if self
+            .backdrop
+            .as_ref()
+            .is_some_and(|(b, _)| b.size() == size)
+        {
             return;
         }
         let blur = BackdropBlur::new(&self.dev.device, self.dev.format, size.0, size.1);
@@ -1202,10 +1234,29 @@ impl GpuBackend {
                     radius,
                     stroke,
                 } => self.tess_rect(*rect, *fill, *radius, *stroke),
-                DrawCommand::Surface { rect, fill_top, fill_bottom, radius, stroke, rim_strength } =>
-                    self.tess_surface(*rect, *fill_top, *fill_bottom, *radius, *stroke, *rim_strength),
-                DrawCommand::SoftShadow { rect, radius, color, offset, blur, spread } =>
-                    self.tess_soft_shadow(*rect, *radius, *color, *offset, *blur, *spread),
+                DrawCommand::Surface {
+                    rect,
+                    fill_top,
+                    fill_bottom,
+                    radius,
+                    stroke,
+                    rim_strength,
+                } => self.tess_surface(
+                    *rect,
+                    *fill_top,
+                    *fill_bottom,
+                    *radius,
+                    *stroke,
+                    *rim_strength,
+                ),
+                DrawCommand::SoftShadow {
+                    rect,
+                    radius,
+                    color,
+                    offset,
+                    blur,
+                    spread,
+                } => self.tess_soft_shadow(*rect, *radius, *color, *offset, *blur, *spread),
                 DrawCommand::Line { start, end, stroke } => {
                     self.tess_line(*start, *end, stroke.width, stroke.color)
                 }
@@ -1234,7 +1285,9 @@ impl GpuBackend {
                     size,
                     color,
                 } => self.tess_text(text, *pos, *size, *color, Face::Mono),
-                DrawCommand::Backdrop { rect, radius, tint } => self.tess_backdrop(*rect, *radius, *tint),
+                DrawCommand::Backdrop { rect, radius, tint } => {
+                    self.tess_backdrop(*rect, *radius, *tint)
+                }
                 DrawCommand::Icon {
                     id,
                     svg,

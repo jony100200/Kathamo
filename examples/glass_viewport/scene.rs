@@ -128,7 +128,11 @@ impl Scene {
     }
 
     /// (Re)creates render targets for `size`; returns a fresh view to register when it did.
-    pub fn ensure_size(&mut self, device: &wgpu::Device, size: (u32, u32)) -> Option<wgpu::TextureView> {
+    pub fn ensure_size(
+        &mut self,
+        device: &wgpu::Device,
+        size: (u32, u32),
+    ) -> Option<wgpu::TextureView> {
         let size = (size.0.max(1), size.1.max(1));
         if self.targets.as_ref().is_some_and(|t| t.size == size) {
             return None;
@@ -230,7 +234,10 @@ fn globals(f: &FrameInput, aspect: f32) -> Globals {
         c.distance * c.pitch.sin() + 0.6,
         c.distance * c.pitch.cos() * c.yaw.cos(),
     ];
-    let view_proj = mul(perspective(0.85, aspect, 0.1, 120.0), look_at(eye, [0.0, 0.8, 0.0]));
+    let view_proj = mul(
+        perspective(0.85, aspect, 0.1, 120.0),
+        look_at(eye, [0.0, 0.8, 0.0]),
+    );
     let (light, top, horizon) = match f.sky {
         Sky::Dusk => ([0.6, 0.35, -0.4], [0.06, 0.05, 0.16], [0.95, 0.42, 0.32]),
         Sky::Night => ([-0.3, 0.6, 0.3], [0.01, 0.015, 0.05], [0.12, 0.2, 0.45]),
@@ -238,14 +245,45 @@ fn globals(f: &FrameInput, aspect: f32) -> Globals {
     };
     let t = f.time;
     let spin = t * 0.6;
-    let orb = |phase: f32, r: f32, y: f32| [r * (t * 0.7 + phase).cos(), y + 0.3 * (t * 1.3 + phase).sin(), r * (t * 0.7 + phase).sin()];
+    let orb = |phase: f32, r: f32, y: f32| {
+        [
+            r * (t * 0.7 + phase).cos(),
+            y + 0.3 * (t * 1.3 + phase).sin(),
+            r * (t * 0.7 + phase).sin(),
+        ]
+    };
     let specs: [(Mat4, [f32; 4], f32, f32); 6] = [
         (trs([0.0; 3], 0.0, 0.0, 1.0), [1.0; 4], 0.0, 1.0),
-        (trs([-2.4, 1.2, 0.0], spin, 0.9, 1.0), [0.95, 0.25, 0.6, 1.0], 0.0, 0.0),
-        (trs([0.0, 1.1, -1.2], 0.0, 0.0, 1.0), [0.2, 0.75, 0.95, 1.0], 0.0, 0.0),
-        (trs([2.4, 0.9, 0.4], -spin * 0.8, spin * 0.5, 0.9), [0.98, 0.68, 0.25, 1.0], 0.0, 0.0),
-        (trs(orb(0.0, 3.4, 1.6), 0.0, 0.0, 0.22), [1.0, 0.3, 0.75, 1.0], 1.0, 0.0),
-        (trs(orb(3.14, 3.0, 2.1), 0.0, 0.0, 0.18), [0.3, 0.65, 1.0, 1.0], 1.0, 0.0),
+        (
+            trs([-2.4, 1.2, 0.0], spin, 0.9, 1.0),
+            [0.95, 0.25, 0.6, 1.0],
+            0.0,
+            0.0,
+        ),
+        (
+            trs([0.0, 1.1, -1.2], 0.0, 0.0, 1.0),
+            [0.2, 0.75, 0.95, 1.0],
+            0.0,
+            0.0,
+        ),
+        (
+            trs([2.4, 0.9, 0.4], -spin * 0.8, spin * 0.5, 0.9),
+            [0.98, 0.68, 0.25, 1.0],
+            0.0,
+            0.0,
+        ),
+        (
+            trs(orb(0.0, 3.4, 1.6), 0.0, 0.0, 0.22),
+            [1.0, 0.3, 0.75, 1.0],
+            1.0,
+            0.0,
+        ),
+        (
+            trs(orb(3.14, 3.0, 2.1), 0.0, 0.0, 0.18),
+            [0.3, 0.65, 1.0, 1.0],
+            1.0,
+            0.0,
+        ),
     ];
     let mut objs = [Obj::zeroed(); 8];
     for (i, (model, color, emissive, ground)) in specs.into_iter().enumerate() {
@@ -266,7 +304,10 @@ fn globals(f: &FrameInput, aspect: f32) -> Globals {
     }
 }
 
-fn pipelines(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> (wgpu::RenderPipeline, wgpu::RenderPipeline) {
+fn pipelines(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+) -> (wgpu::RenderPipeline, wgpu::RenderPipeline) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("glass-demo-shader"),
         source: wgpu::ShaderSource::Wgsl(include_str!("scene.wgsl").into()),
@@ -315,8 +356,20 @@ fn pipelines(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> (wgpu::Re
             cache: None,
         })
     };
-    let sky = make("vs_sky", "fs_sky", &[], false, wgpu::CompareFunction::Always);
-    let mesh = make("vs_mesh", "fs_mesh", &vertex_layout, true, wgpu::CompareFunction::Less);
+    let sky = make(
+        "vs_sky",
+        "fs_sky",
+        &[],
+        false,
+        wgpu::CompareFunction::Always,
+    );
+    let mesh = make(
+        "vs_mesh",
+        "fs_mesh",
+        &vertex_layout,
+        true,
+        wgpu::CompareFunction::Less,
+    );
     (sky, mesh)
 }
 
@@ -328,7 +381,10 @@ fn build_meshes() -> (Vec<Vertex>, Vec<u32>, [u32; 6]) {
     let mut tris = [0u32; 6];
     let mut add = |obj: u32, (pv, pi): (Vec<([f32; 3], [f32; 3])>, Vec<u32>)| {
         let base = v.len() as u32;
-        v.extend(pv.into_iter().map(|(pos, normal)| Vertex { pos, normal, obj }));
+        v.extend(
+            pv.into_iter()
+                .map(|(pos, normal)| Vertex { pos, normal, obj }),
+        );
         tris[obj as usize] = pi.len() as u32 / 3;
         idx.extend(pi.into_iter().map(|i| i + base));
     };
@@ -346,7 +402,15 @@ type Mesh = (Vec<([f32; 3], [f32; 3])>, Vec<u32>);
 fn plane(half: f32) -> Mesh {
     let n = [0.0, 1.0, 0.0];
     let p = |x, z| ([x, 0.0, z], n);
-    (vec![p(-half, -half), p(-half, half), p(half, half), p(half, -half)], vec![0, 1, 2, 0, 2, 3])
+    (
+        vec![
+            p(-half, -half),
+            p(-half, half),
+            p(half, half),
+            p(half, -half),
+        ],
+        vec![0, 1, 2, 0, 2, 3],
+    )
 }
 
 fn sphere(r: f32, seg: u32, rings: u32) -> Mesh {
@@ -427,13 +491,24 @@ fn mul(a: Mat4, b: Mat4) -> Mat4 {
 fn perspective(fovy: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
     let f = 1.0 / (fovy * 0.5).tan();
     let nf = 1.0 / (near - far);
-    [[f / aspect, 0.0, 0.0, 0.0], [0.0, f, 0.0, 0.0], [0.0, 0.0, far * nf, -1.0], [0.0, 0.0, near * far * nf, 0.0]]
+    [
+        [f / aspect, 0.0, 0.0, 0.0],
+        [0.0, f, 0.0, 0.0],
+        [0.0, 0.0, far * nf, -1.0],
+        [0.0, 0.0, near * far * nf, 0.0],
+    ]
 }
 
 fn look_at(eye: [f32; 3], target: [f32; 3]) -> Mat4 {
     let sub = |a: [f32; 3], b: [f32; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    let cross = |a: [f32; 3], b: [f32; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let cross = |a: [f32; 3], b: [f32; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
     let norm = |a: [f32; 3]| {
         let l = dot(a, a).sqrt().max(1e-6);
         [a[0] / l, a[1] / l, a[2] / l]
@@ -441,7 +516,12 @@ fn look_at(eye: [f32; 3], target: [f32; 3]) -> Mat4 {
     let f = norm(sub(target, eye));
     let s = norm(cross(f, [0.0, 1.0, 0.0]));
     let u = cross(s, f);
-    [[s[0], u[0], -f[0], 0.0], [s[1], u[1], -f[1], 0.0], [s[2], u[2], -f[2], 0.0], [-dot(s, eye), -dot(u, eye), dot(f, eye), 1.0]]
+    [
+        [s[0], u[0], -f[0], 0.0],
+        [s[1], u[1], -f[1], 0.0],
+        [s[2], u[2], -f[2], 0.0],
+        [-dot(s, eye), -dot(u, eye), dot(f, eye), 1.0],
+    ]
 }
 
 /// Translation * RotY(yaw) * RotX(pitch) * uniform scale.

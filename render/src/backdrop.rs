@@ -65,17 +65,26 @@ impl BackdropBlur {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("kathamo-backdrop-layout"),
             entries: &[
-                entry(0, wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                }),
-                entry(1, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering)),
-                entry(2, wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                }),
+                entry(
+                    0,
+                    wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                ),
+                entry(
+                    1,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ),
+                entry(
+                    2,
+                    wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                ),
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -115,7 +124,8 @@ impl BackdropBlur {
         });
 
         // Down 0->1->..->N, then up N->..->1.
-        let mut plan: Vec<(bool, usize, usize)> = (0..BLUR_LEVELS).map(|n| (true, n, n + 1)).collect();
+        let mut plan: Vec<(bool, usize, usize)> =
+            (0..BLUR_LEVELS).map(|n| (true, n, n + 1)).collect();
         plan.extend((2..=BLUR_LEVELS).rev().map(|n| (false, n, n - 1)));
         let mut params = Vec::new();
         let passes = plan
@@ -251,9 +261,15 @@ mod tests {
         assert_eq!(at(161, 20), 0xFF00_FF00);
         // Inside, the edge is blurred: both colours mix on each side.
         let (lr, lg) = r_g(at(158, 100));
-        assert!(lr < 250 && lg > 5, "left of edge not blurred: r={lr} g={lg}");
+        assert!(
+            lr < 250 && lg > 5,
+            "left of edge not blurred: r={lr} g={lg}"
+        );
         let (rr, rg) = r_g(at(161, 100));
-        assert!(rr > 5 && rg < 250, "right of edge not blurred: r={rr} g={rg}");
+        assert!(
+            rr > 5 && rg < 250,
+            "right of edge not blurred: r={rr} g={rg}"
+        );
     }
 
     fn r_g(p: u32) -> (u32, u32) {

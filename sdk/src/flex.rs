@@ -14,9 +14,7 @@
 //! ```
 //! `fixed` sizes along the parent's main axis; the cross axis stretches, as in CSS.
 
-use taffy::prelude::{
-    length, AvailableSpace, FlexDirection, NodeId, Size, Style, TaffyTree,
-};
+use taffy::prelude::{length, AvailableSpace, FlexDirection, NodeId, Size, Style, TaffyTree};
 use ui_core::{Rect, Vec2};
 
 /// One box in the layout tree.
@@ -167,9 +165,15 @@ fn collect(
     let Ok(l) = tree.layout(id) else {
         return;
     };
-    let origin = Vec2::new(parent_origin.x + l.location.x, parent_origin.y + l.location.y);
+    let origin = Vec2::new(
+        parent_origin.x + l.location.x,
+        parent_origin.y + l.location.y,
+    );
     if let Some((_, key)) = keys.iter().find(|(n, _)| *n == id) {
-        out.push((key, Rect::from_min_size(origin, Vec2::new(l.size.width, l.size.height))));
+        out.push((
+            key,
+            Rect::from_min_size(origin, Vec2::new(l.size.width, l.size.height)),
+        ));
     }
     if let Ok(children) = tree.children(id) {
         for child in children {

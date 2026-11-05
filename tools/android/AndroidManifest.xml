@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NativeActivity APK: no Java/Kotlin code, the activity loads lib@LIB@.so and calls
+     android_main. build_apk.ps1 fills in the at-sign placeholders below. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="@PACKAGE@" android:versionCode="1" android:versionName="0.1.0">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+@PERMISSIONS@
+    <application android:label="@LABEL@" android:hasCode="false"
+        android:extractNativeLibs="true" android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity android:name="android.app.NativeActivity" android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|density|uiMode"
+            android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
+            <meta-data android:name="android.app.lib_name" android:value="@LIB@" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -18,3 +18,7 @@ resvg = { version = "0.48.1", default-features = false }
 
 [dev-dependencies]
 naga = { version = "22.1", features = ["wgsl-in"] }
+
+[features]
+# Compile the core fonts into the binary (always on for Android).
+embedded-fonts = []

@@ -47,6 +47,14 @@ impl LoadedFont {
         // Fonts live for the whole process; leaking gives us `'static` faces for both
         // the shaper and the rasterizer without self-referential structs.
         let data: &'static [u8] = Box::leak(bytes.into_boxed_slice());
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        Self::from_static(name, data)
+    }
+
+    fn from_static(file_name: String, data: &'static [u8]) -> Option<Self> {
         let shaper = rustybuzz::Face::from_slice(data, 0)?;
         let outlines = FontRef::try_from_slice(data).ok()?;
         let units_per_em = shaper.units_per_em() as f32;
@@ -60,10 +68,7 @@ impl LoadedFont {
             .filter(|h| *h > 0.2)
             .unwrap_or(0.72);
         Some(Self {
-            file_name: path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default(),
+            file_name,
             shaper,
             outlines,
             units_per_em,
@@ -113,6 +118,18 @@ const BENGALI: &str = "NotoSansBengali.ttf";
 const MONO: &str = "JetBrainsMono-Regular.ttf";
 const FALLBACK_CHAIN: [&str; 2] = [MONO, "NotoEmoji.ttf"];
 
+/// Fonts compiled into the binary (Android, or the `embedded-fonts` feature). The
+/// 2 MB emoji face is left out to keep app packages small.
+#[cfg(any(target_os = "android", feature = "embedded-fonts"))]
+const EMBEDDED_FONTS: &[(&str, &[u8])] = &[
+    (REGULAR, include_bytes!("../../assets/fonts/Inter-Regular.ttf")),
+    (STRONG, include_bytes!("../../assets/fonts/Inter-SemiBold.ttf")),
+    (BENGALI, include_bytes!("../../assets/fonts/NotoSansBengali.ttf")),
+    (MONO, include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf")),
+];
+#[cfg(not(any(target_os = "android", feature = "embedded-fonts")))]
+const EMBEDDED_FONTS: &[(&str, &[u8])] = &[];
+
 impl FontSet {
     fn discover() -> Self {
         let dir = find_fonts_dir();
@@ -125,11 +142,19 @@ impl FontSet {
             bengali: None,
             fallbacks: Vec::new(),
         };
-        let Some(dir) = dir else {
+        // Phones and sandboxed installs have no fonts folder beside the binary, so a
+        // build with embedded fonts uses those when no folder is found.
+        if dir.is_none() && EMBEDDED_FONTS.is_empty() {
             return set;
-        };
+        }
         let mut load = |name: &str| -> Option<usize> {
-            let font = LoadedFont::load(&dir.join(name))?;
+            let font = match &dir {
+                Some(dir) => LoadedFont::load(&dir.join(name))?,
+                None => {
+                    let (_, data) = EMBEDDED_FONTS.iter().find(|(n, _)| *n == name)?;
+                    LoadedFont::from_static(name.to_owned(), data)?
+                }
+            };
             set.fonts.push(font);
             Some(set.fonts.len() - 1)
         };

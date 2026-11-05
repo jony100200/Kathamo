@@ -10,6 +10,8 @@ members = [
     "testkit",
     "lab",
     "sdk",
+    "examples/android_demo",
+    "examples/setu_remote",
 ]
 default-members = ["lab"]
 

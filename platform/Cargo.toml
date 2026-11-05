@@ -10,3 +10,8 @@ ui-core = { path = "../core" }
 winit = "0.30"
 accesskit = "0.16"
 accesskit_winit = "0.22"
+
+# Android: winit needs an activity glue. NativeActivity needs no Java code, so the
+# APK is just a manifest plus the Rust .so (see tools/android/build_apk.ps1).
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { version = "0.30", features = ["android-native-activity"] }

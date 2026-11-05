@@ -29,6 +29,28 @@ pub enum WindowRequest {
     },
 }
 
+/// Wakes the UI thread from any thread so it draws a new frame, for example when
+/// a network reply arrives. Clone it into worker threads; `wake()` is cheap and
+/// does nothing once the app has closed.
+#[derive(Clone)]
+pub struct UiWaker(Arc<dyn Fn() + Send + Sync>);
+
+impl UiWaker {
+    pub fn new(wake: impl Fn() + Send + Sync + 'static) -> Self {
+        Self(Arc::new(wake))
+    }
+
+    pub fn wake(&self) {
+        (self.0)()
+    }
+}
+
+impl std::fmt::Debug for UiWaker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("UiWaker")
+    }
+}
+
 /// Unified runtime context provided to applications on each frame.
 pub struct AppContext {
     pub window_id: String,
@@ -36,6 +58,9 @@ pub struct AppContext {
     pub scale: f32,
     pub physical_size: (u32, u32),
     pub viewport: Rect,
+    /// Part of the viewport not covered by system UI (phone status bar, gesture
+    /// bar, display cutout). Equal to `viewport` on desktop. Lay out inside it.
+    pub safe_area: Rect,
     pub pointer: PointerState,
     pub focus: FocusManager,
     pub theme: ThemePalette,
@@ -43,6 +68,12 @@ pub struct AppContext {
     pub frame_count: u64,
     pub images: HashMap<u64, ImageFrame>,
     next_image_version: u64,
+    /// Set by the platform runner: wakes the UI from other threads.
+    pub(crate) waker: Option<UiWaker>,
+    /// Set by the platform runner: a private, writable folder for this app.
+    pub(crate) data_dir: Option<std::path::PathBuf>,
+    /// The app wants text typed: phones show the on-screen keyboard while true.
+    pub(crate) text_input_wanted: bool,
 }
 
 impl Default for AppContext {
@@ -61,6 +92,7 @@ impl AppContext {
             scale,
             physical_size: (width, height),
             viewport: Rect::from_min_size(Vec2::ZERO, Vec2::new(logical_w, logical_h)),
+            safe_area: Rect::from_min_size(Vec2::ZERO, Vec2::new(logical_w, logical_h)),
             pointer: PointerState::default(),
             focus: FocusManager::new(),
             theme: ThemePalette::dark(),
@@ -68,7 +100,36 @@ impl AppContext {
             frame_count: 0,
             images: HashMap::new(),
             next_image_version: 0,
+            waker: None,
+            data_dir: None,
+            text_input_wanted: false,
         }
+    }
+
+    /// Handle that redraws the UI from any thread. `None` in headless runs.
+    pub fn waker(&self) -> Option<UiWaker> {
+        self.waker.clone()
+    }
+
+    /// Private folder where the app may keep settings and caches. On Android it
+    /// is the app's internal storage; on desktop a per-app folder under the
+    /// user's data directory. `None` when the platform gives none (headless).
+    pub fn data_dir(&self) -> Option<&std::path::Path> {
+        self.data_dir.as_deref()
+    }
+
+    /// Ask for text entry. On a phone this shows the on-screen keyboard while
+    /// `true` and hides it when `false`; typed text arrives through
+    /// `KathamoApp::handle_text_input`. Desktop keyboards are always available.
+    /// When the user closes the keyboard outside the app (Android's Back), the
+    /// platform clears the request: check `text_input_wanted()` each frame and
+    /// drop text focus when it turns false.
+    pub fn set_text_input(&mut self, wanted: bool) {
+        self.text_input_wanted = wanted;
+    }
+
+    pub fn text_input_wanted(&self) -> bool {
+        self.text_input_wanted
     }
 
     /// Register or update an RGBA8 image for use with DrawCommand::Image.
@@ -134,11 +195,18 @@ impl AppContext {
             Vec2::ZERO,
             Vec2::new(width as f32 / scale, height as f32 / scale),
         );
+        // The platform runner re-applies system insets after a resize.
+        self.safe_area = self.viewport;
     }
 
     /// Logical bounding rectangle of the application window.
     pub fn bounds(&self) -> Rect {
         self.viewport
+    }
+
+    /// Logical rectangle free of system UI; same as `bounds()` on desktop.
+    pub fn safe_bounds(&self) -> Rect {
+        self.safe_area
     }
 
     /// Active theme palette reference.
@@ -304,6 +372,21 @@ impl<A: KathamoApp> HeadlessAppRunner<A> {
     pub fn new(mut app: A) -> Self {
         let (width, height) = app.default_size();
         let mut ctx = AppContext::new(width, height, 1.0);
+        app.init(&mut ctx);
+        Self { app, ctx }
+    }
+
+    /// Like `new`, with a waker and a data folder, so tests can cover worker
+    /// threads and saved settings the way the native runners provide them.
+    pub fn with_platform(
+        mut app: A,
+        waker: Option<UiWaker>,
+        data_dir: Option<std::path::PathBuf>,
+    ) -> Self {
+        let (width, height) = app.default_size();
+        let mut ctx = AppContext::new(width, height, 1.0);
+        ctx.waker = waker;
+        ctx.data_dir = data_dir;
         app.init(&mut ctx);
         Self { app, ctx }
     }

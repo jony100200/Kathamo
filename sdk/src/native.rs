@@ -4,13 +4,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ui_core::Vec2;
+use ui_core::{Rect, Vec2};
 use ui_platform::{
     winit::{
         application::ApplicationHandler,
         dpi::LogicalSize,
-        event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent},
-        event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+        event::{ElementState, Ime, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
+        event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
         keyboard::{Key as WinitKey, NamedKey},
         window::{Window, WindowAttributes, WindowId},
     },
@@ -18,7 +18,7 @@ use ui_platform::{
 };
 use ui_render::{CpuBackend, GpuBackend, RenderBackend, SoftwarePresenter};
 
-use crate::app::{AppContext, KathamoApp, WindowRequest};
+use crate::app::{AppContext, KathamoApp, UiWaker, WindowRequest};
 
 /// Runs a `KathamoApp` in a real OS window, with GPU rendering and CPU fallback.
 pub fn run_native<A: KathamoApp>(app: A) -> Result<(), String> {
@@ -26,9 +26,150 @@ pub fn run_native<A: KathamoApp>(app: A) -> Result<(), String> {
         return crate::snapshot::snapshot_png(app, std::path::Path::new(&path));
     }
     let event_loop = EventLoop::new().map_err(|e| e.to_string())?;
+    run_on_event_loop(app, event_loop)
+}
+
+fn run_on_event_loop<A: KathamoApp>(app: A, event_loop: EventLoop<()>) -> Result<(), String> {
     event_loop.set_control_flow(ControlFlow::Wait);
-    let mut runner = NativeAppRunner::new(app);
+    let data_dir = desktop_data_dir(app.title());
+    let waker = waker_for(event_loop.create_proxy());
+    let mut runner = NativeAppRunner::with_platform(app, Some(waker), data_dir);
     event_loop.run_app(&mut runner).map_err(|e| e.to_string())
+}
+
+/// A `UiWaker` that posts an empty user event; `user_event` then redraws.
+fn waker_for(proxy: EventLoopProxy<()>) -> UiWaker {
+    let proxy = std::sync::Mutex::new(proxy);
+    UiWaker::new(move || {
+        if let Ok(proxy) = proxy.lock() {
+            let _ = proxy.send_event(());
+        }
+    })
+}
+
+/// Per-app data folder on desktop: `<user data dir>/Kathamo/<app title>`. The
+/// folder is not created here; apps call `create_dir_all` before writing.
+fn desktop_data_dir(title: &str) -> Option<std::path::PathBuf> {
+    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    let base = if cfg!(windows) {
+        env("APPDATA")?
+    } else if cfg!(target_os = "macos") {
+        env("HOME")?.join("Library").join("Application Support")
+    } else {
+        env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local").join("share")))?
+    };
+    Some(base.join("Kathamo").join(app_folder_name(title)))
+}
+
+/// File-system-safe folder name from an app title.
+fn app_folder_name(title: &str) -> String {
+    let name: String = title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    let name = name.trim_matches('_').to_string();
+    if name.is_empty() { "app".into() } else { name }
+}
+
+/// The Android activity handle passed to `android_main`.
+#[cfg(target_os = "android")]
+pub use ui_platform::winit::platform::android::activity::AndroidApp;
+
+/// Runs a `KathamoApp` inside an Android NativeActivity. Call it from the
+/// `#[no_mangle] fn android_main(app: AndroidApp)` of a `cdylib` crate.
+/// stderr (and panics) appear in `adb logcat -s RustStdoutStderr`.
+///
+/// When the activity finishes (Back, `finish()`), the process exits: winit allows
+/// one event loop per process, so a relaunch needs a fresh process anyway, and
+/// Android blocks `onDestroy` until this thread is gone (see `android.rs`).
+#[cfg(target_os = "android")]
+pub fn run_android<A: KathamoApp>(app: A, android_app: AndroidApp) -> Result<(), String> {
+    use ui_platform::winit::platform::android::EventLoopBuilderExtAndroid;
+    let event_loop = EventLoop::builder()
+        .with_android_app(android_app.clone())
+        .build()
+        .map_err(|e| e.to_string())?;
+    event_loop.set_control_flow(ControlFlow::Wait);
+    let data_dir = android_app.internal_data_path();
+    let waker = waker_for(event_loop.create_proxy());
+    let mut runner = NativeAppRunner::with_platform(app, Some(waker), data_dir);
+    runner.android_app = Some(android_app);
+    let result = event_loop.run_app(&mut runner).map_err(|e| e.to_string());
+    if runner.finishing {
+        crate::android::exit_process_now(0);
+    }
+    result
+}
+
+/// What one touch event means for the single-pointer UI model: the first finger
+/// down acts as the primary mouse button; other fingers are ignored.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum TouchAction {
+    Press,
+    Move,
+    Release,
+    Ignore,
+}
+
+fn touch_action(active: &mut Option<u64>, id: u64, phase: TouchPhase) -> TouchAction {
+    match phase {
+        TouchPhase::Started if active.is_none() => {
+            *active = Some(id);
+            TouchAction::Press
+        }
+        TouchPhase::Moved if *active == Some(id) => TouchAction::Move,
+        TouchPhase::Ended | TouchPhase::Cancelled if *active == Some(id) => {
+            *active = None;
+            TouchAction::Release
+        }
+        _ => TouchAction::Ignore,
+    }
+}
+
+/// A finger drag that no widget claimed scrolls instead, in the same units as a
+/// precise trackpad (pixels / 20). Content follows the finger: dragging down
+/// gives a positive delta, like turning the wheel up.
+/// Space a shown on-screen keyboard takes from the bottom, at least (logical px).
+/// Larger than any gesture bar, smaller than any keyboard.
+const KEYBOARD_MIN_INSET: f32 = 120.0;
+
+/// Tracks the on-screen keyboard through the safe area: once a requested
+/// keyboard has taken space (`seen`), getting that space back means the user
+/// closed it outside the app. Returns true at that moment.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn keyboard_was_dismissed(shown: bool, seen: &mut bool, safe_bottom: f32, full_bottom: f32) -> bool {
+    if !shown {
+        *seen = false;
+        return false;
+    }
+    let covered = full_bottom - safe_bottom >= KEYBOARD_MIN_INSET;
+    if covered {
+        *seen = true;
+        return false;
+    }
+    std::mem::take(seen)
+}
+
+fn touch_scroll_delta(finger_delta: Vec2) -> Vec2 {
+    Vec2::new(finger_delta.x / 20.0, finger_delta.y / 20.0)
+}
+
+/// Logical safe area from Android's content rect (physical px, `left, top,
+/// right, bottom`), which excludes the status bar, gesture bar and cutout. An
+/// empty rect (not reported yet) or one outside the window means "whole window".
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn safe_area_from_content_rect(content: (i32, i32, i32, i32), physical: (u32, u32), scale: f32) -> Rect {
+    let (w, h) = (physical.0 as f32, physical.1 as f32);
+    let full = Rect::from_min_size(Vec2::ZERO, Vec2::new(w / scale, h / scale));
+    let (l, t, r, b) = (content.0 as f32, content.1 as f32, content.2 as f32, content.3 as f32);
+    if r <= l || b <= t {
+        return full;
+    }
+    let (l, t, r, b) = (l.clamp(0.0, w), t.clamp(0.0, h), r.clamp(0.0, w), b.clamp(0.0, h));
+    if r <= l || b <= t {
+        return full;
+    }
+    Rect::from_min_max(Vec2::new(l / scale, t / scale), Vec2::new(r / scale, b / scale))
 }
 
 /// Owns the native presentation and input lifecycle. No UI Lab dependency.
@@ -47,12 +188,35 @@ pub struct NativeAppRunner<A: KathamoApp> {
     last_frame: Option<Instant>,
     wake_at: Option<Instant>,
     occluded: bool,
+    touch_id: Option<u64>,
+    #[cfg(target_os = "android")]
+    android_app: Option<AndroidApp>,
+    /// Set when the platform is closing the app for good; the loop is exiting.
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    finishing: bool,
+    /// Whether the phone's on-screen keyboard is currently requested.
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    keyboard_shown: bool,
+    /// The requested keyboard has been seen taking screen space.
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    keyboard_inset_seen: bool,
 }
 
 impl<A: KathamoApp> NativeAppRunner<A> {
-    pub fn new(mut app: A) -> Self {
+    pub fn new(app: A) -> Self {
+        Self::with_platform(app, None, None)
+    }
+
+    /// Like `new`, with the platform services the app sees from `init` onward.
+    pub fn with_platform(
+        mut app: A,
+        waker: Option<UiWaker>,
+        data_dir: Option<std::path::PathBuf>,
+    ) -> Self {
         let (width, height) = app.default_size();
         let mut ctx = AppContext::new(width, height, 1.0);
+        ctx.waker = waker;
+        ctx.data_dir = data_dir;
         app.init(&mut ctx);
         ui_core::motion::set_instant(false);
         Self {
@@ -70,6 +234,12 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             last_frame: None,
             wake_at: None,
             occluded: false,
+            touch_id: None,
+            #[cfg(target_os = "android")]
+            android_app: None,
+            finishing: false,
+            keyboard_shown: false,
+            keyboard_inset_seen: false,
         }
     }
 
@@ -88,10 +258,61 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         let size = window.inner_size();
         let scale = window.scale_factor() as f32;
         self.ctx.resize(size.width, size.height, scale);
+        self.sync_safe_area();
         if let Some(gpu) = &mut self.gpu {
             gpu.set_scale_factor(scale);
         }
         self.cpu.set_scale_factor(scale);
+    }
+
+    /// Android: winit drops `ContentRectChanged`, so the content rect is read
+    /// again before every frame. Returns true when the safe area changed.
+    #[cfg(target_os = "android")]
+    fn sync_safe_area(&mut self) -> bool {
+        let Some(app) = &self.android_app else {
+            return false;
+        };
+        let r = app.content_rect();
+        let safe = safe_area_from_content_rect(
+            (r.left, r.top, r.right, r.bottom),
+            self.ctx.physical_size,
+            self.ctx.scale,
+        );
+        if safe == self.ctx.safe_area {
+            return false;
+        }
+        self.ctx.safe_area = safe;
+        let full_bottom = self.ctx.viewport.max.y;
+        if keyboard_was_dismissed(self.keyboard_shown, &mut self.keyboard_inset_seen, safe.max.y, full_bottom) {
+            // Android's own Back (or the keyboard's hide key) closed it: drop the
+            // request so the app sees `text_input_wanted() == false`.
+            self.keyboard_shown = false;
+            self.ctx.text_input_wanted = false;
+        }
+        true
+    }
+
+    #[cfg(not(target_os = "android"))]
+    fn sync_safe_area(&mut self) -> bool {
+        false
+    }
+
+    /// Android: show or hide the on-screen keyboard when the app's request
+    /// (`AppContext::set_text_input`) changes. Desktop keyboards need nothing.
+    fn sync_keyboard(&mut self) {
+        #[cfg(target_os = "android")]
+        if let Some(app) = &self.android_app {
+            let wanted = self.ctx.text_input_wanted;
+            if wanted != self.keyboard_shown {
+                if wanted {
+                    app.show_soft_input(false);
+                } else {
+                    app.hide_soft_input(false);
+                }
+                self.keyboard_shown = wanted;
+                self.keyboard_inset_seen = false;
+            }
+        }
     }
 
     fn upload_frames_gpu(&mut self) -> Result<(), String> {
@@ -341,6 +562,7 @@ impl<A: KathamoApp> NativeAppRunner<A> {
         self.ctx.cmd_buf.clear();
         self.ctx.frame_count = self.ctx.frame_count.wrapping_add(1);
         self.app.update(&mut self.ctx);
+        self.sync_keyboard();
         if let Some(t) = ui_core::motion::take_wake_deadline() {
             self.wake_at = Some(self.wake_at.map_or(t, |w| w.min(t)));
         }
@@ -414,6 +636,8 @@ fn key_from_winit(key: &WinitKey) -> Key {
         WinitKey::Named(NamedKey::End) => Key::Custom("End".into()),
         WinitKey::Named(NamedKey::PageUp) => Key::Custom("PageUp".into()),
         WinitKey::Named(NamedKey::PageDown) => Key::Custom("PageDown".into()),
+        // Android's Back button (winit reports it as the browser key).
+        WinitKey::Named(NamedKey::BrowserBack) => Key::Custom("Back".into()),
         _ => Key::Custom(format!("{key:?}")),
     }
 }
@@ -436,6 +660,9 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                 eprintln!("[Kathamo Native] OS window created: {:?}", window.id());
                 let window = Arc::new(window);
                 self.update_size(&window);
+                // On Android this would pop up the on-screen keyboard; there the
+                // app asks for it with `AppContext::set_text_input` instead.
+                #[cfg(not(target_os = "android"))]
                 window.set_ime_allowed(true);
                 match SoftwarePresenter::new(window.clone()) {
                     Ok(presenter) => self.presenter = Some(presenter),
@@ -470,6 +697,35 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                 eprintln!("[Kathamo Native] could not create window: {err}");
                 event_loop.exit();
             }
+        }
+    }
+
+    /// Android (and iOS) destroy the native surface when the app goes to the
+    /// background. Drop everything tied to it; `resumed` builds it again, and the
+    /// app state in `self.app` / `self.ctx` survives.
+    fn suspended(&mut self, event_loop: &ActiveEventLoop) {
+        #[cfg(target_os = "android")]
+        if let Some(app) = &self.android_app {
+            if crate::android::activity_is_finishing(app) {
+                self.finishing = true;
+                event_loop.exit();
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        let _ = event_loop;
+        self.gpu = None;
+        self.presenter = None;
+        self.window = None;
+        self.revealed = false;
+        self.gpu_images_uploaded.clear();
+        self.touch_id = None;
+        self.keyboard_shown = false;
+        for button in [
+            PointerButton::Primary,
+            PointerButton::Secondary,
+            PointerButton::Middle,
+        ] {
+            self.ctx.pointer.on_button_up(button);
         }
     }
 
@@ -525,6 +781,41 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     window.request_redraw();
                 }
             }
+            WindowEvent::Touch(touch) => {
+                let scale = self.ctx.scale;
+                let pos = Vec2::new(
+                    touch.location.x as f32 / scale,
+                    touch.location.y as f32 / scale,
+                );
+                let delta = pos - self.ctx.pointer.position;
+                match touch_action(&mut self.touch_id, touch.id, touch.phase) {
+                    TouchAction::Press => {
+                        // A finger has no hover: move there first so widgets see the
+                        // press at the right place.
+                        self.ctx.pointer.on_move(pos);
+                        self.app.handle_mouse_move(pos, delta, &mut self.ctx);
+                        self.ctx.pointer.on_button_down(PointerButton::Primary);
+                        self.app
+                            .handle_mouse_down(pos, PointerButton::Primary, &mut self.ctx);
+                    }
+                    TouchAction::Move => {
+                        self.ctx.pointer.on_move(pos);
+                        if !self.app.handle_mouse_move(pos, delta, &mut self.ctx) {
+                            let scroll = touch_scroll_delta(delta);
+                            self.ctx.pointer.scroll_delta = scroll;
+                            self.app.handle_scroll(scroll, pos, &mut self.ctx);
+                        }
+                    }
+                    TouchAction::Release => {
+                        self.ctx.pointer.on_move(pos);
+                        self.app
+                            .handle_mouse_up(pos, PointerButton::Primary, &mut self.ctx);
+                        self.ctx.pointer.on_button_up(PointerButton::Primary);
+                    }
+                    TouchAction::Ignore => {}
+                }
+                window.request_redraw();
+            }
             WindowEvent::MouseWheel { delta, .. } => {
                 let delta = match delta {
                     MouseScrollDelta::LineDelta(x, y) => Vec2::new(x, y),
@@ -559,6 +850,15 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                 if !consumed && key == Key::Tab {
                     self.ctx.focus.cycle_focus(self.modifiers.shift);
                 }
+                if !consumed && key == Key::Custom("Back".into()) {
+                    // Android: an unhandled Back closes the activity, as users
+                    // expect. `suspended` then sees `isFinishing` and ends the loop.
+                    #[cfg(target_os = "android")]
+                    if let Some(app) = &self.android_app {
+                        crate::android::finish_activity(app);
+                        return;
+                    }
+                }
                 if let Some(text) = event.text {
                     if accepts_key_text(text.as_str(), self.modifiers) {
                         self.app.handle_text_input(text.as_str(), &mut self.ctx);
@@ -580,6 +880,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                 }
             }
             WindowEvent::RedrawRequested => {
+                self.sync_safe_area();
                 match self.present() {
                     Ok(()) => {
                         if !self.revealed
@@ -602,7 +903,21 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
         self.process_window_requests(event_loop, requests);
     }
 
+    /// A `UiWaker` fired (usually from a worker thread): draw a fresh frame.
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: ()) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // Android: the keyboard opening or closing changes the content rect but
+        // winit sends no event for it, so check once per batch of events.
+        if self.sync_safe_area() {
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+        }
         let wake_due = match self.wake_at {
             Some(t) if Instant::now() >= t => {
                 self.wake_at = None;
@@ -751,6 +1066,70 @@ impl SecondaryWindow {
             .present(self.cpu.pixels(), width, height)?;
         self.ctx.pointer.step_frame();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod touch_tests {
+    use super::*;
+
+    #[test]
+    fn first_finger_drives_the_pointer_and_others_are_ignored() {
+        let mut active = None;
+        assert_eq!(touch_action(&mut active, 7, TouchPhase::Started), TouchAction::Press);
+        assert_eq!(touch_action(&mut active, 8, TouchPhase::Started), TouchAction::Ignore);
+        assert_eq!(touch_action(&mut active, 8, TouchPhase::Moved), TouchAction::Ignore);
+        assert_eq!(touch_action(&mut active, 7, TouchPhase::Moved), TouchAction::Move);
+        assert_eq!(touch_action(&mut active, 8, TouchPhase::Ended), TouchAction::Ignore);
+        assert_eq!(touch_action(&mut active, 7, TouchPhase::Cancelled), TouchAction::Release);
+        assert_eq!(active, None);
+        // After release a new finger takes over.
+        assert_eq!(touch_action(&mut active, 8, TouchPhase::Started), TouchAction::Press);
+    }
+
+    #[test]
+    fn unclaimed_drag_scrolls_with_the_finger() {
+        assert_eq!(touch_scroll_delta(Vec2::new(0.0, 40.0)), Vec2::new(0.0, 2.0));
+    }
+
+    #[test]
+    fn content_rect_becomes_a_logical_safe_area() {
+        // Status bar 84 px and gesture bar 42 px on a 720x1600 @1.75 screen.
+        let safe = safe_area_from_content_rect((0, 84, 720, 1558), (720, 1600), 1.75);
+        assert_eq!(safe.min, Vec2::new(0.0, 48.0));
+        assert_eq!(safe.max, Vec2::new(720.0 / 1.75, 1558.0 / 1.75));
+        // Not reported yet, or nonsense: the whole window.
+        let full = Rect::from_min_size(Vec2::ZERO, Vec2::new(400.0, 800.0));
+        assert_eq!(safe_area_from_content_rect((0, 0, 0, 0), (800, 1600), 2.0), full);
+        assert_eq!(safe_area_from_content_rect((900, 0, 1000, 10), (800, 1600), 2.0), full);
+    }
+
+    #[test]
+    fn keyboard_closed_by_the_system_is_noticed_once() {
+        let mut seen = false;
+        // Requested, not on screen yet: nothing to report.
+        assert!(!keyboard_was_dismissed(true, &mut seen, 868.0, 892.0));
+        // On screen: it takes ~300 px.
+        assert!(!keyboard_was_dismissed(true, &mut seen, 560.0, 892.0));
+        // Space returns while still requested: the user closed it.
+        assert!(keyboard_was_dismissed(true, &mut seen, 868.0, 892.0));
+        assert!(!keyboard_was_dismissed(true, &mut seen, 868.0, 892.0));
+        // Not requested: never reported.
+        assert!(!keyboard_was_dismissed(false, &mut seen, 560.0, 892.0));
+        assert!(!keyboard_was_dismissed(false, &mut seen, 868.0, 892.0));
+    }
+
+    #[test]
+    fn app_titles_become_safe_folder_names() {
+        assert_eq!(app_folder_name("Setu Remote"), "Setu_Remote");
+        assert_eq!(app_folder_name("../x"), "x");
+        assert_eq!(app_folder_name("সেতু"), "সেতু");
+        assert_eq!(app_folder_name("///"), "app");
+    }
+
+    #[test]
+    fn android_back_arrives_as_a_named_custom_key() {
+        assert_eq!(key_from_winit(&WinitKey::Named(NamedKey::BrowserBack)), Key::Custom("Back".into()));
     }
 }
 

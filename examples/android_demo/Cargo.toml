@@ -1,0 +1,18 @@
+[package]
+name = "kathamo-android-demo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Kathamo on a phone: touch, scrolling, Bengali text, GPU/CPU rendering"
+
+[lib]
+# cdylib = the .so the APK loads; rlib lets the desktop preview binary reuse the app.
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "kathamo-android-demo"
+path = "src/main.rs"
+
+[dependencies]
+kathamo = { path = "../../sdk" }

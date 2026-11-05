@@ -16,6 +16,13 @@ ui-text = { path = "../text" }
 ui-widgets = { path = "../widgets" }
 ui-testkit = { path = "../testkit" }
 taffy = { version = "0.15.1", default-features = false, features = ["std", "flexbox", "taffy_tree", "content_size"] }
+serde_json = { version = "1", optional = true }
+
+[features]
+# `kathamo::remote`: talk to a host app (Setu, Kolpona) over HTTP JSON-RPC / MCP,
+# for phone and tablet controllers. Plain HTTP only; use it over a private
+# network such as Tailscale, which encrypts the link.
+remote = ["dep:serde_json"]
 
 [[example]]
 name = "glass_viewport"
@@ -69,3 +76,7 @@ path = "../examples/agent_tui.rs"
 [dev-dependencies]
 wgpu = { version = "22.1", default-features = false, features = ["wgsl", "dx12", "metal"] }
 bytemuck = { version = "1.18", features = ["derive"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Raw JNI, to ask the activity `isFinishing()` (see src/android.rs).
+jni-sys = "0.3"

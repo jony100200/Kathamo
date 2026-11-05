@@ -31,6 +31,8 @@
 //! }
 //! ```
 
+#[cfg(target_os = "android")]
+mod android;
 pub mod app;
 pub mod components;
 pub mod designer;
@@ -41,6 +43,8 @@ pub mod inspect;
 pub mod layout;
 pub mod native;
 pub mod prelude;
+#[cfg(feature = "remote")]
+pub mod remote;
 pub mod runtime;
 pub mod snapshot;
 pub mod workspace;

@@ -100,6 +100,16 @@ That is a real, GPU-rendered native window.
 
 Kathamo is young and moving fast. It is built and tested on **Windows**. It should run on Linux, but that is not yet verified by the maintainer — if you try it, we would love to hear how it goes in an issue.
 
+**Android** runs too, tested on the Android 14 emulator; a real phone is next. The same `KathamoApp` becomes an APK with no Java code:
+
+```powershell
+pwsh tools/android/build_apk.ps1                     # touch demo, arm64 + x86_64
+pwsh tools/android/build_apk.ps1 -Crate kathamo-setu-remote -Package studio.kalponic.setu.remote `
+    -Label "Setu Remote" -Permission INTERNET -Install
+```
+
+What a phone app gets: touch (taps, drags, finger scrolling), `ctx.safe_bounds()` clear of the status and gesture bars, the on-screen keyboard on request (`ctx.set_text_input`), the Back button as `Key::Custom("Back")`, `ctx.waker()` to redraw from worker threads, and `ctx.data_dir()` for saved settings. The `remote` feature adds `kathamo::remote`, a small MCP client for controlling a host app such as Setu or Kolpona from the phone. It speaks plain HTTP, so use it over Tailscale or another private network and give the host a token. `examples/setu_remote` is a working controller. Typing in Bengali on the on-screen keyboard is untested and probably limited, because NativeActivity passes the keyboard's input on only as key events.
+
 ## Go deeper
 
 - **[Developer Guide](AGENT_GUIDE.md)** — architecture, components, layouts, SDK reference and measured benchmarks.

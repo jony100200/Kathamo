@@ -160,24 +160,73 @@ pub struct DraggingNode {
     pub offset: Vec2,
 }
 
+/// Header/accent colour for a node category.
+///
+/// Every category gets its own hue; lightness and saturation follow the theme
+/// (brighter on dark canvases, deeper on light ones), so headers stay readable
+/// in every palette. Unknown categories get a stable hue derived from the name.
 pub fn category_color(category: &str, palette: &ThemePalette) -> Color {
-    match category {
-        "Source" => Color::rgb(0x38, 0x8E, 0x3C), // Forest Green
-        "Processing" => Color::rgb(0x19, 0x76, 0xD2), // Cobalt Blue
-        "Material" => Color::rgb(0xF5, 0x7C, 0x00), // Vibrant Amber/Orange
-        "Output" => Color::rgb(0x7B, 0x1F, 0xA2), // Deep Purple
-        "Utility" => Color::rgb(0x60, 0x7D, 0x8B), // Slate Gray
-        _ => palette.accent,
-    }
+    let key = category.to_ascii_lowercase();
+    let (hue, saturation) = match key.as_str() {
+        "source" | "input" | "image" => (135.0, 1.0),
+        "processing" | "process" => (212.0, 1.0),
+        "filter" | "adjust" | "adjustment" => (176.0, 1.0),
+        "composite" | "blend" => (248.0, 1.0),
+        "material" | "pbr" => (32.0, 1.0),
+        "shader" => (330.0, 1.0),
+        "output" | "export" => (285.0, 1.0),
+        "ai" | "generate" | "diffusion" => (12.0, 1.0),
+        "utility" | "math" => (205.0, 0.35),
+        _ => (name_hue(&key), 0.9),
+    };
+    themed_hue(hue, saturation, palette)
 }
 
+/// Wire and pin colour for a socket type, themed like [`category_color`].
 pub fn pin_type_color(pin_type: &str, palette: &ThemePalette) -> Color {
-    match pin_type {
-        "Image" => Color::rgb(0x4C, 0xAF, 0x50),
-        "PbrSet" => Color::rgb(0xFF, 0x98, 0x00),
-        "Float" => Color::rgb(0x21, 0x96, 0xF3),
-        "Video" => Color::rgb(0x9C, 0x27, 0xB0),
-        "Any" => Color::rgb(0x9E, 0x9E, 0x9E),
-        _ => palette.accent,
-    }
+    let key = pin_type.to_ascii_lowercase();
+    let (hue, saturation) = match key.as_str() {
+        "image" => (135.0, 1.0),
+        "mask" => (55.0, 1.0),
+        "float" | "number" => (212.0, 1.0),
+        "color" => (345.0, 1.0),
+        "pbrset" | "pbrmaterial" | "material" => (32.0, 1.0),
+        "shaderwgsl" | "shader" => (330.0, 1.0),
+        "video" => (285.0, 1.0),
+        "any" => (0.0, 0.0),
+        _ => (name_hue(&key), 0.9),
+    };
+    themed_hue(hue, saturation, palette)
+}
+
+/// Stable hue for a name: one of 24 steps around the wheel (FNV-1a hash).
+fn name_hue(name: &str) -> f32 {
+    let hash = name
+        .bytes()
+        .fold(0x811c_9dc5_u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193));
+    (hash % 24) as f32 * 15.0
+}
+
+/// HSL colour whose lightness and saturation suit the palette's canvas.
+fn themed_hue(hue: f32, saturation_scale: f32, palette: &ThemePalette) -> Color {
+    let dark = palette.canvas.luminance() < 0.2;
+    let (saturation, lightness) = if dark { (0.62, 0.62) } else { (0.66, 0.40) };
+    hsl(hue, saturation * saturation_scale, lightness)
+}
+
+fn hsl(hue: f32, saturation: f32, lightness: f32) -> Color {
+    let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
+    let h = hue.rem_euclid(360.0) / 60.0;
+    let x = chroma * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (chroma, x, 0.0),
+        1 => (x, chroma, 0.0),
+        2 => (0.0, chroma, x),
+        3 => (0.0, x, chroma),
+        4 => (x, 0.0, chroma),
+        _ => (chroma, 0.0, x),
+    };
+    let m = lightness - chroma / 2.0;
+    let to_u8 = |v: f32| ((v + m).clamp(0.0, 1.0) * 255.0).round() as u8;
+    Color::rgb(to_u8(r), to_u8(g), to_u8(b))
 }

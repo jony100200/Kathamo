@@ -96,10 +96,34 @@ pub fn agent_card(
     readiness_tone: Tone,
     detail: &str,
 ) -> Interaction {
+    let mood = Mood::from_tone(readiness_tone);
+    agent_card_with_mood(
+        studio,
+        rect,
+        name,
+        source_label,
+        readiness_label,
+        readiness_tone,
+        mood,
+        detail,
+    )
+}
+
+/// Agent card whose mascot mood is chosen by the caller, for states the tone
+/// alone cannot tell apart (a usage limit warns in the pill but the mascot sleeps).
+pub fn agent_card_with_mood(
+    studio: &mut Studio,
+    rect: Rect,
+    name: &str,
+    source_label: &str,
+    readiness_label: &str,
+    readiness_tone: Tone,
+    mood: Mood,
+    detail: &str,
+) -> Interaction {
     let hit = studio.card(rect);
     let top_y = rect.min.y + SPACE_3;
     let av_rect = r_sq(rect.min.x + SPACE_3, top_y, 36.0);
-    let mood = Mood::from_tone(readiness_tone);
     mascot(studio, av_rect, name, mood, motion::clock());
 
     let pill_w = measure_text(readiness_label, 11.5, true) + 26.0;

@@ -125,3 +125,29 @@ fn tones_map_to_moods() {
     assert_eq!(Mood::from_tone(Tone::Bad), Mood::Error);
     assert_eq!(Mood::from_tone(Tone::Neutral), Mood::Sleeping);
 }
+
+#[test]
+fn agent_card_mood_overrides_tone() {
+    use crate::studio_parts::{agent_card, agent_card_with_mood};
+    motion::set_instant(true);
+    let draw = |mood: Option<Mood>| {
+        let mut buf = CommandBuffer::default();
+        let ptr = PointerState::default();
+        let mut s = Studio::new(
+            &mut buf,
+            ThemePalette::warm_paper(),
+            ExtendedTokens::for_mode(ThemeMode::WarmPaper),
+            &ptr,
+        );
+        let rect = Rect::from_min_size(Vec2::ZERO, Vec2::new(320.0, 120.0));
+        let (n, src, lbl, det) = ("codex", "CLI", "Limit reached", "resets at 14:00");
+        match mood {
+            Some(m) => agent_card_with_mood(&mut s, rect, n, src, lbl, Tone::Warning, m, det),
+            None => agent_card(&mut s, rect, n, src, lbl, Tone::Warning, det),
+        };
+        buf.commands().to_vec()
+    };
+    let by_tone = draw(None);
+    assert_eq!(by_tone, draw(Some(Mood::NeedsYou)));
+    assert_ne!(by_tone, draw(Some(Mood::Sleeping)));
+}

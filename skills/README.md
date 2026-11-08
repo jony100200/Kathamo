@@ -21,7 +21,7 @@ Always inspect the checked-out source and current public API before using exampl
 
 ## Repository and privacy boundary
 
-Only reusable, sanitized, publicly appropriate framework guidance belongs here. The owner's personal R&D, private reference material, screenshots, generated test files, private QA reports, logs, and agent session notes remain on the owner's machine **outside this repository**. Use the optional `KS_KATHAMO_PRIVATE` environment variable to point to that local-only directory. Do not commit, publish, upload, or paste its contents into remote tools.
+These skills use public Kathamo APIs and standard Rust tools. Keep private research, screenshots, session logs, and scratch files outside the public repository; no private Kalponic service or application is required to use them.
 
 No third-party implementation or interface is a source file for this project. Kathamo uses original terminology, public contracts, components and design decisions.
 

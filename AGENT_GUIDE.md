@@ -1,6 +1,6 @@
 # Kathamo (কাঠামো) — Agent & Developer Architecture Guide
 
-> **Official UI Framework Guide for AI Coding Agents (Dolil, Antigravity, Codex) and Human Developers.**  
+> **Public framework reference for Rust developers and AI coding agents.**
 > Maintained by **Kalponic Studio**. Distributed under the **MIT License**.
 
 ---
@@ -10,8 +10,8 @@
 **Kathamo (কাঠামো)** is a lightweight, commercial-grade, native Rust UI framework developed by Kalponic Studio. It is engineered specifically for desktop workstation applications (such as **Ojon**, **Cholpo**, and **Chobi**) that must run side-by-side with heavy local AI workloads (LLMs, VLMs, Diffusion models) on 1080p and 1440p displays.
 
 ### The Three Core Rules
-1. **Zero-Allocation Per Frame**: Never allocate heap vectors or strings inside render loops. All text commands and draw instructions use preallocated arenas and cached texture atlases.
-2. **Never Block the UI Thread**: Expensive background work (model scanning, quantization, tensor slicing, downloading) runs on worker threads via `TaskController`. The UI thread remains pinned at 120+ FPS with sub-3ms frame times.
+1. **Efficient Frame Work**: Reuse buffers and cached resources where possible. Avoid unnecessary per-frame allocations, and measure hotspots before claiming allocation-free rendering.
+2. **Keep the UI Responsive**: Run expensive operations on workers, report their state via `TaskController` or app-owned channels, and measure frame times on the target machine. No universal frame-rate guarantee is implied.
 3. **Declarative Layout Ergonomics**: Agents must describe layouts via high-level nested closures (`ui.horizontal`, `ui.columns`, `ui.glass_card`, `ui.model_card`), never manually calculating raw pixel bounding boxes.
 
 ---
@@ -485,9 +485,9 @@ cargo test --workspace
 
 ### Real-World Workstation Demonstration: Ojon (ওজন)
 
-Kathamo includes a full-fidelity implementation of **Ojon (ওজন)** — Kalponic Studio's local AI model quantization workstation ([github.com/jony100200/Ojon](https://github.com/jony100200/Ojon)).
+Kathamo includes an **Ojon-themed UI showcase** with fixed demonstration data. It demonstrates workstation layout and widgets, not model conversion or a connected Ojon runtime. The separate [Ojon project](https://github.com/jony100200/Ojon) implements model operations.
 
-Run the standalone example:
+Run the UI-only example:
 ```bash
 cargo run -p ui-lab --example ojon_workstation
 ```
@@ -499,23 +499,15 @@ cargo run -p ui-lab
 
 ---
 
-### Benchmark Gates & Measured Evidence (1,000 Frames @ 1440×900)
+### Performance and verification
 
-| Metric | Measured Result | Target Gate | Verdict |
-| :--- | :--- | :--- | :--- |
-| **p50 Frame Time** | **1.22 ms** | < 8.3 ms (120 Hz) | ✅ Excellent |
-| **p90 Frame Time** | **2.64 ms** | < 16.7 ms (60 Hz) | ✅ Excellent |
-| **p95 Frame Time** | **2.79 ms** | < 16.7 ms (60 Hz) | ✅ **PASS (6.0× Headroom)** |
-| **p99 Frame Time** | **3.26 ms** | < 16.7 ms (60 Hz) | ✅ Excellent |
-| **Frame Stalls (>16.7ms)** | **0** | 0 stalls | ✅ Perfect |
-| **RAM (private, `desktop_app --native`)** | **~170–180 MB** | — | Measured; mostly GPU driver |
-| **Discrete-GPU VRAM** | **0 MB** (UI runs on the integrated GPU) | Leave VRAM for models | ✅ |
-| **Idle CPU (no input, after hover animations)** | **0.00 %** over 10 s | 0 % | ✅ |
-| **GPU Recovery Fallback** | **Instant Safe Mode** | Zero panic / crash | ✅ Seamless Recovery |
-| **Presentation Flash** | **ZERO frames** | Zero white screen | ✅ Hidden until first paint |
+Framework performance depends on the application, graphics backend, display and machine. When performance matters, measure native frame time, idle CPU, memory and GPU selection on the target hardware. `ui-lab` exposes a local benchmark runner:
 
+```bash
+cargo run --release -p ui-lab -- --benchmark
+```
 
-RAM, VRAM and idle CPU were measured on Windows 11, on a laptop with an integrated and a discrete GPU, using Windows performance counters.
+These results are local measurements; they are not universal throughput or memory guarantees.
 
 #### GPU selection
 
@@ -632,7 +624,7 @@ Every interactive control shows: rest, hover (spring), pressed, focused (animate
 
 ### Craft: viewport
 
-A real 3D or video viewport renders into a wgpu texture in `KathamoApp::prepare_gpu` and is shown with `gpu.register_external_view(id, view)` plus `DrawCommand::Image` (zero copy). Output sRGB-encoded colour into `Rgba8Unorm`. See `sdk/examples/glass_viewport` for depth, MSAA, lighting and glass HUD panels over live 3D.
+A real 3D or video viewport renders into a wgpu texture in `KathamoApp::prepare_gpu` and is shown with `gpu.register_external_view(id, view)` plus `DrawCommand::Image` (zero copy). Output sRGB-encoded colour into `Rgba8Unorm`. See `examples/glass_viewport/` for depth, MSAA, lighting and glass HUD panels over live 3D.
 
 ### Craft: ux
 
@@ -709,5 +701,5 @@ Recipe for a new screen:
 3. Fill regions from the component catalog before writing custom drawing.
 4. Add every state: hover, press, focus, selected, disabled, empty, loading, error.
 5. Snapshot, run the review checklist, fix, re-shoot.
-6. Run the audit (`kathamo.audit` in Pothik) and clear its findings.
+6. Inspect the result using the public `InterfaceInspector`, a native snapshot, and real keyboard/pointer interaction.
 7. Measure RAM, VRAM and idle CPU; report only what you measured.

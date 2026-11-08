@@ -50,6 +50,6 @@ Kathamo is a **framework, not an application**. It must allow independent deskto
 
 ## Verification
 
-Run supported local formatting, build, lint and existing inline/unit tests where environment permits. Exercise real native interactions—click, hold, drag, type, paste, resize, dock, maximize, restore, save/reopen—and explicitly mark unrun checks. Keep QA screenshots, standalone tests, generated fixtures, logs and benchmarks **outside Git**, under `$KS_KATHAMO_PRIVATE`.
+Run supported local formatting, build, lint and existing inline/unit tests where environment permits. Exercise real native interactions—click, hold, drag, type, paste, resize, dock, maximize, restore, save/reopen—and explicitly mark unrun checks. Keep QA screenshots, standalone tests, generated fixtures, logs and benchmarks **outside Git**, in a local directory outside the repository.
 
 Before any commit, inspect an explicit changed-file allowlist. Never stage local-only materials. Do not push or publish without the owner's authorization.

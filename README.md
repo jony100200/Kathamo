@@ -6,6 +6,18 @@
 
 <p align="center"><b>Desktop apps that look like the modern web. Without shipping a browser.</b></p>
 
+<p align="center">
+  <a href="#see-it-in-60-seconds">Live demos</a> ·
+  <a href="#your-first-app">Get started</a> ·
+  <a href="examples/">Example gallery</a> ·
+  <a href="skills/">Agent skills</a> ·
+  <a href="AGENT_GUIDE.md">Developer reference</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/jony100200/Kathamo/actions/workflows/verify.yml"><img alt="Rust verification" src="https://github.com/jony100200/Kathamo/actions/workflows/verify.yml/badge.svg" /></a>
+</p>
+
 ---
 
 You know the feeling. You open a beautiful app — soft glass panels, smooth animations, crisp type — and your fan spins up, because under the hood it is a whole web browser eating your memory and your GPU.
@@ -62,6 +74,16 @@ Browse the [complete demo gallery](examples/) for source code, screenshots, and 
 
 ## Your first app
 
+Use Kathamo as a dependency in **your own Rust application**, without copying the framework into your project:
+
+```bash
+cargo new kathamo-hello
+cd kathamo-hello
+cargo add kathamo --git https://github.com/jony100200/Kathamo
+```
+
+Replace `src/main.rs` with:
+
 ```rust
 use kathamo::prelude::*;
 
@@ -94,25 +116,24 @@ fn main() {
 }
 ```
 
-That is a real, GPU-rendered native window.
+Run `cargo run` in the new project to open a native window. Kathamo provides the interface; your application owns its data and behavior.
 
-## Honest status
+## Platform support
 
 Kathamo is young and moving fast. It is built and tested on **Windows**. It should run on Linux, but that is not yet verified by the maintainer — if you try it, we would love to hear how it goes in an issue.
 
-**Android** runs too, tested on the Android 14 emulator; a real phone is next. The same `KathamoApp` becomes an APK with no Java code:
+**Android:** The native Android path has been exercised on an Android 14 emulator. Build the included public demo with:
 
 ```powershell
-pwsh tools/android/build_apk.ps1                     # touch demo, arm64 + x86_64
-pwsh tools/android/build_apk.ps1 -Crate kathamo-setu-remote -Package studio.kalponic.setu.remote `
-    -Label "Setu Remote" -Permission INTERNET -Install
+pwsh tools/android/build_apk.ps1
 ```
 
-What a phone app gets: touch (taps, drags, finger scrolling), `ctx.safe_bounds()` clear of the status and gesture bars, the on-screen keyboard on request (`ctx.set_text_input`), the Back button as `Key::Custom("Back")`, `ctx.waker()` to redraw from worker threads, and `ctx.data_dir()` for saved settings. The `remote` feature adds `kathamo::remote`, a small MCP client for controlling a host app such as Setu or Kolpona from the phone. It speaks plain HTTP, so use it over Tailscale or another private network and give the host a token. `examples/setu_remote` is a working controller. Typing in Bengali on the on-screen keyboard is untested and probably limited, because NativeActivity passes the keyboard's input on only as key events.
+The public `examples/android_demo/` and `examples/setu_remote/` directories show the mobile application and optional remote-client integration. Real-device coverage and some international keyboard behavior are still being expanded.
 
 ## Go deeper
 
-- **[Developer Guide](AGENT_GUIDE.md)** — architecture, components, layouts, SDK reference and measured benchmarks.
+- **[Developer reference](AGENT_GUIDE.md)** — architecture, controls, layouts and public APIs.
+- **[Agent skills](skills/)** — reusable framework, UI building, UX and visual QA instructions for coding agents.
 - **[Acknowledgements](ACKNOWLEDGEMENTS.md)** — the fonts, icons and open-source crates Kathamo stands on.
 - **License** — [MIT](LICENSE). Use it, ship it, build something beautiful.
 

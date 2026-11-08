@@ -9,7 +9,7 @@ description: Perform local, evidence-based UX, interaction, accessibility, layou
 
 Do not equate source presence, screenshot quality or successful compilation with functional correctness. State separately what was read, built, launched and manually or automatically exercised. Never invent measurements.
 
-All private references, native screenshots, golden images, generated fixtures, standalone test files, performance traces, logs and R&D reports must remain **outside Git**, under `$KS_KATHAMO_PRIVATE` or another owner-approved local directory. Do not publish or upload them.
+All private references, native screenshots, golden images, generated fixtures, standalone test files, performance traces, logs and R&D reports must remain **outside Git**, in a local directory outside the repository or another owner-approved local directory. Do not publish or upload them.
 
 ## Verification levels
 

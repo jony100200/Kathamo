@@ -61,4 +61,4 @@ If declarative UI documents or stylesheets become available, follow their verifi
 
 An independent application builds and uses the UI from public Kathamo dependencies. Its primary workflow is interactive and reusable, not a static mockup. No framework internals are patched to implement ordinary application-specific behavior.
 
-Save private local layouts, screenshots and generated QA/test artifacts only to `$KS_KATHAMO_PRIVATE` outside Git.
+Save private local layouts, screenshots and generated QA/test artifacts only outside Git.

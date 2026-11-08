@@ -3,6 +3,8 @@ name: Rust verification
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -11,6 +13,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Check local documentation links
+        run: python tools/check_docs_links.py
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Compile workspace and examples

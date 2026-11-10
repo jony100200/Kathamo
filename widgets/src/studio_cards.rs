@@ -401,7 +401,7 @@ mod tests {
         let card = DropCard {
             glyph: crate::studio::glyphs::PHOTO,
             title: "Drop an image",
-            body: "A long explanation that wraps onto more than one line in a narrow card,                    and then some more words so it needs a third line too.",
+            body: "A long explanation that wraps onto more than one line in a narrow card, and then some more words so it needs a third line too.",
             browse: "Browse",
             secondary: None,
             hovering_files: false,

@@ -39,6 +39,22 @@ pub trait Editor: Send + Sync {
         palette: &ThemePalette,
     );
 
+    /// Render with an application context, for panels whose body reads or drives app state.
+    ///
+    /// The host calls this instead of [`Editor::render`] when it was given a context (see
+    /// `WorkspaceHost::render_with_context`). The default ignores the context and calls
+    /// `render`, so editors that do not need app state are unaffected.
+    fn render_with_context(
+        &mut self,
+        cmd_buf: &mut CommandBuffer,
+        viewport: Rect,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+        _ctx: &mut (dyn std::any::Any + 'static),
+    ) {
+        self.render(cmd_buf, viewport, ptr, palette);
+    }
+
     /// Handle mouse down interaction within this editor's allocated region.
     fn handle_mouse_down(
         &mut self,

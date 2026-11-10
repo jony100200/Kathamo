@@ -844,6 +844,30 @@ impl WorkspaceHost {
         ptr: &PointerState,
         palette: &ThemePalette,
     ) {
+        self.render_panels(cmd_buf, bounds, ptr, palette, None);
+    }
+
+    /// Like [`WorkspaceHost::render`], but each panel body receives `ctx` through
+    /// [`Editor::render_with_context`]. Use it when panel bodies read or draw app state.
+    pub fn render_with_context(
+        &mut self,
+        cmd_buf: &mut CommandBuffer,
+        bounds: Rect,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+        ctx: &mut (dyn std::any::Any + 'static),
+    ) {
+        self.render_panels(cmd_buf, bounds, ptr, palette, Some(ctx));
+    }
+
+    fn render_panels(
+        &mut self,
+        cmd_buf: &mut CommandBuffer,
+        bounds: Rect,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+        mut ctx: Option<&mut (dyn std::any::Any + 'static)>,
+    ) {
         self.ensure_editors_instantiated();
         let ws = &mut self.workspaces[self.active_workspace_idx];
         let layout = ws.dock_tree.compute_layout(bounds);
@@ -855,7 +879,16 @@ impl WorkspaceHost {
                     cmd_buf.push(DrawCommand::ClipPush {
                         rect: leaf.content_rect,
                     });
-                    editor.render(cmd_buf, leaf.content_rect, ptr, palette);
+                    match ctx.as_deref_mut() {
+                        Some(app) => editor.render_with_context(
+                            cmd_buf,
+                            leaf.content_rect,
+                            ptr,
+                            palette,
+                            app,
+                        ),
+                        None => editor.render(cmd_buf, leaf.content_rect, ptr, palette),
+                    }
                     cmd_buf.push(DrawCommand::ClipPop);
                 }
             }
@@ -1219,5 +1252,101 @@ mod tests {
             &ptr,
         );
         assert!(handled);
+    }
+
+    /// Counts how many times the panel body was drawn, and whether it saw the app context.
+    #[derive(Default)]
+    struct ContextProbe {
+        plain_draws: u32,
+        context_draws: u32,
+        seen_value: Option<u32>,
+    }
+
+    struct AppState {
+        value: u32,
+    }
+
+    struct ContextPanel(std::sync::Arc<std::sync::Mutex<ContextProbe>>);
+
+    impl Editor for ContextPanel {
+        fn id(&self) -> &str {
+            "context_panel"
+        }
+        fn title(&self) -> &str {
+            "Context panel"
+        }
+        fn render(
+            &mut self,
+            _cmd_buf: &mut CommandBuffer,
+            _viewport: Rect,
+            _ptr: &PointerState,
+            _palette: &ThemePalette,
+        ) {
+            self.0.lock().unwrap().plain_draws += 1;
+        }
+        fn render_with_context(
+            &mut self,
+            _cmd_buf: &mut CommandBuffer,
+            _viewport: Rect,
+            _ptr: &PointerState,
+            _palette: &ThemePalette,
+            ctx: &mut (dyn std::any::Any + 'static),
+        ) {
+            let mut probe = self.0.lock().unwrap();
+            probe.context_draws += 1;
+            probe.seen_value = ctx.downcast_ref::<AppState>().map(|app| app.value);
+            if let Some(app) = ctx.downcast_mut::<AppState>() {
+                app.value += 1;
+            }
+        }
+    }
+
+    fn context_host(probe: std::sync::Arc<std::sync::Mutex<ContextProbe>>) -> WorkspaceHost {
+        let mut editors = EditorRegistry::new();
+        editors.register_factory("context_panel", "Context panel", "Test", move || {
+            Box::new(ContextPanel(probe.clone()))
+        });
+        let tree = DockTree::new("main", DockTabPanel::new("context_panel", "Context panel"));
+        WorkspaceHost::from_workspace(editors, Workspace::new("ctx", "Ctx", tree))
+    }
+
+    #[test]
+    fn panel_body_receives_app_context_when_host_is_given_one() {
+        let probe = std::sync::Arc::new(std::sync::Mutex::new(ContextProbe::default()));
+        let mut host = context_host(probe.clone());
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let ptr = PointerState::default();
+        let mut cmd_buf = CommandBuffer::default();
+        let mut app = AppState { value: 7 };
+
+        host.render_with_context(&mut cmd_buf, bounds, &ptr, &ThemePalette::dark(), &mut app);
+
+        let probe = probe.lock().unwrap();
+        assert_eq!(probe.context_draws, 1);
+        assert_eq!(probe.plain_draws, 0);
+        assert_eq!(probe.seen_value, Some(7));
+        assert_eq!(
+            app.value, 8,
+            "a panel can mutate the app state it was given"
+        );
+    }
+
+    #[test]
+    fn plain_render_still_uses_the_editor_render_path() {
+        let probe = std::sync::Arc::new(std::sync::Mutex::new(ContextProbe::default()));
+        let mut host = context_host(probe.clone());
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let mut cmd_buf = CommandBuffer::default();
+
+        host.render(
+            &mut cmd_buf,
+            bounds,
+            &PointerState::default(),
+            &ThemePalette::dark(),
+        );
+
+        let probe = probe.lock().unwrap();
+        assert_eq!(probe.plain_draws, 1);
+        assert_eq!(probe.context_draws, 0);
     }
 }

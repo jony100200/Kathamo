@@ -20,7 +20,7 @@ use ui_platform::{
 use ui_render::{CommandBuffer, DrawCommand};
 use ui_themes::{BilingualLabel, FluentTypographyScale, ThemePalette};
 
-use crate::controls::{render_badge, render_button, ButtonStyle, NumericScrubber};
+use crate::controls::{render_badge, ButtonStyle, NumericScrubber};
 use crate::icon_cache::{IconAtlas, StudioIcon};
 use crate::input::{
     render_checkbox, render_dropdown, render_progress_bar, CheckboxState, DropdownState,
@@ -158,7 +158,16 @@ impl<'a> KolponaUi<'a> {
         let hovered = rect.contains(self.pointer.position);
         let clicked = self.is_clicked_in_rect(rect);
 
-        render_button(self.cmd_buf, rect, text, style, hovered, self.palette);
+        let pressed = hovered && self.pointer.primary_down;
+        crate::controls::render_button_pressed(
+            self.cmd_buf,
+            rect,
+            text,
+            style,
+            hovered,
+            pressed,
+            self.palette,
+        );
 
         if let Some(ic) = icon {
             let icon_rect = Rect::from_min_size(

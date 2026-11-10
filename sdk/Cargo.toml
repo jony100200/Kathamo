@@ -45,6 +45,10 @@ name = "kolpona_shell"
 path = "../examples/kolpona_shell.rs"
 
 [[example]]
+name = "studio_kit"
+path = "../examples/studio_kit.rs"
+
+[[example]]
 name = "interactive_ui"
 path = "../examples/interactive_ui.rs"
 

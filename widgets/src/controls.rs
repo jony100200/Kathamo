@@ -20,6 +20,25 @@ pub fn render_button(
     is_hovered: bool,
     palette: &ThemePalette,
 ) {
+    render_button_pressed(buf, rect, label, style, is_hovered, false, palette);
+}
+
+/// [`render_button`] with a pressed state: while `is_pressed` the fill eases toward the
+/// palette's pressed colour with the `motion::PRESS` spring.
+pub fn render_button_pressed(
+    buf: &mut CommandBuffer,
+    rect: Rect,
+    label: &str,
+    style: ButtonStyle,
+    is_hovered: bool,
+    is_pressed: bool,
+    palette: &ThemePalette,
+) {
+    let press = ui_core::motion::animate_bool(
+        ui_core::motion::rect_key("button_press", rect),
+        is_pressed,
+        ui_core::motion::PRESS,
+    );
     // Hover is a short spring between the rest and hover fills, not a binary flip.
     let t = ui_core::motion::animate_bool(
         ui_core::motion::rect_key("button", rect),
@@ -54,7 +73,13 @@ pub fn render_button(
             palette.text,
         ),
     };
-    let fill = rest.lerp(hover, t);
+    let states = palette.states();
+    let pressed = match style {
+        ButtonStyle::Primary => states.accent_pressed,
+        ButtonStyle::Danger => palette.danger.lerp(palette.canvas, 0.18),
+        ButtonStyle::Secondary | ButtonStyle::Ghost => states.pressed,
+    };
+    let fill = rest.lerp(hover, t).lerp(pressed, press);
 
     buf.push(DrawCommand::Rect {
         rect,

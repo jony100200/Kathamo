@@ -4,7 +4,7 @@
 //! Widgets here are presentation only. They draw from theme tokens, report pointer
 //! interaction, and never own application state.
 
-use ui_core::{Color, CornerRadius, Rect, Stroke, Vec2};
+use ui_core::{motion, Color, CornerRadius, Rect, Stroke, Vec2};
 use ui_platform::PointerState;
 use ui_render::{measure_text, CommandBuffer, DrawCommand};
 use ui_themes::{ExtendedTokens, ThemePalette, RADIUS_CARD, RADIUS_CONTROL, SPACE_2, SPACE_3};
@@ -69,6 +69,31 @@ pub mod glyphs {
     glyph!(COPY, "copy");
     glyph!(DOWNLOAD, "download");
     glyph!(TRASH, "trash");
+    glyph!(BRUSH, "brush");
+    glyph!(ERASER, "eraser");
+    glyph!(FILL, "bucket-droplet");
+    glyph!(MASK, "mask");
+    glyph!(TEXTURE, "texture");
+    glyph!(PRESENT, "presentation");
+    glyph!(SPHERE, "sphere");
+    glyph!(APERTURE, "aperture");
+    glyph!(OPEN_FILE, "file-import");
+    glyph!(CUBE, "cube");
+    glyph!(CAMERA, "camera");
+    glyph!(GRAPH, "vector-bezier");
+    glyph!(SLIDERS, "adjustments-horizontal");
+    glyph!(WAND, "wand");
+    glyph!(FOLDER_OPEN, "folder-open");
+    glyph!(FOLDER_PLUS, "folder-plus");
+    glyph!(PHOTO_PLUS, "photo-plus");
+    glyph!(SAVE, "device-floppy");
+    glyph!(EXPORT, "upload");
+    glyph!(EYE, "eye");
+    glyph!(EYE_OFF, "eye-off");
+    glyph!(ROTATE, "rotate");
+    glyph!(GRID, "layout-grid");
+    glyph!(PALETTE, "palette");
+    glyph!(PROJECT, "box");
 }
 
 /// Semantic tone for status pills, dots and meters. Always paired with a text label.
@@ -95,6 +120,8 @@ pub enum ButtonKind {
 pub struct Interaction {
     pub hovered: bool,
     pub clicked: bool,
+    /// The primary button is held down on the widget (drawn as the pressed state).
+    pub pressed: bool,
 }
 
 /// Painter bound to one frame's command buffer, palette and pointer.
@@ -135,6 +162,7 @@ impl<'a> Studio<'a> {
         Interaction {
             hovered,
             clicked: hovered && self.pointer.primary_clicked,
+            pressed: hovered && self.pointer.primary_down,
         }
     }
 
@@ -309,57 +337,84 @@ impl<'a> Studio<'a> {
         label: &str,
         kind: ButtonKind,
     ) -> Interaction {
-        let hit = self.interact(rect);
+        self.button_full(rect, glyph, label, kind, true)
+    }
+
+    /// Button with every state: hover and press are short springs (`motion::HOVER`,
+    /// `motion::PRESS`), and a disabled button draws quieter and never reports a click.
+    pub fn button_full(
+        &mut self,
+        rect: Rect,
+        glyph: Option<Glyph>,
+        label: &str,
+        kind: ButtonKind,
+        enabled: bool,
+    ) -> Interaction {
+        let mut hit = self.interact(rect);
+        if !enabled {
+            hit = Interaction::default();
+        }
+        let hover = motion::animate_bool(
+            motion::rect_key("studio_button", rect),
+            hit.hovered,
+            motion::HOVER,
+        );
+        let press = motion::animate_bool(
+            motion::rect_key("studio_press", rect),
+            hit.pressed,
+            motion::PRESS,
+        );
         let p = self.palette;
-        let (fill, edge, ink) = match kind {
-            ButtonKind::Primary => (
-                if hit.hovered {
-                    p.accent_hover
-                } else {
+        let st = p.states();
+        let (fill, edge, ink) = if !enabled {
+            (st.disabled_fill, p.border, st.disabled_text)
+        } else {
+            match kind {
+                ButtonKind::Primary => (
                     p.accent
-                },
-                p.accent,
-                self.tokens.on_accent,
-            ),
-            ButtonKind::Secondary => (
-                if hit.hovered {
-                    p.elevated_high
-                } else {
-                    p.elevated
-                },
-                p.border,
-                p.text,
-            ),
-            ButtonKind::Ghost => (
-                if hit.hovered {
-                    p.elevated
-                } else {
+                        .lerp(p.accent_hover, hover)
+                        .lerp(st.accent_pressed, press),
+                    p.accent,
+                    self.tokens.on_accent,
+                ),
+                ButtonKind::Secondary => (
+                    p.elevated.lerp(st.hover, hover).lerp(st.pressed, press),
+                    p.border,
+                    p.text,
+                ),
+                ButtonKind::Ghost => (
                     Color::TRANSPARENT
-                },
-                if hit.hovered {
-                    p.border
-                } else {
-                    Color::TRANSPARENT
-                },
-                if hit.hovered { p.text } else { p.text_muted },
-            ),
+                        .lerp(p.elevated, hover)
+                        .lerp(st.pressed, press),
+                    Color::TRANSPARENT.lerp(p.border, hover),
+                    p.text_muted.lerp(p.text, hover),
+                ),
+            }
         };
-        self.outline(rect, fill, edge, RADIUS_CONTROL);
+        // Pressed content sinks by one pixel, so the press reads even on flat fills.
+        let sink = Vec2::new(0.0, press.round());
+        let rect_drawn = Rect::from_min_max(rect.min + sink, rect.max + sink);
+        self.outline(rect_drawn, fill, edge, RADIUS_CONTROL);
         let size = 12.5;
         let text_w = measure_text(label, size, true);
-        let icon_w = if glyph.is_some() { 16.0 + 6.0 } else { 0.0 };
+        let icon_w = match (glyph.is_some(), label.is_empty()) {
+            (false, _) => 0.0,
+            (true, true) => 16.0,
+            (true, false) => 16.0 + 6.0,
+        };
         let mut x = rect.center().x - (text_w + icon_w) / 2.0;
+        let cy = rect_drawn.center().y;
         if let Some(g) = glyph {
             self.icon(
                 g,
-                Rect::from_min_size(Vec2::new(x, rect.center().y - 8.0), Vec2::splat(16.0)),
+                Rect::from_min_size(Vec2::new(x, cy - 8.0), Vec2::splat(16.0)),
                 ink,
             );
             x += icon_w;
         }
         self.text(
             label,
-            Vec2::new(x, text_center_y(rect, size)),
+            Vec2::new(x, text_center_y(rect_drawn, size)),
             size,
             ink,
             true,
@@ -367,10 +422,22 @@ impl<'a> Studio<'a> {
         hit
     }
 
+    /// Keyboard focus ring: a 2 px outline in the focus colour, just outside `rect`.
+    pub fn focus_ring(&mut self, rect: Rect, radius: f32) {
+        self.buf.push(DrawCommand::Rect {
+            rect: rect.expand(2.0),
+            fill: Color::TRANSPARENT,
+            radius: CornerRadius::same(radius + 2.0),
+            stroke: Stroke::new(2.0, self.palette.states().focus),
+        });
+    }
+
     /// Square icon-only button with a hover background.
     pub fn icon_button(&mut self, rect: Rect, glyph: Glyph, active: bool) -> Interaction {
         let hit = self.interact(rect);
-        if active || hit.hovered {
+        if hit.pressed {
+            self.fill(rect, self.palette.states().pressed, RADIUS_CONTROL);
+        } else if active || hit.hovered {
             self.fill(rect, self.palette.elevated, RADIUS_CONTROL);
         }
         let color = if active || hit.hovered {

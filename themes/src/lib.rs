@@ -133,6 +133,23 @@ impl ThemePalette {
         }
     }
 
+    /// Interaction state colours derived from this palette (hover, pressed, focus,
+    /// disabled). Derived rather than stored so every existing palette literal stays valid
+    /// and custom palettes get consistent states for free.
+    pub fn states(&self) -> StateTokens {
+        let dark = self.text.luminance() > self.canvas.luminance();
+        // Pressed sinks toward the canvas on dark themes and toward the text on light ones.
+        let sink = if dark { self.canvas } else { self.text };
+        StateTokens {
+            hover: self.elevated_high,
+            pressed: self.elevated.lerp(sink, 0.35),
+            accent_pressed: self.accent.lerp(sink, 0.18),
+            focus: self.accent_hover,
+            disabled_fill: self.surface,
+            disabled_text: self.text_muted.lerp(self.surface, 0.2),
+        }
+    }
+
     /// Android Material 3 inspired surface elevation mapper (Levels 0 through 4).
     pub fn surface_at_elevation(&self, level: u8) -> Color {
         match level {
@@ -174,6 +191,23 @@ impl StudioTheme {
     pub fn extended(&self) -> ExtendedTokens {
         ExtendedTokens::for_mode(self.mode)
     }
+}
+
+/// Colours for interactive states, from [`ThemePalette::states`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StateTokens {
+    /// Fill of a neutral control under the pointer.
+    pub hover: Color,
+    /// Fill of a neutral control while the pointer button is held on it.
+    pub pressed: Color,
+    /// Fill of an accent (primary) control while pressed.
+    pub accent_pressed: Color,
+    /// Keyboard focus ring.
+    pub focus: Color,
+    /// Fill of a control that cannot be used right now.
+    pub disabled_fill: Color,
+    /// Label of a disabled control: readable, but clearly quieter than muted text.
+    pub disabled_text: Color,
 }
 
 /// Tokens beyond the base palette. Kept separate so existing `ThemePalette` literals stay valid.
@@ -238,6 +272,41 @@ mod tests {
                 text_contrast,
                 mode
             );
+        }
+    }
+
+    #[test]
+    fn state_tokens_stay_distinct_and_legible() {
+        for mode in [
+            ThemeMode::Dark,
+            ThemeMode::StudioGraphite,
+            ThemeMode::Light,
+            ThemeMode::MidnightGraphite,
+            ThemeMode::WarmPaper,
+        ] {
+            let p = StudioTheme::new(mode).palette;
+            let s = p.states();
+            assert_ne!(
+                s.pressed, p.elevated,
+                "{mode:?}: pressed must differ from rest"
+            );
+            assert_ne!(
+                s.pressed, s.hover,
+                "{mode:?}: pressed must differ from hover"
+            );
+            assert_ne!(s.accent_pressed, p.accent, "{mode:?}");
+            // Text stays readable on a pressed control, and the focus ring is visible.
+            let pressed_text = p.text.contrast_ratio(s.pressed);
+            assert!(
+                pressed_text >= 4.5,
+                "{mode:?} text/pressed {pressed_text:.2}"
+            );
+            let ring = s.focus.contrast_ratio(p.surface);
+            assert!(ring >= 3.0, "{mode:?} focus/surface {ring:.2}");
+            // Disabled text is quieter than muted text but still meets the 3:1 floor.
+            let off = s.disabled_text.contrast_ratio(s.disabled_fill);
+            assert!(off >= 3.0, "{mode:?} disabled {off:.2}");
+            assert!(off < p.text_muted.contrast_ratio(p.surface), "{mode:?}");
         }
     }
 

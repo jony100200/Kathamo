@@ -18,17 +18,21 @@ pub mod input_prompt;
 pub mod meter;
 pub mod navigation_rail;
 pub mod node_editor;
+pub mod project_hub;
 pub mod property_inspector;
 pub mod range_slider;
 pub mod rich_text;
 pub mod studio;
+pub mod studio_cards;
 pub mod studio_parts;
 pub mod stylebox;
 pub mod tab_strip;
 pub mod text_area;
 pub mod timeline;
 pub mod tooltip;
+pub mod type_scale;
 pub mod ui;
+pub mod view_overlay;
 pub mod virtual_list;
 pub mod workspace_host;
 
@@ -51,14 +55,18 @@ pub use studio_parts::{
     agent_card, channel_row, chip, code_block, composer, message_block, model_card, search_field,
     segmented, task_card, ComposerOut, MessageRole,
 };
+pub use project_hub::{project_hub, HubAction, HubProject, HubStart, ProjectHub};
+pub use studio_cards::{card_grid, DropCard, DropCardResponse};
 pub use tooltip::TooltipOverlay;
+pub use type_scale::{TextStyle, TypeRole};
+pub use view_overlay::{axis_gizmo, axis_on_screen, corner_rect, view_badge, AxisView, Corner, AXIS_VIEWS};
 pub use ui::{KathamoUi, KolponaUi, Response};
 
 pub use ui_text as text;
 pub use ui_text::{FontAssetMeta, FontDefaults, FontManifest, FontRegistry};
 pub use ui_themes as theme;
 pub use ui_themes::{
-    metrics, typography, StudioFontBinaries, StudioTheme, ThemeMode, ThemePalette, TypographyScale,
+    metrics, typography, StateTokens, StudioFontBinaries, StudioTheme, ThemeMode, ThemePalette, TypographyScale,
 };
 
 pub use adapters::{
@@ -68,7 +76,7 @@ pub use canvas::{CanvasShape, InfiniteCanvas};
 pub use canvas_host::{CanvasHost, CanvasHostKind, CanvasStroke, CanvasTool};
 pub use command_palette::{CommandPalette, PaletteCommand};
 pub use controls::{
-    render_badge, render_button, render_glass_card, render_status_pill, ButtonStyle,
+    render_badge, render_button, render_button_pressed, render_glass_card, render_status_pill, ButtonStyle,
     NumericScrubber,
 };
 pub use dock_view::{DockTreeView, DraggingTabState};

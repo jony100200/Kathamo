@@ -660,8 +660,30 @@ fn key_from_winit(key: &WinitKey) -> Key {
         WinitKey::Named(NamedKey::PageDown) => Key::Custom("PageDown".into()),
         // Android's Back button (winit reports it as the browser key).
         WinitKey::Named(NamedKey::BrowserBack) => Key::Custom("Back".into()),
+        WinitKey::Named(named) => {
+            function_key(*named).map_or_else(|| Key::Custom(format!("{key:?}")), Key::F)
+        }
         _ => Key::Custom(format!("{key:?}")),
     }
+}
+
+/// F1..F12 as their number.
+fn function_key(key: NamedKey) -> Option<u8> {
+    const KEYS: [NamedKey; 12] = [
+        NamedKey::F1,
+        NamedKey::F2,
+        NamedKey::F3,
+        NamedKey::F4,
+        NamedKey::F5,
+        NamedKey::F6,
+        NamedKey::F7,
+        NamedKey::F8,
+        NamedKey::F9,
+        NamedKey::F10,
+        NamedKey::F11,
+        NamedKey::F12,
+    ];
+    KEYS.iter().position(|k| *k == key).map(|i| i as u8 + 1)
 }
 
 /// Attributes for the app's main window: title, size, and the maximized start.
@@ -1169,6 +1191,12 @@ mod touch_tests {
         assert_eq!(app_folder_name("../x"), "x");
         assert_eq!(app_folder_name("সেতু"), "সেতু");
         assert_eq!(app_folder_name("///"), "app");
+    }
+
+    #[test]
+    fn function_keys_arrive_as_numbered_keys() {
+        assert_eq!(key_from_winit(&WinitKey::Named(NamedKey::F1)), Key::F(1));
+        assert_eq!(key_from_winit(&WinitKey::Named(NamedKey::F12)), Key::F(12));
     }
 
     #[test]

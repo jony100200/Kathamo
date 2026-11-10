@@ -141,8 +141,15 @@ impl Studio<'_> {
         } else {
             40.0
         };
+        let wrapped = lines.len();
         while !lines.is_empty() && full(disc_side, lines.len()) > room {
             lines.pop();
+        }
+        // A cut body says so.
+        if lines.len() < wrapped {
+            if let Some(last) = lines.last_mut() {
+                last.push('…');
+            }
         }
         let block = full(disc_side, lines.len());
         let mut y = (c.y - block * 0.5).max(rect.min.y + SPACE_4);

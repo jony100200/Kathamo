@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use ui_core::motion;
 use ui_core::*;
-use ui_platform::{PointerButton, PointerState};
+use ui_platform::{Key, PointerButton, PointerState};
 use ui_render::command::DrawCommand;
 use ui_render::CommandBuffer;
 use ui_themes::ThemePalette;
@@ -23,6 +23,10 @@ pub struct MenuItem {
     pub shortcut: Option<String>,
     pub enabled: bool,
     pub separator_after: bool,
+    /// `Some(checked)` makes this a check item. `None` (the default) is a plain item.
+    pub checked: Option<bool>,
+    /// Nested items. The submenu opens on hover, click or ArrowRight and activates nothing itself.
+    pub submenu: Option<Vec<MenuItem>>,
 }
 
 impl MenuItem {
@@ -33,7 +37,30 @@ impl MenuItem {
             shortcut: None,
             enabled: true,
             separator_after: false,
+            checked: None,
+            submenu: None,
         }
+    }
+
+    /// A check item, shown with a box that is filled when `checked`.
+    pub fn check(id: impl Into<String>, label: impl Into<String>, checked: bool) -> Self {
+        Self::new(id, label).with_checked(checked)
+    }
+
+    pub fn with_checked(mut self, checked: bool) -> Self {
+        self.checked = Some(checked);
+        self
+    }
+
+    /// Makes this item open a nested dropdown with `items`.
+    pub fn with_submenu(mut self, items: Vec<MenuItem>) -> Self {
+        self.submenu = Some(items);
+        self
+    }
+
+    /// True for the divider items made by [`MenuItem::separator`].
+    pub fn is_separator(&self) -> bool {
+        self.id.is_empty() && self.label.is_empty() && self.submenu.is_none()
     }
 
     pub fn action(id: impl Into<String>, label: impl Into<String>, shortcut: Option<&str>) -> Self {
@@ -44,8 +71,9 @@ impl MenuItem {
         item
     }
 
+    /// A divider line between items. It takes no pointer or keyboard focus.
     pub fn separator() -> Self {
-        Self::new("sep", "").with_separator()
+        Self::new("", "")
     }
 
     pub fn with_shortcut(mut self, shortcut: impl Into<String>) -> Self {
@@ -81,10 +109,84 @@ impl Menu {
 }
 
 /// Top application MenuBar.
+///
+/// A menu bar is a row of titles. Clicking a title opens its dropdown. Items with a
+/// [`MenuItem::with_submenu`] open a nested dropdown on hover, click or ArrowRight. The keyboard
+/// moves the highlight with the arrows, ArrowLeft and Escape close one level, and Enter
+/// activates the highlighted item. Feed keys to [`MenuBar::handle_key_down`] while
+/// [`MenuBar::is_open`] is true.
 #[derive(Debug, Clone, Default)]
 pub struct MenuBar {
     pub menus: Vec<Menu>,
     pub open_menu_idx: Option<usize>,
+    /// Item indices of the open submenus, outermost first. Each names an item with a submenu in
+    /// the level above it.
+    pub submenu_path: Vec<usize>,
+    /// Keyboard or hover highlight, an index into the deepest open level.
+    pub highlight: Option<usize>,
+}
+
+/// One open dropdown: its panel rectangle, its items, and each item's (top, height).
+struct MenuLevel<'a> {
+    rect: Rect,
+    items: &'a [MenuItem],
+    tops: Vec<(f32, f32)>,
+}
+
+/// Where a pointer position lands in the open menus.
+enum MenuHit {
+    Item { depth: usize, index: usize },
+    Panel,
+    Nothing,
+}
+
+const MENU_ROW_H: f32 = 26.0;
+const MENU_SEP_H: f32 = 9.0;
+const MENU_PAD: f32 = 4.0;
+
+/// (top, height) of each item in a dropdown whose panel starts at `panel_top`.
+fn item_tops(items: &[MenuItem], panel_top: f32) -> Vec<(f32, f32)> {
+    let mut y = panel_top + MENU_PAD;
+    let mut tops = Vec::with_capacity(items.len());
+    for item in items {
+        let h = if item.is_separator() {
+            MENU_SEP_H
+        } else {
+            MENU_ROW_H
+        };
+        tops.push((y, h));
+        y += h;
+        if item.separator_after && !item.is_separator() {
+            y += MENU_SEP_H;
+        }
+    }
+    tops
+}
+
+fn panel_height(items: &[MenuItem]) -> f32 {
+    let rows: f32 = item_tops(items, 0.0).last().map_or(0.0, |&(y, h)| y + h);
+    rows + MENU_PAD
+}
+
+fn panel_width(items: &[MenuItem]) -> f32 {
+    let widest = items
+        .iter()
+        .filter(|it| !it.is_separator())
+        .map(|it| {
+            let shortcut = it
+                .shortcut
+                .as_deref()
+                .map_or(0.0, |sc| ui_render::measure_text(sc, 10.5, false) + 24.0);
+            let arrow = if it.submenu.is_some() { 16.0 } else { 0.0 };
+            ui_render::measure_text(&it.label, 11.5, false) + shortcut + arrow + 24.0
+        })
+        .fold(180.0f32, f32::max);
+    let check_col = if items.iter().any(|it| it.checked.is_some()) {
+        14.0
+    } else {
+        0.0
+    };
+    widest + check_col
 }
 
 impl MenuBar {
@@ -92,7 +194,30 @@ impl MenuBar {
         Self {
             menus,
             open_menu_idx: None,
+            submenu_path: Vec::new(),
+            highlight: None,
         }
+    }
+
+    /// True while a dropdown is open. Keys go to the menu bar first while it is open.
+    pub fn is_open(&self) -> bool {
+        self.open_menu_idx.is_some()
+    }
+
+    /// Opens the menu at `idx`. Does nothing if there is no such menu.
+    pub fn open_menu(&mut self, idx: usize) {
+        if idx < self.menus.len() {
+            self.open_menu_idx = Some(idx);
+            self.submenu_path.clear();
+            self.highlight = None;
+        }
+    }
+
+    /// Closes every open dropdown.
+    pub fn close(&mut self) {
+        self.open_menu_idx = None;
+        self.submenu_path.clear();
+        self.highlight = None;
     }
 
     /// Title hit/draw rectangles, sized from the measured title text.
@@ -113,24 +238,84 @@ impl MenuBar {
             .collect()
     }
 
-    fn dropdown_rect(&self, bounds: Rect, idx: usize) -> Option<Rect> {
-        let menu = self.menus.get(idx)?;
-        let title = *self.title_rects(bounds).get(idx)?;
-        let widest = menu
-            .items
-            .iter()
-            .map(|it| {
-                let shortcut = it
-                    .shortcut
-                    .as_deref()
-                    .map_or(0.0, |sc| ui_render::measure_text(sc, 10.5, false) + 24.0);
-                ui_render::measure_text(&it.label, 11.5, false) + shortcut + 24.0
-            })
-            .fold(180.0f32, f32::max);
-        Some(Rect::from_min_size(
+    /// The items of the open level `depth` (0 is the open top-level menu).
+    fn items_at(&self, depth: usize) -> Option<&[MenuItem]> {
+        let mut items: &[MenuItem] = &self.menus.get(self.open_menu_idx?)?.items;
+        for &idx in self.submenu_path.iter().take(depth) {
+            items = items.get(idx)?.submenu.as_deref()?;
+        }
+        Some(items)
+    }
+
+    /// Every open dropdown, outermost first, with its geometry.
+    fn open_levels(&self, bounds: Rect) -> Vec<MenuLevel<'_>> {
+        let Some(top) = self.open_menu_idx else {
+            return Vec::new();
+        };
+        let Some(menu) = self.menus.get(top) else {
+            return Vec::new();
+        };
+        let title = self.title_rects(bounds)[top];
+        let mut rect = Rect::from_min_size(
             Vec2::new(title.min.x, bounds.max.y + 2.0),
-            Vec2::new(widest, menu.items.len() as f32 * 26.0 + 8.0),
-        ))
+            Vec2::new(panel_width(&menu.items), panel_height(&menu.items)),
+        );
+        let mut items: &[MenuItem] = &menu.items;
+        let mut levels = Vec::new();
+        for depth in 0..=self.submenu_path.len() {
+            let tops = item_tops(items, rect.min.y);
+            let parent_row = tops.clone();
+            levels.push(MenuLevel { rect, items, tops });
+            let Some(&idx) = self.submenu_path.get(depth) else {
+                break;
+            };
+            let (Some(sub), Some(&(y, _))) = (
+                items.get(idx).and_then(|it| it.submenu.as_deref()),
+                parent_row.get(idx),
+            ) else {
+                break;
+            };
+            rect = Rect::from_min_size(
+                Vec2::new(rect.max.x - 2.0, y - MENU_PAD),
+                Vec2::new(panel_width(sub), panel_height(sub)),
+            );
+            items = sub;
+        }
+        levels
+    }
+
+    /// What is under `pos`: an item (depth, index), a dropdown panel, or nothing.
+    fn hit(&self, pos: Vec2, bounds: Rect) -> MenuHit {
+        let levels = self.open_levels(bounds);
+        for (depth, level) in levels.iter().enumerate().rev() {
+            if !level.rect.contains(pos) {
+                continue;
+            }
+            return match level
+                .tops
+                .iter()
+                .position(|&(y, h)| pos.y >= y && pos.y < y + h)
+            {
+                Some(index) if !level.items[index].is_separator() => MenuHit::Item { depth, index },
+                _ => MenuHit::Panel,
+            };
+        }
+        MenuHit::Nothing
+    }
+
+    /// Opens the item's submenu, or makes `index` the highlight at `depth`.
+    fn select_at(&mut self, depth: usize, index: usize) {
+        self.submenu_path.truncate(depth);
+        let has_submenu = self
+            .items_at(depth)
+            .and_then(|items| items.get(index))
+            .is_some_and(|it| it.submenu.is_some() && it.enabled);
+        if has_submenu {
+            self.submenu_path.push(index);
+            self.highlight = None;
+        } else {
+            self.highlight = Some(index);
+        }
     }
 
     pub fn handle_mouse_down(
@@ -150,35 +335,147 @@ impl MenuBar {
                 .iter()
                 .position(|r| r.contains(pos))
             {
-                self.open_menu_idx = if self.open_menu_idx == Some(idx) {
-                    None
+                if self.open_menu_idx == Some(idx) {
+                    self.close();
                 } else {
-                    Some(idx)
-                };
+                    self.open_menu(idx);
+                }
                 return None;
             }
         }
 
-        // Check if clicked inside open dropdown
-        if let Some(idx) = self.open_menu_idx {
-            if let (Some(menu), Some(dropdown_rect)) =
-                (self.menus.get(idx), self.dropdown_rect(bounds, idx))
-            {
-                if dropdown_rect.contains(pos) {
-                    let rel_y = pos.y - (dropdown_rect.min.y + 4.0);
-                    let item_idx = (rel_y / 26.0).floor() as usize;
-                    if let Some(item) = menu.items.get(item_idx) {
-                        if item.enabled {
-                            self.open_menu_idx = None;
-                            return Some(item.id.clone());
-                        }
-                    }
-                } else {
-                    self.open_menu_idx = None;
+        match self.hit(pos, bounds) {
+            MenuHit::Item { depth, index } => {
+                let item = self.items_at(depth)?.get(index)?;
+                if !item.enabled {
+                    return None;
                 }
+                if item.submenu.is_some() {
+                    self.select_at(depth, index);
+                    return None;
+                }
+                let id = item.id.clone();
+                self.close();
+                Some(id)
+            }
+            MenuHit::Panel => None,
+            MenuHit::Nothing => {
+                self.close();
+                None
             }
         }
+    }
 
+    /// Hover: switches an open menu to the title under the pointer, and highlights or opens the
+    /// item under the pointer. Returns true when a dropdown is open.
+    pub fn handle_mouse_move(&mut self, pos: Vec2, bounds: Rect) -> bool {
+        if !self.is_open() {
+            return false;
+        }
+        if let Some(idx) = self
+            .title_rects(bounds)
+            .iter()
+            .position(|r| r.contains(pos))
+        {
+            if self.open_menu_idx != Some(idx) {
+                self.open_menu(idx);
+            }
+            return true;
+        }
+        if let MenuHit::Item { depth, index } = self.hit(pos, bounds) {
+            let enabled = self
+                .items_at(depth)
+                .and_then(|items| items.get(index))
+                .is_some_and(|it| it.enabled);
+            if enabled {
+                self.select_at(depth, index);
+            }
+        }
+        true
+    }
+
+    /// Moves the highlight to the next (`step` > 0) or previous selectable item at the deepest
+    /// open level. Separators and disabled items are skipped.
+    fn step_highlight(&mut self, step: isize) {
+        let Some(items) = self.items_at(self.submenu_path.len()) else {
+            return;
+        };
+        let n = items.len() as isize;
+        let mut i = match self.highlight {
+            Some(h) => h as isize + step,
+            None if step > 0 => 0,
+            None => n - 1,
+        };
+        while (0..n).contains(&i) {
+            let it = &items[i as usize];
+            if !it.is_separator() && it.enabled {
+                self.highlight = Some(i as usize);
+                return;
+            }
+            i += step;
+        }
+    }
+
+    /// Keyboard navigation. Returns the id of an activated item and closes the menus. Call
+    /// only while [`MenuBar::is_open`] is true.
+    pub fn handle_key_down(&mut self, key: &Key) -> Option<String> {
+        let top_count = self.menus.len();
+        match key {
+            Key::Escape => {
+                if self.submenu_path.pop().is_some() {
+                    self.highlight = None;
+                } else {
+                    self.close();
+                }
+            }
+            Key::ArrowDown => self.step_highlight(1),
+            Key::ArrowUp => self.step_highlight(-1),
+            Key::ArrowRight => {
+                let highlighted = self.highlight.and_then(|h| {
+                    self.items_at(self.submenu_path.len())
+                        .and_then(|items| items.get(h))
+                        .map(|it| (h, it.submenu.is_some()))
+                });
+                match highlighted {
+                    Some((h, true)) => {
+                        self.submenu_path.push(h);
+                        self.highlight = None;
+                        self.step_highlight(1);
+                    }
+                    _ if self.submenu_path.is_empty() && top_count > 0 => {
+                        let next = (self.open_menu_idx.unwrap_or(0) + 1) % top_count;
+                        self.open_menu(next);
+                    }
+                    _ => {}
+                }
+            }
+            Key::ArrowLeft => {
+                if let Some(parent) = self.submenu_path.pop() {
+                    self.highlight = Some(parent);
+                } else if top_count > 0 {
+                    let prev = (self.open_menu_idx.unwrap_or(0) + top_count - 1) % top_count;
+                    self.open_menu(prev);
+                }
+            }
+            Key::Enter => {
+                let depth = self.submenu_path.len();
+                let h = self.highlight?;
+                let item = self.items_at(depth)?.get(h)?;
+                if !item.enabled {
+                    return None;
+                }
+                if item.submenu.is_some() {
+                    self.submenu_path.push(h);
+                    self.highlight = None;
+                    self.step_highlight(1);
+                    return None;
+                }
+                let id = item.id.clone();
+                self.close();
+                return Some(id);
+            }
+            _ => {}
+        }
         None
     }
 
@@ -230,74 +527,124 @@ impl MenuBar {
             });
         }
 
-        // Render open dropdown if active
-        if let Some(idx) = self.open_menu_idx {
-            if let (Some(menu), Some(dropdown_rect)) =
-                (self.menus.get(idx), self.dropdown_rect(bounds, idx))
-            {
-                cmd_buf.push(DrawCommand::SoftShadow {
-                    rect: dropdown_rect,
-                    radius: CornerRadius::same(5.0),
-                    color: Color::rgba(0, 0, 0, 110),
-                    offset: Vec2::new(0.0, 6.0),
-                    blur: 18.0,
-                    spread: 0.0,
-                });
-                // Frosted glass: blurred backdrop + translucent tint, then the hairline border.
-                cmd_buf.push(DrawCommand::Backdrop {
-                    rect: dropdown_rect,
-                    radius: CornerRadius::same(5.0),
-                    tint: palette.elevated.with_alpha(200),
-                });
+        // Open dropdowns, outermost first so each submenu paints over its parent.
+        let deepest = self.submenu_path.len();
+        for (depth, level) in self.open_levels(bounds).iter().enumerate() {
+            self.render_level(cmd_buf, level, depth, deepest, ptr, palette);
+        }
+    }
+
+    fn render_level(
+        &self,
+        cmd_buf: &mut CommandBuffer,
+        level: &MenuLevel<'_>,
+        depth: usize,
+        deepest: usize,
+        ptr: &PointerState,
+        palette: &ThemePalette,
+    ) {
+        let panel = level.rect;
+        cmd_buf.push(DrawCommand::SoftShadow {
+            rect: panel,
+            radius: CornerRadius::same(5.0),
+            color: Color::rgba(0, 0, 0, 110),
+            offset: Vec2::new(0.0, 6.0),
+            blur: 18.0,
+            spread: 0.0,
+        });
+        // Frosted glass: blurred backdrop + translucent tint, then the hairline border.
+        cmd_buf.push(DrawCommand::Backdrop {
+            rect: panel,
+            radius: CornerRadius::same(5.0),
+            tint: palette.elevated.with_alpha(200),
+        });
+        cmd_buf.push(DrawCommand::Rect {
+            rect: panel,
+            fill: Color::TRANSPARENT,
+            radius: CornerRadius::same(5.0),
+            stroke: Stroke::new(1.0, palette.border),
+        });
+
+        let has_checks = level.items.iter().any(|it| it.checked.is_some());
+        let check_col = if has_checks { 14.0 } else { 0.0 };
+        let parent_row = self.submenu_path.get(depth).copied();
+        for (index, (item, &(top, height))) in level.items.iter().zip(&level.tops).enumerate() {
+            if item.is_separator() {
                 cmd_buf.push(DrawCommand::Rect {
-                    rect: dropdown_rect,
-                    fill: Color::TRANSPARENT,
-                    radius: CornerRadius::same(5.0),
-                    stroke: Stroke::new(1.0, palette.border),
+                    rect: Rect::from_min_size(
+                        Vec2::new(panel.min.x + 8.0, top + height * 0.5),
+                        Vec2::new(panel.width() - 16.0, 1.0),
+                    ),
+                    fill: palette.border.with_alpha(160),
+                    radius: CornerRadius::ZERO,
+                    stroke: Stroke::NONE,
                 });
+                continue;
+            }
 
-                let mut item_y = dropdown_rect.min.y + 4.0;
-                for item in &menu.items {
-                    let r = Rect::from_min_size(
-                        Vec2::new(dropdown_rect.min.x + 4.0, item_y),
-                        Vec2::new(dropdown_rect.width() - 8.0, 24.0),
-                    );
-                    let is_hov = r.contains(ptr.position) && item.enabled;
+            let r = Rect::from_min_size(
+                Vec2::new(panel.min.x + 4.0, top),
+                Vec2::new(panel.width() - 8.0, MENU_ROW_H),
+            );
+            let highlighted =
+                (depth == deepest && self.highlight == Some(index)) || parent_row == Some(index);
+            let is_hov = r.contains(ptr.position) && item.enabled;
+            if highlighted || is_hov {
+                cmd_buf.push(DrawCommand::Rect {
+                    rect: r,
+                    fill: palette.elevated_high,
+                    radius: CornerRadius::same(3.0),
+                    stroke: Stroke::NONE,
+                });
+            }
 
-                    if is_hov {
-                        cmd_buf.push(DrawCommand::Rect {
-                            rect: r,
-                            fill: palette.elevated_high,
-                            radius: CornerRadius::same(3.0),
-                            stroke: Stroke::NONE,
-                        });
-                    }
+            if let Some(checked) = item.checked {
+                cmd_buf.push(DrawCommand::Rect {
+                    rect: Rect::from_min_size(
+                        Vec2::new(r.min.x + 6.0, r.center().y - 4.0),
+                        Vec2::new(8.0, 8.0),
+                    ),
+                    fill: if checked {
+                        palette.accent
+                    } else {
+                        Color::TRANSPARENT
+                    },
+                    radius: CornerRadius::same(2.0),
+                    stroke: Stroke::new(1.0, palette.text_muted),
+                });
+            }
 
-                    cmd_buf.push(DrawCommand::Text {
-                        text: item.label.clone(),
-                        pos: Vec2::new(r.min.x + 8.0, r.min.y + 5.0),
-                        size: 11.5,
-                        color: if item.enabled {
-                            palette.text
-                        } else {
-                            palette.text_muted.with_alpha(120)
-                        },
-                        strong: false,
-                    });
+            cmd_buf.push(DrawCommand::Text {
+                text: item.label.clone(),
+                pos: Vec2::new(r.min.x + 8.0 + check_col, r.min.y + 5.0),
+                size: 11.5,
+                color: if item.enabled {
+                    palette.text
+                } else {
+                    palette.text_muted.with_alpha(120)
+                },
+                strong: false,
+            });
 
-                    if let Some(sc) = &item.shortcut {
-                        let sc_w = ui_render::measure_text(sc, 10.5, false);
-                        cmd_buf.push(DrawCommand::Text {
-                            text: sc.clone(),
-                            pos: Vec2::new(r.max.x - 10.0 - sc_w, r.min.y + 6.0),
-                            size: 10.5,
-                            color: palette.text_muted,
-                            strong: false,
-                        });
-                    }
+            if let Some(sc) = &item.shortcut {
+                let sc_w = ui_render::measure_text(sc, 10.5, false);
+                cmd_buf.push(DrawCommand::Text {
+                    text: sc.clone(),
+                    pos: Vec2::new(r.max.x - 10.0 - sc_w, r.min.y + 6.0),
+                    size: 10.5,
+                    color: palette.text_muted,
+                    strong: false,
+                });
+            }
 
-                    item_y += 26.0;
-                }
+            if item.submenu.is_some() {
+                cmd_buf.push(DrawCommand::Text {
+                    text: ">".to_string(),
+                    pos: Vec2::new(r.max.x - 12.0, r.min.y + 5.0),
+                    size: 11.5,
+                    color: palette.text_muted,
+                    strong: false,
+                });
             }
         }
     }
@@ -1419,5 +1766,224 @@ mod tests {
 
         host.dismiss("n1");
         assert_eq!(host.notifications.len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod menu_bar_tests {
+    use super::*;
+
+    const BOUNDS: Rect = Rect {
+        min: Vec2::new(0.0, 0.0),
+        max: Vec2::new(800.0, 30.0),
+    };
+
+    fn sample_bar() -> MenuBar {
+        MenuBar::new(vec![
+            Menu::new(
+                "File",
+                vec![
+                    MenuItem::new("file_new", "New").with_shortcut("Ctrl+N"),
+                    MenuItem::separator(),
+                    MenuItem::new("file_recent", "Recent").with_submenu(vec![
+                        MenuItem::new("recent_a", "project_a.kolpona"),
+                        MenuItem::new("recent_b", "project_b.kolpona").disabled(),
+                        MenuItem::separator(),
+                        MenuItem::new("recent_c", "project_c.kolpona"),
+                    ]),
+                    MenuItem::check("view_grid", "Show grid", true).with_separator(),
+                    MenuItem::new("file_close", "Close").disabled(),
+                ],
+            ),
+            Menu::new("Edit", vec![MenuItem::new("edit_undo", "Undo")]),
+        ])
+    }
+
+    /// Centre of item `index` in open level `depth`, from the same geometry the bar draws.
+    fn centre(bar: &MenuBar, depth: usize, index: usize) -> Vec2 {
+        let levels = bar.open_levels(BOUNDS);
+        let level = &levels[depth];
+        let (top, height) = level.tops[index];
+        Vec2::new(level.rect.min.x + 30.0, top + height * 0.5)
+    }
+
+    #[test]
+    fn separators_are_dividers_and_never_activate() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        let levels = bar.open_levels(BOUNDS);
+        let (top, height) = levels[0].tops[1];
+        assert_eq!(height, MENU_SEP_H, "a divider is a short row");
+        let on_divider = Vec2::new(levels[0].rect.min.x + 30.0, top + 2.0);
+        assert_eq!(
+            bar.handle_mouse_down(on_divider, PointerButton::Primary, BOUNDS),
+            None
+        );
+        assert!(bar.is_open(), "clicking a divider keeps the menu open");
+    }
+
+    #[test]
+    fn check_item_emits_its_id_and_keeps_its_state() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        assert_eq!(bar.menus[0].items[3].checked, Some(true));
+        let p = centre(&bar, 0, 3);
+        assert_eq!(
+            bar.handle_mouse_down(p, PointerButton::Primary, BOUNDS),
+            Some("view_grid".into())
+        );
+    }
+
+    #[test]
+    fn disabled_items_do_nothing_on_click() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        let p = centre(&bar, 0, 4);
+        assert_eq!(
+            bar.handle_mouse_down(p, PointerButton::Primary, BOUNDS),
+            None
+        );
+        assert!(bar.is_open());
+    }
+
+    #[test]
+    fn hover_opens_a_submenu_and_a_click_inside_it_activates() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        assert!(bar.handle_mouse_move(centre(&bar, 0, 2), BOUNDS));
+        assert_eq!(
+            bar.submenu_path,
+            vec![2],
+            "hovering Recent opens its submenu"
+        );
+        assert_eq!(bar.open_levels(BOUNDS).len(), 2);
+
+        // The submenu sits to the right of its parent and does not overlap it.
+        let levels = bar.open_levels(BOUNDS);
+        assert!(levels[1].rect.min.x >= levels[0].rect.max.x - 2.0);
+
+        // Hovering the disabled entry leaves the highlight alone.
+        bar.handle_mouse_move(centre(&bar, 1, 1), BOUNDS);
+        assert_eq!(bar.highlight, None);
+        assert_eq!(
+            bar.handle_mouse_down(centre(&bar, 1, 0), PointerButton::Primary, BOUNDS),
+            Some("recent_a".into())
+        );
+        assert!(!bar.is_open(), "activating an item closes every level");
+        assert!(bar.submenu_path.is_empty());
+    }
+
+    #[test]
+    fn click_on_a_submenu_parent_opens_it_without_activating() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        assert_eq!(
+            bar.handle_mouse_down(centre(&bar, 0, 2), PointerButton::Primary, BOUNDS),
+            None
+        );
+        assert_eq!(bar.submenu_path, vec![2]);
+        assert!(bar.is_open());
+    }
+
+    #[test]
+    fn keyboard_walks_the_menu_skipping_dividers_and_disabled_items() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        bar.handle_key_down(&Key::ArrowDown);
+        assert_eq!(bar.highlight, Some(0), "first selectable item");
+        bar.handle_key_down(&Key::ArrowDown);
+        assert_eq!(bar.highlight, Some(2), "skips the divider at index 1");
+        bar.handle_key_down(&Key::ArrowDown);
+        assert_eq!(bar.highlight, Some(3), "the check item follows Recent");
+        bar.handle_key_down(&Key::ArrowDown);
+        assert_eq!(
+            bar.highlight,
+            Some(3),
+            "the disabled Close is skipped at the end"
+        );
+
+        bar.handle_key_down(&Key::ArrowUp);
+        assert_eq!(bar.highlight, Some(2));
+        // ArrowRight opens the highlighted submenu and highlights its first selectable item.
+        assert_eq!(bar.handle_key_down(&Key::ArrowRight), None);
+        assert_eq!(bar.submenu_path, vec![2]);
+        assert_eq!(bar.highlight, Some(0));
+        bar.handle_key_down(&Key::ArrowDown);
+        assert_eq!(
+            bar.highlight,
+            Some(3),
+            "skips the disabled entry and the divider"
+        );
+        assert_eq!(
+            bar.handle_key_down(&Key::Enter),
+            Some("recent_c".into()),
+            "Enter activates the highlighted submenu item"
+        );
+        assert!(!bar.is_open());
+    }
+
+    #[test]
+    fn escape_and_arrow_left_close_one_level_at_a_time() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        bar.handle_key_down(&Key::ArrowDown);
+        bar.handle_key_down(&Key::ArrowDown);
+        bar.handle_key_down(&Key::ArrowRight);
+        assert_eq!(bar.submenu_path, vec![2]);
+
+        bar.handle_key_down(&Key::Escape);
+        assert!(
+            bar.submenu_path.is_empty(),
+            "Escape closes the submenu first"
+        );
+        assert!(bar.is_open());
+        assert_eq!(bar.highlight, None);
+
+        bar.handle_key_down(&Key::ArrowDown);
+        bar.handle_key_down(&Key::ArrowDown);
+        bar.handle_key_down(&Key::ArrowRight);
+        assert_eq!(bar.submenu_path, vec![2]);
+        bar.handle_key_down(&Key::ArrowLeft);
+        assert!(bar.submenu_path.is_empty(), "ArrowLeft closes the submenu");
+        assert_eq!(
+            bar.highlight,
+            Some(2),
+            "and returns the highlight to its parent"
+        );
+
+        bar.handle_key_down(&Key::Escape);
+        assert!(!bar.is_open(), "Escape with no submenu closes the menu");
+    }
+
+    #[test]
+    fn arrows_at_the_top_level_switch_menus() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        bar.handle_key_down(&Key::ArrowRight);
+        assert_eq!(bar.open_menu_idx, Some(1));
+        bar.handle_key_down(&Key::ArrowLeft);
+        assert_eq!(bar.open_menu_idx, Some(0));
+    }
+
+    #[test]
+    fn hovering_another_title_while_open_switches_menus() {
+        let mut bar = sample_bar();
+        bar.open_menu(0);
+        let edit_title = bar.title_rects(BOUNDS)[1].center();
+        bar.handle_mouse_move(edit_title, BOUNDS);
+        assert_eq!(bar.open_menu_idx, Some(1));
+    }
+
+    #[test]
+    fn title_click_toggles_and_outside_click_closes() {
+        let mut bar = sample_bar();
+        let title = bar.title_rects(BOUNDS)[0].center();
+        bar.handle_mouse_down(title, PointerButton::Primary, BOUNDS);
+        assert_eq!(bar.open_menu_idx, Some(0));
+        bar.handle_mouse_down(title, PointerButton::Primary, BOUNDS);
+        assert_eq!(bar.open_menu_idx, None, "clicking an open title closes it");
+        bar.open_menu(0);
+        bar.handle_mouse_down(Vec2::new(700.0, 500.0), PointerButton::Primary, BOUNDS);
+        assert!(!bar.is_open());
     }
 }

@@ -83,9 +83,10 @@ impl TextStyle {
         measure_face(text, self.size, self.face) + self.tracking * glyphs
     }
 
-    /// Top offset that centres one line of this style in a box of `height`.
+    /// Top offset that centres one line of this style in a box of `height` (the drawn
+    /// position is near the top of the capitals, as with `text_center_y`).
     pub fn centre_offset(&self, height: f32) -> f32 {
-        ((height - self.size * 1.28) * 0.5).round()
+        ((height - self.size * 0.72) * 0.5).round()
     }
 
     /// Pushes `text` at `pos` (top-left of the line box).

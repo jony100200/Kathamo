@@ -126,21 +126,39 @@ impl Studio<'_> {
         let c = rect.center();
         let title_style = TypeRole::Title.style();
         let body_style = TypeRole::Body.style();
-        let lines = wrap_text(
+        let mut lines = wrap_text(
             card.body,
             (rect.width() - SPACE_6 * 2.0).min(420.0),
             body_style.size,
         );
-        let block = 64.0 + SPACE_4 + 24.0 + SPACE_2 + lines.len() as f32 * 20.0 + SPACE_6 + 36.0;
+        // A short card gets a smaller disc and only the body lines that fit.
+        let room = rect.height() - SPACE_4 * 2.0;
+        let full = |disc: f32, n: usize| {
+            disc + SPACE_4 + 24.0 + SPACE_2 + n as f32 * 20.0 + SPACE_6 + 36.0
+        };
+        let disc_side = if full(64.0, lines.len()) <= room {
+            64.0
+        } else {
+            40.0
+        };
+        while !lines.is_empty() && full(disc_side, lines.len()) > room {
+            lines.pop();
+        }
+        let block = full(disc_side, lines.len());
         let mut y = (c.y - block * 0.5).max(rect.min.y + SPACE_4);
-        let disc = centered(Vec2::new(c.x, y + 32.0), Vec2::splat(64.0));
-        self.outline(disc, p.elevated.lerp(p.accent, glow * 0.25), p.border, 32.0);
+        let disc = centered(Vec2::new(c.x, y + disc_side * 0.5), Vec2::splat(disc_side));
+        self.outline(
+            disc,
+            p.elevated.lerp(p.accent, glow * 0.25),
+            p.border,
+            disc_side * 0.5,
+        );
         self.icon(
             card.glyph,
-            centered(disc.center(), Vec2::splat(32.0)),
+            centered(disc.center(), Vec2::splat(disc_side * 0.5)),
             p.accent,
         );
-        y += 64.0 + SPACE_4;
+        y += disc_side + SPACE_4;
         let tw = title_style.measure(card.title);
         title_style.draw(self.buf, card.title, Vec2::new(c.x - tw * 0.5, y), p.text);
         y += 24.0 + SPACE_2;
@@ -359,6 +377,27 @@ mod tests {
             ExtendedTokens::for_mode(ThemeMode::Dark),
             pointer,
         )
+    }
+
+    #[test]
+    fn a_short_drop_card_keeps_its_buttons_inside() {
+        let rect = Rect::from_min_size(Vec2::ZERO, Vec2::new(600.0, 200.0));
+        let card = DropCard {
+            glyph: crate::studio::glyphs::PHOTO,
+            title: "Drop an image",
+            body: "A long explanation that wraps onto more than one line in a narrow card,                    and then some more words so it needs a third line too.",
+            browse: "Browse",
+            secondary: None,
+            hovering_files: false,
+        };
+        let mut buf = CommandBuffer::new();
+        let idle = PointerState::default();
+        studio(&mut buf, &idle).drop_card(rect, card);
+        for c in buf.commands() {
+            if let DrawCommand::Rect { rect: r, .. } = c {
+                assert!(r.max.y <= rect.max.y + 0.5, "{r:?} spills out of {rect:?}");
+            }
+        }
     }
 
     #[test]

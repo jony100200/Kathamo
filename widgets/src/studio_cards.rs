@@ -194,12 +194,13 @@ impl Studio<'_> {
         out
     }
 
-    /// A clickable thumbnail card: an image (`texture`, or a placeholder icon), a title, a
-    /// caption and an optional small badge over the image's top-left corner.
+    /// A clickable thumbnail card: an image (`texture`: id and width / height, cropped to
+    /// fill), or a placeholder icon, a title, a caption and an optional small badge over the
+    /// image's top-left corner.
     pub fn thumbnail_card(
         &mut self,
         rect: Rect,
-        texture: Option<u64>,
+        texture: Option<(u64, f32)>,
         placeholder: Glyph,
         title: &str,
         caption: &str,
@@ -227,10 +228,10 @@ impl Studio<'_> {
         );
         self.fill(image, p.canvas, RADIUS_CONTROL);
         match texture {
-            Some(id) => self.buf.push(DrawCommand::Image {
+            Some((id, aspect)) => self.buf.push(DrawCommand::Image {
                 rect: image,
                 texture_id: id,
-                uv_rect: Rect::from_min_size(Vec2::ZERO, Vec2::splat(1.0)),
+                uv_rect: cover_uv(aspect, image.width() / image.height().max(1.0)),
                 tint: Color::WHITE,
             }),
             None => self.icon(
@@ -328,6 +329,21 @@ impl Studio<'_> {
     }
 }
 
+/// The centred part of an image of aspect `source` (width / height) that fills a box of
+/// aspect `target`, as a UV rectangle.
+pub fn cover_uv(source: f32, target: f32) -> Rect {
+    if !(source > 0.0 && target > 0.0) {
+        return Rect::from_min_size(Vec2::ZERO, Vec2::splat(1.0));
+    }
+    if source > target {
+        let w = target / source;
+        Rect::from_min_size(Vec2::new((1.0 - w) * 0.5, 0.0), Vec2::new(w, 1.0))
+    } else {
+        let h = source / target;
+        Rect::from_min_size(Vec2::new(0.0, (1.0 - h) * 0.5), Vec2::new(1.0, h))
+    }
+}
+
 /// A dashed rounded-corner outline (straight dashes on the sides, corners left open).
 fn dashed_outline(s: &mut Studio, rect: Rect, color: Color) {
     let (dash, gap, inset) = (8.0, 6.0, RADIUS_CARD);
@@ -398,6 +414,15 @@ mod tests {
                 assert!(r.max.y <= rect.max.y + 0.5, "{r:?} spills out of {rect:?}");
             }
         }
+    }
+
+    #[test]
+    fn cover_uv_crops_the_long_side_and_keeps_the_centre() {
+        let wide = cover_uv(2.0, 1.0);
+        assert!((wide.width() - 0.5).abs() < 1e-6 && (wide.min.x - 0.25).abs() < 1e-6);
+        let tall = cover_uv(1.0, 2.0);
+        assert!((tall.height() - 0.5).abs() < 1e-6 && (tall.min.y - 0.25).abs() < 1e-6);
+        assert_eq!(cover_uv(0.0, 1.0).width(), 1.0);
     }
 
     #[test]

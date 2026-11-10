@@ -29,8 +29,8 @@ pub struct HubProject<'a> {
     pub caption: &'a str,
     /// For example the project's kind or last mode.
     pub badge: Option<&'a str>,
-    /// A cover image texture already uploaded by the app.
-    pub cover: Option<u64>,
+    /// A cover image texture already uploaded by the app, and its width / height.
+    pub cover: Option<(u64, f32)>,
 }
 
 /// Everything the hub shows this frame.
@@ -95,10 +95,10 @@ pub fn project_hub(s: &mut Studio, rect: Rect, hub: &ProjectHub) -> Option<HubAc
         }
         x -= SPACE_2;
     }
-    let mut y = col.min.y + 40.0 + 20.0 + SPACE_8;
+    let mut y = col.min.y + 40.0 + 20.0 + SPACE_6;
     let n = hub.starts.len().max(1) as f32;
     let card_w = ((col.width() - SPACE_4 * (n - 1.0)) / n).floor();
-    let card_h = 200.0;
+    let card_h = 176.0;
     for (i, start) in hub.starts.iter().enumerate() {
         let r = Rect::from_min_size(
             Vec2::new(col.min.x + i as f32 * (card_w + SPACE_4), y),
@@ -108,7 +108,7 @@ pub fn project_hub(s: &mut Studio, rect: Rect, hub: &ProjectHub) -> Option<HubAc
             action = Some(HubAction::Start { card: i, action: a });
         }
     }
-    y += card_h + SPACE_8;
+    y += card_h + SPACE_6;
     TypeRole::Section
         .style()
         .draw(s.buf, "Recent projects", Vec2::new(col.min.x, y), p.text);
@@ -120,7 +120,14 @@ pub fn project_hub(s: &mut Studio, rect: Rect, hub: &ProjectHub) -> Option<HubAc
             .draw(s.buf, hub.recent_empty, area.min, p.text_muted);
         return action;
     }
-    let cards = card_grid(area, hub.recent.len(), 200.0, 0.62, 52.0);
+    // Covers are wide; a short window gets flatter cards rather than cut-off ones.
+    let mut cards = card_grid(area, hub.recent.len(), 200.0, 0.56, 52.0);
+    if let Some(first) = cards.first().copied() {
+        if first.height() > area.height() && first.width() > 0.0 {
+            let aspect = ((area.height() - 52.0) / first.width()).max(0.3);
+            cards = card_grid(area, hub.recent.len(), 200.0, aspect, 52.0);
+        }
+    }
     s.clip(area);
     for (i, (r, item)) in cards.iter().zip(hub.recent).enumerate() {
         if r.min.y > area.max.y {

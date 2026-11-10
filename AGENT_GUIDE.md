@@ -329,6 +329,12 @@ Use `WorkspaceHost::with_preset(registry, id, name, WorkspacePreset::Spatial3D)`
 
 An application implements `KathamoApp`, forwards pointer input to its `WorkspaceHost`, then starts its real OS window with `run_native(app)`. The application supplies viewport image buffers, editor data, and backend functionality; Kathamo supplies UI chrome and input infrastructure.
 
+### App-aware panels, menus, palette and prompts
+- **Panels that read app state.** `Editor::render_with_context(.., ctx: &mut (dyn Any + 'static))` receives the app. Call `WorkspaceHost::render_with_context(cmd_buf, bounds, ptr, palette, &mut app)` each frame. `Editor::render` still works unchanged for editors that do not need state.
+- **Menus.** `MenuItem::with_submenu(items)` opens a nested dropdown (hover, click or ArrowRight). `MenuItem::check(id, label, checked)` draws a check box. `MenuItem::separator()` is a divider. `MenuItem::disabled()` greys an item out. Feed keys to `MenuBar::handle_key_down(&key)` while `MenuBar::is_open()`.
+- **Command palette.** Forward `handle_text_input`, `handle_key_down`, `handle_pointer_move`, `handle_pointer_down` and `handle_scroll` while `is_open`, then read the picked id with `take_chosen()`.
+- **Input prompt.** `InputPrompt::open(title, message, PromptKind::{Text, Number, Choice})` for one typed value. Handle keys and clicks while `is_open`. Each call returns `Some(PromptOutcome::Submitted(PromptValue::..))` or `Some(PromptOutcome::Cancelled)` when the prompt ends.
+
 ### Fluent Declarative Layouts (`LayoutBuilder`)
 Compose forms, cards, scrubbers, and controls with zero coordinate math:
 ```rust

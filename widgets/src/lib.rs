@@ -15,6 +15,7 @@ pub mod icon_cache;
 pub mod input;
 pub mod inspector;
 pub mod input_prompt;
+pub mod meter;
 pub mod navigation_rail;
 pub mod node_editor;
 pub mod property_inspector;

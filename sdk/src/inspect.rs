@@ -23,14 +23,8 @@ impl InterfaceInspector {
         snap.focused_element = host.focused_panel_id.clone();
         for leaf in &layout.leaves {
             let mut group = UiInspectorNode::new(&leaf.id, "DockLeaf", leaf.bounds);
-            for (index, tab) in leaf.tabs.iter().enumerate() {
-                let tab_bounds = Rect::from_min_size(
-                    Vec2::new(
-                        leaf.header_rect.min.x + 8.0 + index as f32 * 114.0,
-                        leaf.header_rect.min.y + 2.0,
-                    ),
-                    Vec2::new(110.0, leaf.header_rect.height() - 2.0),
-                );
+            let rects = ui_widgets::dock_view::dock_tab_rects(leaf.header_rect, &leaf.tabs);
+            for (index, (tab, tab_bounds)) in leaf.tabs.iter().zip(rects).enumerate() {
                 group.add_child(
                     UiInspectorNode::new(&tab.id, "DockTab", tab_bounds)
                         .with_label(&tab.title)

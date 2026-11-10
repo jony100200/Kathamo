@@ -9,6 +9,52 @@ use ui_core::{
 use ui_platform::{PointerButton, PointerState};
 use ui_render::{CommandBuffer, DrawCommand};
 
+/// Tab title size in dock headers.
+const TAB_TEXT: f32 = 11.5;
+/// Room for the close cross on a closable tab.
+const TAB_CLOSE: f32 = 18.0;
+const TAB_GAP: f32 = 4.0;
+const TAB_MIN: f32 = 44.0;
+const TAB_MAX: f32 = 180.0;
+/// Room kept free at the right of a header for the maximize button.
+const HEADER_RESERVED: f32 = 34.0;
+
+/// The tab rectangles of a leaf header: each tab as wide as its title (bold, plus padding and
+/// the close cross), and all of them shrunk evenly when they would run past the header, so no
+/// tab ever spills over its neighbour panel. Titles that no longer fit are shortened with an
+/// ellipsis when drawn.
+pub fn dock_tab_rects(header: Rect, tabs: &[DockTabPanel]) -> Vec<Rect> {
+    let natural: Vec<f32> = tabs
+        .iter()
+        .map(|tab| {
+            let close = if tab.is_closable { TAB_CLOSE } else { 0.0 };
+            (ui_render::measure_text(&tab.title, TAB_TEXT, true) + 18.0 + close)
+                .clamp(TAB_MIN, TAB_MAX)
+        })
+        .collect();
+    let gaps = TAB_GAP * tabs.len().saturating_sub(1) as f32;
+    let room = (header.width() - 8.0 - HEADER_RESERVED - gaps).max(0.0);
+    let total: f32 = natural.iter().sum();
+    let scale = if total > room && total > 0.0 {
+        room / total
+    } else {
+        1.0
+    };
+    let mut x = header.min.x + 8.0;
+    natural
+        .into_iter()
+        .map(|w| {
+            let w = (w * scale).max(TAB_MIN.min(w));
+            let rect = Rect::from_min_size(
+                Vec2::new(x, header.min.y + 2.0),
+                Vec2::new(w, header.height() - 2.0),
+            );
+            x += w + TAB_GAP;
+            rect
+        })
+        .collect()
+}
+
 /// State of an active tab drag operation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DraggingTabState {
@@ -68,14 +114,8 @@ impl DockTreeView {
                 }
 
                 // Check tab clicks
-                let mut tab_x = leaf.header_rect.min.x + 8.0;
-                for (t_idx, tab) in leaf.tabs.iter().enumerate() {
-                    let tab_w = 110.0;
-                    let tab_rect = Rect::from_min_size(
-                        Vec2::new(tab_x, leaf.header_rect.min.y + 2.0),
-                        Vec2::new(tab_w, leaf.header_rect.height() - 2.0),
-                    );
-
+                let rects = dock_tab_rects(leaf.header_rect, &leaf.tabs);
+                for (t_idx, (tab, tab_rect)) in leaf.tabs.iter().zip(rects).enumerate() {
                     if tab_rect.contains(pos) {
                         // Close button on tab
                         let close_rect = Rect::from_min_size(
@@ -99,7 +139,6 @@ impl DockTreeView {
                         });
                         return true;
                     }
-                    tab_x += tab_w + 4.0;
                 }
             }
         }
@@ -237,14 +276,9 @@ impl DockTreeView {
             });
 
             // Tabs
-            let mut tab_x = leaf.header_rect.min.x + 8.0;
-            for (t_idx, tab) in leaf.tabs.iter().enumerate() {
-                let tab_w = 110.0;
+            let rects = dock_tab_rects(leaf.header_rect, &leaf.tabs);
+            for (t_idx, (tab, tab_rect)) in leaf.tabs.iter().zip(rects).enumerate() {
                 let is_active = t_idx == leaf.active_tab;
-                let tab_rect = Rect::from_min_size(
-                    Vec2::new(tab_x, leaf.header_rect.min.y + 2.0),
-                    Vec2::new(tab_w, leaf.header_rect.height() - 2.0),
-                );
 
                 buf.push(DrawCommand::Rect {
                     rect: tab_rect,
@@ -261,10 +295,12 @@ impl DockTreeView {
                     },
                 });
 
+                let close = if tab.is_closable { TAB_CLOSE } else { 0.0 };
+                let title_room = (tab_rect.width() - 14.0 - close).max(8.0);
                 buf.push(DrawCommand::Text {
-                    text: tab.title.clone(),
+                    text: ui_render::fit_text(&tab.title, TAB_TEXT, is_active, title_room),
                     pos: Vec2::new(tab_rect.min.x + 8.0, tab_rect.min.y + 5.0),
-                    size: 11.5,
+                    size: TAB_TEXT,
                     color: if is_active {
                         palette.text
                     } else {
@@ -283,8 +319,6 @@ impl DockTreeView {
                         strong: false,
                     });
                 }
-
-                tab_x += tab_w + 4.0;
             }
 
             // Maximize / Restore Toggle Icon
@@ -369,6 +403,31 @@ mod tests {
     use super::*;
     use ui_core::{DockNode, DockTabPanel};
     use ui_themes::ThemePalette;
+
+    #[test]
+    fn dock_tabs_fit_their_titles_and_never_spill_past_the_header() {
+        let tab = |title: &str| DockTabPanel::new(title, title);
+        let header = Rect::from_min_size(Vec2::new(100.0, 10.0), Vec2::new(900.0, 26.0));
+        let short = dock_tab_rects(header, &[tab("Story"), tab("Activity")]);
+        assert!(
+            short[0].width() < short[1].width(),
+            "wider titles get wider tabs"
+        );
+        assert!(short[0].width() >= TAB_MIN);
+
+        let many: Vec<_> = (0..12).map(|i| tab(&format!("Panel number {i}"))).collect();
+        let narrow = Rect::from_min_size(Vec2::new(0.0, 0.0), Vec2::new(400.0, 26.0));
+        let rects = dock_tab_rects(narrow, &many);
+        assert_eq!(rects.len(), 12);
+        let last = rects.last().unwrap();
+        assert!(
+            last.max.x <= narrow.max.x - HEADER_RESERVED + 1.0 || last.width() <= TAB_MIN,
+            "tabs shrink to fit: {last:?}"
+        );
+        for pair in rects.windows(2) {
+            assert!(pair[0].max.x <= pair[1].min.x, "no overlap");
+        }
+    }
 
     #[test]
     fn test_dock_view_interactions() {

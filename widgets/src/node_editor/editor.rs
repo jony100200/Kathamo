@@ -5,8 +5,8 @@ use super::geometry::{
 use super::minimap::render_minimap;
 use super::presets::create_default_graph;
 use super::render::{
-    render_connections_with, render_grid, render_hud, render_marquee, render_nodes_with,
-    render_pending_wire_with, render_search_overlay, render_toolbar,
+    render_connections_with, render_grid, render_groups, render_hud, render_marquee,
+    render_nodes_with, render_pending_wire_with, render_search_overlay, render_toolbar,
 };
 use super::search_menu::SearchMenuState;
 use super::types::PresetNode;
@@ -603,6 +603,9 @@ impl NodeEditor {
 
         // 1. Grid
         render_grid(buf, viewport, self.pan, self.zoom, palette);
+
+        // 1.5. Group frames, behind wires and nodes
+        render_groups(buf, &self.groups, self.pan, self.zoom, viewport, palette);
 
         // 2. Connections
         let view = (self.pan, self.zoom, viewport.min);

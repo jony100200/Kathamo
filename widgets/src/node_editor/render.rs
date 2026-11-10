@@ -1,8 +1,8 @@
 use super::geometry::{input_pin_world_pos, output_pin_world_pos, toolbar_rects, world_to_screen};
 use super::search_menu::SearchMenuState;
 use super::types::{
-    category_color, resolve_pin_color, GraphNode, NodeConnection, PendingWire, PinColors,
-    ToolbarAction,
+    category_color, resolve_pin_color, GraphNode, NodeConnection, NodeGroup, PendingWire,
+    PinColors, ToolbarAction,
 };
 use crate::theme::ThemePalette;
 use ui_core::{CornerRadius, Rect, Stroke, Vec2};
@@ -173,6 +173,42 @@ pub fn render_pending_wire_with(
             end,
             stroke: Stroke::new(2.0 * zoom, resolve_pin_color(pin_type, pin_colors, palette)),
         });
+    }
+}
+
+/// Draws group frames (titled, tinted boxes behind their nodes). The group's colour sets the
+/// tint and border; its alpha is ignored so opaque and translucent colours look the same.
+/// Frames outside the viewport are skipped.
+pub fn render_groups(
+    buf: &mut CommandBuffer,
+    groups: &[NodeGroup],
+    pan: Vec2,
+    zoom: f32,
+    viewport: Rect,
+    palette: &ThemePalette,
+) {
+    for group in groups {
+        let min = world_to_screen(group.bounds.min, pan, zoom, viewport.min);
+        let max = world_to_screen(group.bounds.max, pan, zoom, viewport.min);
+        let rect = Rect::from_min_max(min, max);
+        if !rect.intersects(viewport) {
+            continue;
+        }
+        buf.push(DrawCommand::Rect {
+            rect,
+            fill: group.color.with_alpha(26),
+            radius: CornerRadius::same(8.0 * zoom),
+            stroke: Stroke::new(1.0, group.color.with_alpha(150)),
+        });
+        if !group.title.is_empty() && zoom >= 0.3 {
+            buf.push(DrawCommand::Text {
+                text: group.title.clone(),
+                pos: min + Vec2::new(10.0 * zoom, 8.0 * zoom),
+                size: (12.0 * zoom).max(8.0),
+                color: palette.text,
+                strong: true,
+            });
+        }
     }
 }
 

@@ -526,3 +526,30 @@ fn registered_pin_colours_override_wires_and_pins() {
     assert_eq!(wires.len(), wire_types.len());
     assert!(wires.iter().all(|c| *c == teal));
 }
+
+#[test]
+fn group_frames_draw_behind_nodes_with_their_title() {
+    use super::types::NodeGroup;
+    use ui_core::Color;
+    use ui_render::{CommandBuffer, DrawCommand};
+    let mut editor = NodeEditor::default();
+    editor.groups = vec![NodeGroup {
+        id: "g1".into(),
+        title: "CARD 1: MODEL".into(),
+        bounds: Rect::from_min_size(Vec2::new(10.0, 10.0), Vec2::new(300.0, 200.0)),
+        color: Color::rgb(170, 110, 240),
+    }];
+    let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1280.0, 720.0));
+    let mut buffer = CommandBuffer::new();
+    editor.render(&mut buffer, viewport, &ThemePalette::dark());
+    let commands = buffer.commands();
+    let title = commands
+        .iter()
+        .position(|c| matches!(c, DrawCommand::Text { text, .. } if text == "CARD 1: MODEL"))
+        .expect("the group title is drawn");
+    let first_node = commands
+        .iter()
+        .position(|c| matches!(c, DrawCommand::Text { text, .. } if *text == editor.nodes[0].title))
+        .expect("a node title is drawn");
+    assert!(title < first_node, "frames are drawn before (behind) nodes");
+}

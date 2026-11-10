@@ -59,28 +59,31 @@ pub fn render(
         stroke: Stroke::new(1.0, palette.border.with_alpha(160)),
     });
 
-    // Sliding pill: x and width spring toward the active tab.
-    let target = rects[active.min(rects.len() - 1)];
-    let key = motion::rect_key("tab_strip", bounds);
-    let x = motion::animate(key, target.min.x, motion::SLIDE);
-    let w = motion::animate(key ^ 1, target.width(), motion::SLIDE);
-    let pill = Rect::from_min_size(Vec2::new(x, target.min.y), Vec2::new(w, target.height()));
-    buf.push(DrawCommand::SoftShadow {
-        rect: pill,
-        radius: CornerRadius::same(5.0),
-        color: Color::rgba(0, 0, 0, 70),
-        offset: Vec2::new(0.0, 1.0),
-        blur: 4.0,
-        spread: 0.0,
-    });
-    buf.push(DrawCommand::Surface {
-        rect: pill,
-        fill_top: palette.elevated_high,
-        fill_bottom: palette.elevated,
-        radius: CornerRadius::same(5.0),
-        stroke: Stroke::new(1.0, palette.border.with_alpha(200)),
-        rim_strength: 0.5,
-    });
+    // Sliding pill: x and width spring toward the active tab. An `active`
+    // index past the last tab means "no tab selected" and draws no pill.
+    if let Some(target) = rects.get(active).copied() {
+        let key = motion::rect_key("tab_strip", bounds);
+        let x = motion::animate(key, target.min.x, motion::SLIDE);
+        let w = motion::animate(key ^ 1, target.width(), motion::SLIDE);
+        let pill =
+            Rect::from_min_size(Vec2::new(x, target.min.y), Vec2::new(w, target.height()));
+        buf.push(DrawCommand::SoftShadow {
+            rect: pill,
+            radius: CornerRadius::same(5.0),
+            color: Color::rgba(0, 0, 0, 70),
+            offset: Vec2::new(0.0, 1.0),
+            blur: 4.0,
+            spread: 0.0,
+        });
+        buf.push(DrawCommand::Surface {
+            rect: pill,
+            fill_top: palette.elevated_high,
+            fill_bottom: palette.elevated,
+            radius: CornerRadius::same(5.0),
+            stroke: Stroke::new(1.0, palette.border.with_alpha(200)),
+            rim_strength: 0.5,
+        });
+    }
 
     for (i, (label, r)) in labels.iter().zip(rects).enumerate() {
         let is_active = i == active;
@@ -128,5 +131,28 @@ mod tests {
         assert_eq!(hit(&rects, mid), Some(1));
         let bounds = strip_bounds(&rects, Vec2::new(10.0, 0.0), 28.0);
         assert!(bounds.max.x >= rects[2].max.x);
+    }
+
+    #[test]
+    fn active_past_the_end_draws_no_pill_and_no_strong_label() {
+        let labels = ["Home", "Chat"];
+        let rects = tab_rects(&labels, Vec2::ZERO, 28.0);
+        let bounds = strip_bounds(&rects, Vec2::ZERO, 28.0);
+        let palette = ThemePalette::dark();
+        let mut buf = CommandBuffer::new();
+        render(&mut buf, &labels, &rects, bounds, usize::MAX, Vec2::ZERO, &palette);
+        let commands = buf.commands();
+        assert!(!commands
+            .iter()
+            .any(|c| matches!(c, DrawCommand::Surface { .. })));
+        assert!(!commands
+            .iter()
+            .any(|c| matches!(c, DrawCommand::Text { strong: true, .. })));
+        let mut buf = CommandBuffer::new();
+        render(&mut buf, &labels, &rects, bounds, 1, Vec2::ZERO, &palette);
+        assert!(buf
+            .commands()
+            .iter()
+            .any(|c| matches!(c, DrawCommand::Surface { .. })));
     }
 }

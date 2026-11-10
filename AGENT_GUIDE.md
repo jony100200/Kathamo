@@ -385,7 +385,9 @@ runtime.set_text_by_id(&reloaded, &id, "Hello").ok(); // only TextInput accepts 
 let actions = runtime.take_events();
 ```
 
-For complex node UIs, validate and save `GraphDocument::from_editor(&editor)`; use `render_guided` for a readable step view or `apply_to` for the full existing `NodeEditor`. The two presentations share IDs, but Kathamo never executes the graph.
+For complex node UIs, validate and save `GraphDocument::from_editor(&editor)`; use `render_guided` for a readable step view or `apply_to` for the full existing `NodeEditor`. The two presentations share IDs, but Kathamo never executes the graph. Give your socket types their own wire colours with `editor.set_pin_color("HeightField", color)`; unregistered types use a stable themed hue.
+
+Native file dialogs never block the UI thread: `kathamo::dialogs::pick_file(&[FileFilter::new("Images", &["png"])])`, `pick_folder()` and `save_file(filters, name)` return a `DialogHandle`; call `handle.poll()` each frame until it returns `Some(DialogOutcome::Picked(path) | Cancelled | Unavailable)`. Keep a typed path field as fallback (no native dialog on Linux/Android yet). Override `KathamoApp::start_maximized` to open the main window maximized on small or high-DPI screens.
 
 Local verification after source edits: `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, `cargo test --workspace`, then `cargo run -p kathamo --example visual_designer -- --headless` and `cargo run -p kathamo --example interactive_ui`. Native pointer/keyboard/IME review is still required.
 

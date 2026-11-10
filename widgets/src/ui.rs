@@ -148,7 +148,11 @@ impl<'a> KolponaUi<'a> {
         icon: Option<StudioIcon>,
     ) -> Response {
         let height = 30.0;
-        let width = (text.len() as f32 * 8.5 + if icon.is_some() { 36.0 } else { 24.0 }).max(72.0);
+        let width = crate::controls::button_width(
+            text,
+            style == ButtonStyle::Primary,
+            if icon.is_some() { 22.0 } else { 0.0 },
+        );
         let rect = Rect::from_min_size(self.cursor, Vec2::new(width, height));
 
         let hovered = rect.contains(self.pointer.position);
@@ -237,7 +241,7 @@ impl<'a> KolponaUi<'a> {
             strong: false,
         });
         let width = match self.direction {
-            Direction::Horizontal => (text.len() as f32 * 7.5 + 4.0).max(30.0),
+            Direction::Horizontal => (ui_render::measure_text(text, size, false) + 4.0).max(30.0),
             Direction::Vertical => self.bounds.width(),
         };
         if let Some(tree) = &mut self.accessibility {

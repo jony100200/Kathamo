@@ -26,6 +26,8 @@ pub fn render_button(
         is_hovered,
         ui_core::motion::HOVER,
     );
+    // Flat, calm controls: a raised fill with a hairline border, the accent only for the main
+    // action. No gloss: depth comes from the panel around them.
     let (rest, hover, stroke, text_color) = match style {
         ButtonStyle::Primary => (
             palette.accent,
@@ -34,9 +36,9 @@ pub fn render_button(
             palette.canvas,
         ),
         ButtonStyle::Secondary => (
-            palette.surface,
             palette.elevated,
-            Stroke::new(1.0, palette.border.lerp(palette.text_muted, t * 0.35)),
+            palette.elevated_high,
+            Stroke::new(1.0, palette.border.lerp(palette.text_muted, t * 0.25)),
             palette.text,
         ),
         ButtonStyle::Ghost => (
@@ -54,34 +56,42 @@ pub fn render_button(
     };
     let fill = rest.lerp(hover, t);
 
-    // One GPU SDF quad for the full button treatment; no stacked rectangle layers.
-    let depth = if style == ButtonStyle::Ghost { 0 } else { 12 };
-    let bottom = ui_core::Color::rgba(
-        fill.r.saturating_sub(depth),
-        fill.g.saturating_sub(depth),
-        fill.b.saturating_sub(depth),
-        fill.a,
-    );
-    buf.push(DrawCommand::Surface {
+    buf.push(DrawCommand::Rect {
         rect,
-        fill_top: fill,
-        fill_bottom: bottom,
-        radius: CornerRadius::same(7.0),
+        fill,
+        radius: CornerRadius::same(BUTTON_RADIUS),
         stroke,
-        rim_strength: if style == ButtonStyle::Ghost {
-            0.0
-        } else {
-            0.55
-        },
     });
 
+    // The label is centred; one that does not fit starts at the left padding and is cut
+    // with an ellipsis.
+    let strong = style == ButtonStyle::Primary;
+    // Half a pixel of slack: width = text + padding, and float rounding must not cut it.
+    let room = (rect.width() - 2.0 * BUTTON_PAD + 0.5).max(0.0);
+    let shown = ui_render::fit_text(label, BUTTON_TEXT, strong, room);
+    let w = ui_render::measure_text(&shown, BUTTON_TEXT, strong);
+    let x = if w <= room {
+        rect.center().x - w * 0.5
+    } else {
+        rect.min.x + BUTTON_PAD
+    };
     buf.push(DrawCommand::Text {
-        text: label.to_string(),
-        pos: Vec2::new(rect.min.x + 12.0, rect.center().y - 8.0),
-        size: 13.0,
+        text: shown,
+        pos: Vec2::new(x, rect.center().y - 8.0),
+        size: BUTTON_TEXT,
         color: text_color,
-        strong: style == ButtonStyle::Primary,
+        strong,
     });
+}
+
+/// Button label size, side padding and corner radius.
+pub const BUTTON_TEXT: f32 = 12.5;
+pub const BUTTON_PAD: f32 = 14.0;
+pub const BUTTON_RADIUS: f32 = 6.0;
+
+/// Width of a button whose label is `text` (plus `icon` extra pixels for a leading icon).
+pub fn button_width(text: &str, strong: bool, icon: f32) -> f32 {
+    (ui_render::measure_text(text, BUTTON_TEXT, strong) + 2.0 * BUTTON_PAD + icon).max(64.0)
 }
 
 pub fn render_badge(
@@ -96,7 +106,7 @@ pub fn render_badge(
     } else {
         palette.warning
     };
-    let width = (text.len() as f32 * 7.5 + 16.0).max(60.0);
+    let width = (ui_render::measure_text(text, 11.5, false) + 16.0).max(48.0);
     let rect = Rect::from_min_size(pos, Vec2::new(width, 22.0));
 
     buf.push(DrawCommand::Rect {

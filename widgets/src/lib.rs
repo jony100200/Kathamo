@@ -14,6 +14,7 @@ pub mod hierarchy_tree;
 pub mod icon_cache;
 pub mod input;
 pub mod inspector;
+pub mod input_prompt;
 pub mod navigation_rail;
 pub mod node_editor;
 pub mod property_inspector;
@@ -72,6 +73,7 @@ pub use controls::{
 pub use dock_view::{DockTreeView, DraggingTabState};
 pub use hierarchy_tree::{HierarchyEvent, HierarchyItem, HierarchyTree};
 pub use inspector::PropertyInspector;
+pub use input_prompt::{InputPrompt, PromptKind, PromptOutcome, PromptValue};
 pub use node_editor::{GraphNode, NodeConnection, NodeEditor, NodeGroup, NodePin};
 pub use property_inspector::{
     MetadataPropertyInspector, PropertyChangedEvent, PropertyItem, PropertyValue,

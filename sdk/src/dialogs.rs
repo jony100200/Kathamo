@@ -21,6 +21,7 @@
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::Mutex;
 
 /// A named group of file extensions, e.g. `FileFilter::new("Images", &["png", "jpg"])`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,10 +54,11 @@ pub enum DialogOutcome {
     Unavailable,
 }
 
-/// A dialog running on its own thread. Poll it each frame.
+/// A dialog running on its own thread. Poll it each frame. `Send + Sync`, so it
+/// can live inside an editor or panel state.
 #[derive(Debug)]
 pub struct DialogHandle {
-    rx: Receiver<DialogOutcome>,
+    rx: Mutex<Receiver<DialogOutcome>>,
 }
 
 impl DialogHandle {
@@ -77,20 +79,23 @@ impl DialogHandle {
         if spawned.is_err() {
             let _ = tx.send(DialogOutcome::Unavailable);
         }
-        Self { rx }
+        Self { rx: Mutex::new(rx) }
     }
 
     /// A handle that is already finished with `outcome`.
     pub fn ready(outcome: DialogOutcome) -> Self {
         let (tx, rx) = mpsc::channel();
         let _ = tx.send(outcome);
-        Self { rx }
+        Self { rx: Mutex::new(rx) }
     }
 
     /// `None` while the dialog is open; the outcome once it has closed.
     /// The outcome is delivered once; drop the handle after receiving it.
     pub fn poll(&self) -> Option<DialogOutcome> {
-        match self.rx.try_recv() {
+        let Ok(rx) = self.rx.lock() else {
+            return Some(DialogOutcome::Cancelled);
+        };
+        match rx.try_recv() {
             Ok(outcome) => Some(outcome),
             Err(TryRecvError::Empty) => None,
             // The dialog thread ended without a result (it panicked).
@@ -209,6 +214,12 @@ mod tests {
         assert_eq!(outcome, Some(DialogOutcome::Cancelled));
         let ready = DialogHandle::ready(DialogOutcome::Unavailable);
         assert_eq!(ready.poll(), Some(DialogOutcome::Unavailable));
+    }
+
+    #[test]
+    fn handles_can_live_in_shared_app_state() {
+        fn send_sync<T: Send + Sync>() {}
+        send_sync::<DialogHandle>();
     }
 
     #[test]

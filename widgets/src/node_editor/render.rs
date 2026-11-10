@@ -1,7 +1,8 @@
 use super::geometry::{input_pin_world_pos, output_pin_world_pos, toolbar_rects, world_to_screen};
 use super::search_menu::SearchMenuState;
 use super::types::{
-    category_color, pin_type_color, GraphNode, NodeConnection, PendingWire, ToolbarAction,
+    category_color, resolve_pin_color, GraphNode, NodeConnection, PendingWire, PinColors,
+    ToolbarAction,
 };
 use crate::theme::ThemePalette;
 use ui_core::{CornerRadius, Rect, Stroke, Vec2};
@@ -52,6 +53,20 @@ pub fn render_connections(
     viewport_origin: Vec2,
     palette: &ThemePalette,
 ) {
+    let view = (pan, zoom, viewport_origin);
+    render_connections_with(buf, nodes, connections, view, palette, &PinColors::new());
+}
+
+/// [`render_connections`] with app-registered wire colours.
+/// `view` is `(pan, zoom, viewport_origin)`.
+pub fn render_connections_with(
+    buf: &mut CommandBuffer,
+    nodes: &[GraphNode],
+    connections: &[NodeConnection],
+    (pan, zoom, viewport_origin): (Vec2, f32, Vec2),
+    palette: &ThemePalette,
+    pin_colors: &PinColors,
+) {
     for conn in connections {
         let from_n = nodes.iter().find(|n| n.id == conn.from_node);
         let to_n = nodes.iter().find(|n| n.id == conn.to_node);
@@ -67,7 +82,8 @@ pub fn render_connections(
                 let dist = (end.x - start.x).abs().max(40.0 * zoom) * 0.5;
                 let ctrl1 = Vec2::new(start.x + dist, start.y);
                 let ctrl2 = Vec2::new(end.x - dist, end.y);
-                let wire_color = pin_type_color(&from_n.outputs[out_idx].pin_type, palette);
+                let wire_color =
+                    resolve_pin_color(&from_n.outputs[out_idx].pin_type, pin_colors, palette);
 
                 buf.push(DrawCommand::CubicBezier {
                     start,
@@ -89,6 +105,20 @@ pub fn render_pending_wire(
     zoom: f32,
     viewport_origin: Vec2,
     palette: &ThemePalette,
+) {
+    let view = (pan, zoom, viewport_origin);
+    render_pending_wire_with(buf, nodes, pending_wire, view, palette, &PinColors::new());
+}
+
+/// [`render_pending_wire`] with app-registered wire colours.
+/// `view` is `(pan, zoom, viewport_origin)`.
+pub fn render_pending_wire_with(
+    buf: &mut CommandBuffer,
+    nodes: &[GraphNode],
+    pending_wire: &PendingWire,
+    (pan, zoom, viewport_origin): (Vec2, f32, Vec2),
+    palette: &ThemePalette,
+    pin_colors: &PinColors,
 ) {
     if let Some(from_n) = nodes.iter().find(|n| n.id == pending_wire.from_node) {
         let (start_world, pin_type) = if pending_wire.is_output {
@@ -141,7 +171,7 @@ pub fn render_pending_wire(
             ctrl1,
             ctrl2,
             end,
-            stroke: Stroke::new(2.0 * zoom, pin_type_color(pin_type, palette)),
+            stroke: Stroke::new(2.0 * zoom, resolve_pin_color(pin_type, pin_colors, palette)),
         });
     }
 }
@@ -178,6 +208,22 @@ pub fn render_nodes(
     viewport_origin: Vec2,
     viewport: Rect,
     palette: &ThemePalette,
+) {
+    let view = (pan, zoom, viewport_origin);
+    let colors = PinColors::new();
+    render_nodes_with(buf, nodes, selected_nodes, view, viewport, palette, &colors);
+}
+
+/// [`render_nodes`] with app-registered pin colours.
+/// `view` is `(pan, zoom, viewport_origin)`.
+pub fn render_nodes_with(
+    buf: &mut CommandBuffer,
+    nodes: &[GraphNode],
+    selected_nodes: &[String],
+    (pan, zoom, viewport_origin): (Vec2, f32, Vec2),
+    viewport: Rect,
+    palette: &ThemePalette,
+    pin_colors: &PinColors,
 ) {
     for node in nodes {
         let screen_pos = world_to_screen(node.pos, pan, zoom, viewport_origin);
@@ -271,7 +317,7 @@ pub fn render_nodes(
         for (idx, pin) in node.inputs.iter().enumerate() {
             let p_world = input_pin_world_pos(node, idx);
             let p_screen = world_to_screen(p_world, pan, zoom, viewport_origin);
-            let p_color = pin_type_color(&pin.pin_type, palette);
+            let p_color = resolve_pin_color(&pin.pin_type, pin_colors, palette);
             let pin_radius = 4.5 * zoom;
             buf.push(DrawCommand::Rect {
                 rect: Rect::from_min_size(
@@ -295,7 +341,7 @@ pub fn render_nodes(
         for (idx, pin) in node.outputs.iter().enumerate() {
             let p_world = output_pin_world_pos(node, idx);
             let p_screen = world_to_screen(p_world, pan, zoom, viewport_origin);
-            let p_color = pin_type_color(&pin.pin_type, palette);
+            let p_color = resolve_pin_color(&pin.pin_type, pin_colors, palette);
             let pin_radius = 4.5 * zoom;
             buf.push(DrawCommand::Rect {
                 rect: Rect::from_min_size(

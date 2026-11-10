@@ -77,6 +77,12 @@ path = "../examples/agent_tui.rs"
 wgpu = { version = "22.1", default-features = false, features = ["wgsl", "dx12", "metal"] }
 bytemuck = { version = "1.18", features = ["derive"] }
 
+# `kathamo::dialogs`: system file dialogs (MIT). No default features: no async
+# runtime or portal stack; Windows/macOS backends only, other targets report
+# "unavailable".
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+rfd = { version = "0.15", default-features = false }
+
 [target.'cfg(target_os = "android")'.dependencies]
 # Raw JNI, to ask the activity `isFinishing()` (see src/android.rs).
 jni-sys = "0.3"

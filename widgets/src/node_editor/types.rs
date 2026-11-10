@@ -1,4 +1,5 @@
 use crate::theme::ThemePalette;
+use std::collections::HashMap;
 use ui_core::{Color, Rect, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -197,6 +198,24 @@ pub fn pin_type_color(pin_type: &str, palette: &ThemePalette) -> Color {
         _ => (name_hue(&key), 0.9),
     };
     themed_hue(hue, saturation, palette)
+}
+
+/// App-registered wire and pin colours, keyed by socket type name.
+///
+/// Keys match case-insensitively: an exact key wins, then the lower-case one.
+pub type PinColors = HashMap<String, Color>;
+
+/// Wire and pin colour for a socket type: an app-registered colour when there
+/// is one, otherwise the built-in themed colour from [`pin_type_color`].
+pub fn resolve_pin_color(pin_type: &str, overrides: &PinColors, palette: &ThemePalette) -> Color {
+    if overrides.is_empty() {
+        return pin_type_color(pin_type, palette);
+    }
+    overrides
+        .get(pin_type)
+        .or_else(|| overrides.get(&pin_type.to_ascii_lowercase()))
+        .copied()
+        .unwrap_or_else(|| pin_type_color(pin_type, palette))
 }
 
 /// Stable hue for a name: one of 24 steps around the wheel (FNV-1a hash).

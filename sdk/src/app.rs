@@ -227,6 +227,12 @@ pub trait KathamoApp: 'static {
         (1440, 900)
     }
 
+    /// Open the main native window maximized. Default: `false` (uses `default_size`).
+    /// Useful on small or high-DPI screens where `default_size` would run off-screen.
+    fn start_maximized(&self) -> bool {
+        false
+    }
+
     /// Optional initialization logic.
     fn init(&mut self, _ctx: &mut AppContext) {}
 

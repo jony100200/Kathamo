@@ -5,14 +5,14 @@ use super::geometry::{
 use super::minimap::render_minimap;
 use super::presets::create_default_graph;
 use super::render::{
-    render_connections, render_grid, render_hud, render_marquee, render_nodes, render_pending_wire,
-    render_search_overlay, render_toolbar,
+    render_connections_with, render_grid, render_hud, render_marquee, render_nodes_with,
+    render_pending_wire_with, render_search_overlay, render_toolbar,
 };
 use super::search_menu::SearchMenuState;
 use super::types::PresetNode;
 use super::types::{
     DraggingNode, GraphNode, NodeAlignment, NodeConnection, NodeGroup, NodePin, PendingWire,
-    ToolbarAction,
+    PinColors, ToolbarAction,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use ui_core::{CornerRadius, Rect, Stroke, Vec2};
@@ -38,6 +38,9 @@ pub struct NodeEditor {
     pub show_minimap: bool,
     /// Quick-add toolbar across the top. Hosts with their own controls can hide it.
     pub show_toolbar: bool,
+    /// Wire and pin colours per socket type, set by the app with
+    /// [`NodeEditor::set_pin_color`]. Unlisted types use the built-in themed colour.
+    pub pin_colors: PinColors,
 }
 
 impl Default for NodeEditor {
@@ -58,11 +61,17 @@ impl Default for NodeEditor {
             search_state: SearchMenuState::default(),
             show_minimap: true,
             show_toolbar: true,
+            pin_colors: PinColors::new(),
         }
     }
 }
 
 impl NodeEditor {
+    /// Register the wire and pin colour for a socket type (matched case-insensitively).
+    pub fn set_pin_color(&mut self, pin_type: &str, color: ui_core::Color) {
+        self.pin_colors.insert(pin_type.to_ascii_lowercase(), color);
+    }
+
     pub fn is_node_selected(&self, id: &str) -> bool {
         self.selected_nodes.iter().any(|s| s == id)
     }
@@ -596,27 +605,20 @@ impl NodeEditor {
         render_grid(buf, viewport, self.pan, self.zoom, palette);
 
         // 2. Connections
-        render_connections(
+        let view = (self.pan, self.zoom, viewport.min);
+        let pin_colors = &self.pin_colors;
+        render_connections_with(
             buf,
             &self.nodes,
             &self.connections,
-            self.pan,
-            self.zoom,
-            viewport.min,
+            view,
             palette,
+            pin_colors,
         );
 
         // 3. Pending wire
         if let Some(wire) = &self.pending_wire {
-            render_pending_wire(
-                buf,
-                &self.nodes,
-                wire,
-                self.pan,
-                self.zoom,
-                viewport.min,
-                palette,
-            );
+            render_pending_wire_with(buf, &self.nodes, wire, view, palette, pin_colors);
         }
 
         // 3.5. Marquee box
@@ -625,15 +627,14 @@ impl NodeEditor {
         }
 
         // 4. Nodes
-        render_nodes(
+        render_nodes_with(
             buf,
             &self.nodes,
             &self.selected_nodes,
-            self.pan,
-            self.zoom,
-            viewport.min,
+            view,
             viewport,
             palette,
+            pin_colors,
         );
 
         // 5. Toolbar

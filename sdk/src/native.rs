@@ -642,20 +642,24 @@ fn key_from_winit(key: &WinitKey) -> Key {
     }
 }
 
+/// Attributes for the app's main window: title, size, and the maximized start.
+fn main_window_attributes<A: KathamoApp>(app: &A) -> WindowAttributes {
+    let (width, height) = app.default_size();
+    WindowAttributes::default()
+        .with_title(app.title())
+        .with_inner_size(LogicalSize::new(width as f64, height as f64))
+        .with_min_inner_size(LogicalSize::new(480.0, 320.0))
+        .with_maximized(app.start_maximized())
+        .with_visible(false)
+}
+
 impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
         }
         eprintln!("[Kathamo Native] resumed() event triggered, creating OS window...");
-        let (width, height) = self.app.default_size();
-        let attributes = WindowAttributes::default()
-            .with_title(self.app.title())
-            .with_inner_size(LogicalSize::new(width as f64, height as f64))
-            .with_min_inner_size(LogicalSize::new(480.0, 320.0))
-            .with_visible(false);
-
-        match event_loop.create_window(attributes) {
+        match event_loop.create_window(main_window_attributes(&self.app)) {
             Ok(window) => {
                 eprintln!("[Kathamo Native] OS window created: {:?}", window.id());
                 let window = Arc::new(window);
@@ -1130,6 +1134,27 @@ mod touch_tests {
     #[test]
     fn android_back_arrives_as_a_named_custom_key() {
         assert_eq!(key_from_winit(&WinitKey::Named(NamedKey::BrowserBack)), Key::Custom("Back".into()));
+    }
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    struct Plain(bool);
+    impl KathamoApp for Plain {
+        fn start_maximized(&self) -> bool {
+            self.0
+        }
+        fn update(&mut self, _ctx: &mut AppContext) {}
+    }
+
+    #[test]
+    fn main_window_starts_maximized_only_when_the_app_asks() {
+        assert!(!main_window_attributes(&Plain(false)).maximized);
+        let attrs = main_window_attributes(&Plain(true));
+        assert!(attrs.maximized);
+        assert!(!attrs.visible, "still revealed only after the first frame");
     }
 }
 

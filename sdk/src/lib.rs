@@ -36,6 +36,7 @@ mod android;
 pub mod app;
 pub mod components;
 pub mod designer;
+pub mod dialogs;
 pub mod editors;
 pub mod flex;
 pub mod graph_document;

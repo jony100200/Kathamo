@@ -479,3 +479,50 @@ fn hidden_toolbar_is_not_drawn_or_clickable() {
         "the visible toolbar still works"
     );
 }
+
+#[test]
+fn registered_pin_colours_override_wires_and_pins() {
+    use super::types::{pin_type_color, resolve_pin_color, PinColors};
+    use ui_core::Color;
+    use ui_render::{CommandBuffer, DrawCommand};
+    let palette = ThemePalette::dark();
+    let teal = Color::rgb(60, 170, 190);
+
+    // Lookup is case-insensitive; unregistered types keep the themed colour.
+    let mut colors = PinColors::new();
+    colors.insert("heightfield".into(), teal);
+    assert_eq!(resolve_pin_color("HeightField", &colors, &palette), teal);
+    assert_eq!(
+        resolve_pin_color("Image", &colors, &palette),
+        pin_type_color("Image", &palette)
+    );
+
+    // Every wire drawn by the editor takes the registered colour of its output pin.
+    let mut editor = NodeEditor::default();
+    let wire_types: Vec<String> = editor
+        .connections
+        .iter()
+        .filter_map(|c| {
+            let n = editor.nodes.iter().find(|n| n.id == c.from_node)?;
+            let p = n.outputs.iter().find(|p| p.id == c.from_pin)?;
+            Some(p.pin_type.clone())
+        })
+        .collect();
+    assert!(!wire_types.is_empty(), "default graph has wires");
+    for ty in &wire_types {
+        editor.set_pin_color(ty, teal);
+    }
+    let mut buf = CommandBuffer::new();
+    let viewport = Rect::from_min_size(Vec2::ZERO, Vec2::new(1920.0, 1080.0));
+    editor.render(&mut buf, viewport, &palette);
+    let wires: Vec<_> = buf
+        .commands()
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::CubicBezier { stroke, .. } => Some(stroke.color),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(wires.len(), wire_types.len());
+    assert!(wires.iter().all(|c| *c == teal));
+}

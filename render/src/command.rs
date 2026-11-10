@@ -55,6 +55,16 @@ pub enum DrawCommand {
         tint: Color,
     },
     /// Monospace text for code, logs and aligned numbers.
+    /// Text in a chosen face with letter spacing (`tracking`, extra logical pixels after
+    /// each glyph). `Text` stays the simple regular/strong form.
+    StyledText {
+        text: String,
+        pos: Vec2,
+        size: f32,
+        color: Color,
+        face: crate::text::Face,
+        tracking: f32,
+    },
     Code {
         text: String,
         pos: Vec2,

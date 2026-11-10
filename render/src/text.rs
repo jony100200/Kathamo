@@ -90,6 +90,12 @@ pub enum Face {
     Regular,
     Strong,
     Mono,
+    /// Inter Medium (500): labels and buttons that need a little more weight than body text.
+    Medium,
+    /// Inter Bold (700): headings.
+    Bold,
+    /// Space Grotesk Bold: titles and brand marks.
+    Display,
 }
 
 impl Face {
@@ -108,12 +114,18 @@ pub struct FontSet {
     regular: Option<usize>,
     strong: Option<usize>,
     mono: Option<usize>,
+    medium: Option<usize>,
+    bold: Option<usize>,
+    display: Option<usize>,
     bengali: Option<usize>,
     fallbacks: Vec<usize>,
 }
 
 const REGULAR: &str = "Inter-Regular.ttf";
 const STRONG: &str = "Inter-SemiBold.ttf";
+const MEDIUM: &str = "Inter-Medium.ttf";
+const BOLD: &str = "Inter-Bold.ttf";
+const DISPLAY: &str = "SpaceGrotesk-Bold.ttf";
 const BENGALI: &str = "NotoSansBengali.ttf";
 const MONO: &str = "JetBrainsMono-Regular.ttf";
 const FALLBACK_CHAIN: [&str; 2] = [MONO, "NotoEmoji.ttf"];
@@ -122,10 +134,31 @@ const FALLBACK_CHAIN: [&str; 2] = [MONO, "NotoEmoji.ttf"];
 /// 2 MB emoji face is left out to keep app packages small.
 #[cfg(any(target_os = "android", feature = "embedded-fonts"))]
 const EMBEDDED_FONTS: &[(&str, &[u8])] = &[
-    (REGULAR, include_bytes!("../../assets/fonts/Inter-Regular.ttf")),
-    (STRONG, include_bytes!("../../assets/fonts/Inter-SemiBold.ttf")),
-    (BENGALI, include_bytes!("../../assets/fonts/NotoSansBengali.ttf")),
-    (MONO, include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf")),
+    (
+        REGULAR,
+        include_bytes!("../../assets/fonts/Inter-Regular.ttf"),
+    ),
+    (
+        STRONG,
+        include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
+    ),
+    (
+        MEDIUM,
+        include_bytes!("../../assets/fonts/Inter-Medium.ttf"),
+    ),
+    (BOLD, include_bytes!("../../assets/fonts/Inter-Bold.ttf")),
+    (
+        DISPLAY,
+        include_bytes!("../../assets/fonts/SpaceGrotesk-Bold.ttf"),
+    ),
+    (
+        BENGALI,
+        include_bytes!("../../assets/fonts/NotoSansBengali.ttf"),
+    ),
+    (
+        MONO,
+        include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf"),
+    ),
 ];
 #[cfg(not(any(target_os = "android", feature = "embedded-fonts")))]
 const EMBEDDED_FONTS: &[(&str, &[u8])] = &[];
@@ -139,6 +172,9 @@ impl FontSet {
             regular: None,
             strong: None,
             mono: None,
+            medium: None,
+            bold: None,
+            display: None,
             bengali: None,
             fallbacks: Vec::new(),
         };
@@ -160,6 +196,11 @@ impl FontSet {
         };
         let regular = load(REGULAR);
         let strong = load(STRONG);
+        // Optional faces: a fonts folder from before they existed still works (they fall
+        // back to the nearest face that is there).
+        let medium = load(MEDIUM);
+        let bold = load(BOLD);
+        let display = load(DISPLAY);
         let bengali = load(BENGALI);
         let fallbacks: Vec<usize> = FALLBACK_CHAIN.iter().filter_map(|n| load(n)).collect();
         // The mono face is the first fallback; reuse it instead of loading it twice.
@@ -169,6 +210,9 @@ impl FontSet {
             .filter(|&i| set.fonts[i].file_name == MONO);
         set.regular = regular;
         set.strong = strong.or(regular);
+        set.medium = medium.or(regular);
+        set.bold = bold.or(set.strong);
+        set.display = display.or(set.bold);
         set.bengali = bengali;
         set.fallbacks = fallbacks;
         set
@@ -184,6 +228,9 @@ impl FontSet {
             Face::Regular => self.regular,
             Face::Strong => self.strong,
             Face::Mono => self.mono.or(self.regular),
+            Face::Medium => self.medium,
+            Face::Bold => self.bold,
+            Face::Display => self.display,
         }
     }
 
@@ -291,6 +338,27 @@ thread_local! {
 }
 
 /// Shapes `text` with an explicit typeface role. Results are cached per thread.
+/// Like [`shape_face`], with `tracking` extra pixels after every glyph (letter spacing, for
+/// small uppercase labels). Bengali text is never spaced: its glyphs join.
+pub fn shape_tracked(text: &str, px: f32, face: Face, tracking: f32) -> Option<TextLayout> {
+    let mut layout = shape_face(text, px, face)?;
+    if tracking == 0.0 || text.chars().any(is_bengali) {
+        return Some(layout);
+    }
+    for (i, glyph) in layout.glyphs.iter_mut().enumerate() {
+        glyph.x += tracking * i as f32;
+    }
+    layout.advance += tracking * layout.glyphs.len().saturating_sub(1) as f32;
+    Some(layout)
+}
+
+/// Width of `text` drawn with `face` and `tracking` (see [`shape_tracked`]).
+pub fn measure_tracked(text: &str, px: f32, face: Face, tracking: f32) -> f32 {
+    shape_tracked(text, px, face, tracking)
+        .map(|l| l.advance)
+        .unwrap_or_else(|| text.chars().count() as f32 * (px * 0.55 + tracking))
+}
+
 pub fn shape_face(text: &str, px: f32, face: Face) -> Option<TextLayout> {
     let key = (text.to_string(), px.to_bits(), face);
     if let Some(hit) = LAYOUT_CACHE.with_borrow(|c| c.get(&key).cloned()) {
@@ -493,6 +561,33 @@ mod tests {
             set.source_dir
         );
         assert!(set.bengali.is_some(), "Noto Sans Bengali must load");
+    }
+
+    #[test]
+    fn heavier_faces_load_their_own_fonts() {
+        let set = fonts();
+        let name = |face: Face| set.primary(face).map(|i| set.fonts[i].file_name.clone());
+        assert_eq!(name(Face::Medium).as_deref(), Some(MEDIUM));
+        assert_eq!(name(Face::Bold).as_deref(), Some(BOLD));
+        assert_eq!(name(Face::Display).as_deref(), Some(DISPLAY));
+        // Heavier weights are wider for the same text.
+        let w = |face| measure_face("Harbor Lights", 14.0, face);
+        assert!(w(Face::Regular) < w(Face::Medium) && w(Face::Medium) < w(Face::Bold));
+    }
+
+    #[test]
+    fn tracking_adds_space_between_glyphs_but_never_inside_bengali() {
+        let plain = measure_face("SELECTED", 11.0, Face::Strong);
+        let spaced = measure_tracked("SELECTED", 11.0, Face::Strong, 1.5);
+        assert!(
+            (spaced - plain - 1.5 * 7.0).abs() < 0.01,
+            "{plain} -> {spaced}"
+        );
+        let bengali = "চলপো";
+        assert_eq!(
+            measure_tracked(bengali, 14.0, Face::Regular, 2.0),
+            measure_face(bengali, 14.0, Face::Regular)
+        );
     }
 
     #[test]

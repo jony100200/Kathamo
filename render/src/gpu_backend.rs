@@ -1156,12 +1156,24 @@ impl GpuBackend {
     }
 
     fn tess_text(&mut self, text_str: &str, pos: Vec2, size: f32, color: Color, face: Face) {
+        self.tess_text_tracked(text_str, pos, size, color, face, 0.0);
+    }
+
+    fn tess_text_tracked(
+        &mut self,
+        text_str: &str,
+        pos: Vec2,
+        size: f32,
+        color: Color,
+        face: Face,
+        tracking: f32,
+    ) {
         if color.a == 0 {
             return;
         }
         let s = self.scale;
         let px = size * s;
-        let Some(layout) = text::shape_face(text_str, px, face) else {
+        let Some(layout) = text::shape_tracked(text_str, px, face, tracking * s) else {
             self.tess_bitmap_text(text_str, pos, size, color);
             return;
         };
@@ -1285,6 +1297,14 @@ impl GpuBackend {
                     size,
                     color,
                 } => self.tess_text(text, *pos, *size, *color, Face::Mono),
+                DrawCommand::StyledText {
+                    text,
+                    pos,
+                    size,
+                    color,
+                    face,
+                    tracking,
+                } => self.tess_text_tracked(text, *pos, *size, *color, *face, *tracking),
                 DrawCommand::Backdrop { rect, radius, tint } => {
                     self.tess_backdrop(*rect, *radius, *tint)
                 }

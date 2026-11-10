@@ -425,9 +425,21 @@ impl CpuBackend {
     }
 
     fn draw_text(&mut self, text: &str, pos: Vec2, size: f32, color: Color, face: Face) {
+        self.draw_text_tracked(text, pos, size, color, face, 0.0);
+    }
+
+    fn draw_text_tracked(
+        &mut self,
+        text: &str,
+        pos: Vec2,
+        size: f32,
+        color: Color,
+        face: Face,
+        tracking: f32,
+    ) {
         let s = self.scale;
         let px = size * s;
-        let Some(layout) = text::shape_face(text, px, face) else {
+        let Some(layout) = text::shape_tracked(text, px, face, tracking * s) else {
             self.draw_bitmap_text(text, pos, size, color, face == Face::Strong);
             return;
         };
@@ -587,6 +599,14 @@ impl RenderBackend for CpuBackend {
                     size,
                     color,
                 } => self.draw_text(text, *pos, *size, *color, Face::Mono),
+                DrawCommand::StyledText {
+                    text,
+                    pos,
+                    size,
+                    color,
+                    face,
+                    tracking,
+                } => self.draw_text_tracked(text, *pos, *size, *color, *face, *tracking),
                 DrawCommand::Icon {
                     id,
                     svg,

@@ -103,6 +103,68 @@ pub trait Editor: Send + Sync {
         false
     }
 
+    /// Mouse down with the application context (see
+    /// `WorkspaceHost::handle_mouse_down_with_context`). `pos` is in window coordinates and
+    /// `viewport` is the panel's body rectangle, so the panel-local position is
+    /// `pos - viewport.min`. Returning `true` captures the pointer: moves and the release then
+    /// arrive here wherever the pointer goes. The default ignores the context and calls
+    /// [`Editor::handle_mouse_down`].
+    fn handle_mouse_down_with_context(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        ptr: &PointerState,
+        _ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        self.handle_mouse_down(pos, button, viewport, ptr)
+    }
+
+    /// Pointer move with the context: a drag while this panel holds the capture, a hover
+    /// otherwise. Default: [`Editor::handle_mouse_move`].
+    fn handle_mouse_move_with_context(
+        &mut self,
+        pos: Vec2,
+        delta: Vec2,
+        viewport: Rect,
+        ptr: &PointerState,
+        _ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        self.handle_mouse_move(pos, delta, viewport, ptr)
+    }
+
+    /// Release with the context. Default: [`Editor::handle_mouse_up`].
+    fn handle_mouse_up_with_context(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        viewport: Rect,
+        _ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        self.handle_mouse_up(pos, button, viewport)
+    }
+
+    /// Wheel with the context. Default: [`Editor::handle_scroll`].
+    fn handle_scroll_with_context(
+        &mut self,
+        delta: Vec2,
+        pos: Vec2,
+        viewport: Rect,
+        _ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        self.handle_scroll(delta, pos, viewport)
+    }
+
+    /// Key press for the focused panel with the context. Default: [`Editor::handle_key_down`].
+    fn handle_key_down_with_context(
+        &mut self,
+        key: Key,
+        modifiers: Modifiers,
+        _ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        self.handle_key_down(key, modifiers)
+    }
+
     /// Optional serialization of view state (e.g. pan/zoom, active tab, camera position).
     fn save_state(&self) -> Option<String> {
         None

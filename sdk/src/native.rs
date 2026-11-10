@@ -18,7 +18,7 @@ use ui_platform::{
 };
 use ui_render::{CpuBackend, GpuBackend, RenderBackend, SoftwarePresenter};
 
-use crate::app::{AppContext, KathamoApp, UiWaker, WindowRequest};
+use crate::app::{AppContext, FileDropEvent, FileDropQueue, KathamoApp, UiWaker, WindowRequest};
 
 /// Runs a `KathamoApp` in a real OS window, with GPU rendering and CPU fallback.
 pub fn run_native<A: KathamoApp>(app: A) -> Result<(), String> {
@@ -189,6 +189,8 @@ pub struct NativeAppRunner<A: KathamoApp> {
     wake_at: Option<Instant>,
     occluded: bool,
     touch_id: Option<u64>,
+    /// File-drag events from the OS, delivered to the app once per event batch.
+    drops: FileDropQueue,
     #[cfg(target_os = "android")]
     android_app: Option<AndroidApp>,
     /// Set when the platform is closing the app for good; the loop is exiting.
@@ -235,12 +237,32 @@ impl<A: KathamoApp> NativeAppRunner<A> {
             wake_at: None,
             occluded: false,
             touch_id: None,
+            drops: FileDropQueue::default(),
             #[cfg(target_os = "android")]
             android_app: None,
             finishing: false,
             keyboard_shown: false,
             keyboard_inset_seen: false,
         }
+    }
+
+    /// Takes a file-drag event from the OS (the window event handler calls this for winit's
+    /// `HoveredFile`, `HoveredFileCancelled` and `DroppedFile`). Delivery happens in
+    /// [`NativeAppRunner::deliver_file_drops`], once the event batch is read.
+    pub fn file_drop_event(&mut self, event: FileDropEvent) {
+        self.drops.push(event);
+    }
+
+    /// Hands queued file-drag events to the app. Returns whether the app took dropped files.
+    pub fn deliver_file_drops(&mut self) -> bool {
+        if !self.drops.is_pending() {
+            return false;
+        }
+        let taken = self.drops.deliver(&mut self.app, &mut self.ctx);
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+        taken
     }
 
     /// True while the app or any widget transition needs another frame.
@@ -832,6 +854,13 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                     .handle_scroll(delta, self.ctx.pointer.position, &mut self.ctx);
                 window.request_redraw();
             }
+            WindowEvent::HoveredFile(_)
+            | WindowEvent::HoveredFileCancelled
+            | WindowEvent::DroppedFile(_) => {
+                if let Some(drop) = file_drop_event_of(event) {
+                    self.file_drop_event(drop);
+                }
+            }
             WindowEvent::ModifiersChanged(mods) => {
                 let state = mods.state();
                 self.modifiers = Modifiers {
@@ -903,6 +932,7 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
             }
             _ => {}
         }
+        self.deliver_file_drops();
         let requests = std::mem::take(&mut self.ctx.window_requests);
         self.process_window_requests(event_loop, requests);
     }
@@ -943,6 +973,16 @@ impl<A: KathamoApp> ApplicationHandler for NativeAppRunner<A> {
                 child.window.request_redraw();
             }
         }
+    }
+}
+
+/// The OS file-drag events as `FileDropEvent`s; `None` for any other window event.
+fn file_drop_event_of(event: WindowEvent) -> Option<FileDropEvent> {
+    match event {
+        WindowEvent::HoveredFile(path) => Some(FileDropEvent::Hovered(path)),
+        WindowEvent::HoveredFileCancelled => Some(FileDropEvent::HoverCancelled),
+        WindowEvent::DroppedFile(path) => Some(FileDropEvent::Dropped(path)),
+        _ => None,
     }
 }
 
@@ -1175,5 +1215,52 @@ mod key_text_tests {
                 ..Modifiers::default()
             }
         ));
+    }
+}
+
+#[cfg(test)]
+mod file_drop_tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct Sink {
+        dropped: Vec<Vec<std::path::PathBuf>>,
+        hovering: bool,
+    }
+    impl KathamoApp for Sink {
+        fn update(&mut self, _ctx: &mut AppContext) {}
+        fn handle_files_hovered(&mut self, _p: Vec<std::path::PathBuf>, _c: &mut AppContext) {
+            self.hovering = true;
+        }
+        fn handle_files_hover_cancelled(&mut self, _c: &mut AppContext) {
+            self.hovering = false;
+        }
+        fn handle_files_dropped(&mut self, p: Vec<std::path::PathBuf>, _c: &mut AppContext) -> bool {
+            self.hovering = false;
+            self.dropped.push(p);
+            true
+        }
+    }
+
+    /// The runner turns winit's file events into one app call per event batch.
+    #[test]
+    fn winit_file_events_reach_the_app_hooks() {
+        let mut runner = NativeAppRunner::new(Sink::default());
+        let hover = file_drop_event_of(WindowEvent::HoveredFile("a.png".into())).unwrap();
+        runner.file_drop_event(hover);
+        assert!(!runner.app.hovering, "nothing is delivered before the batch ends");
+        runner.deliver_file_drops();
+        assert!(runner.app.hovering);
+        for name in ["a.png", "b.png"] {
+            runner.file_drop_event(file_drop_event_of(WindowEvent::DroppedFile(name.into())).unwrap());
+        }
+        assert!(runner.deliver_file_drops());
+        assert!(!runner.app.hovering);
+        assert_eq!(
+            runner.app.dropped,
+            vec![vec![std::path::PathBuf::from("a.png"), std::path::PathBuf::from("b.png")]]
+        );
+        assert!(!runner.deliver_file_drops(), "an empty queue delivers nothing");
+        assert!(file_drop_event_of(WindowEvent::Focused(true)).is_none());
     }
 }

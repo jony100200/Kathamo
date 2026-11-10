@@ -284,6 +284,23 @@ pub trait KathamoApp: 'static {
         false
     }
 
+    /// The OS dropped files on the window (a batch: everything dropped together). The pointer
+    /// position is `ctx.pointer.position`, the last place the cursor was over the window.
+    /// Return `true` when the files were taken. Default: ignored.
+    fn handle_files_dropped(
+        &mut self,
+        _paths: Vec<std::path::PathBuf>,
+        _ctx: &mut AppContext,
+    ) -> bool {
+        false
+    }
+
+    /// Files are being dragged over the window (not dropped yet): a hint to show a drop target.
+    fn handle_files_hovered(&mut self, _paths: Vec<std::path::PathBuf>, _ctx: &mut AppContext) {}
+
+    /// The drag left the window or was cancelled, so the drop target hint can go.
+    fn handle_files_hover_cancelled(&mut self, _ctx: &mut AppContext) {}
+
     /// Render a secondary native window. Override to display detached editor content.
     /// The default renders the application's regular interface.
     fn update_window(&mut self, _window_id: &str, ctx: &mut AppContext) {
@@ -368,6 +385,66 @@ pub trait KathamoApp: 'static {
     }
 }
 
+/// A file-drag event from the platform layer (winit `HoveredFile`, `HoveredFileCancelled`,
+/// `DroppedFile`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FileDropEvent {
+    Hovered(std::path::PathBuf),
+    HoverCancelled,
+    Dropped(std::path::PathBuf),
+}
+
+/// Collects file-drag events (the OS sends one per file) and hands each batch to the app in one
+/// call, so an app sees "these files were dropped" rather than a file at a time.
+#[derive(Default)]
+pub struct FileDropQueue {
+    hovered: Vec<std::path::PathBuf>,
+    dropped: Vec<std::path::PathBuf>,
+    cancelled: bool,
+}
+
+impl FileDropQueue {
+    pub fn push(&mut self, event: FileDropEvent) {
+        match event {
+            FileDropEvent::Hovered(path) => {
+                self.cancelled = false;
+                self.hovered.push(path);
+            }
+            FileDropEvent::HoverCancelled => {
+                self.hovered.clear();
+                self.cancelled = true;
+            }
+            FileDropEvent::Dropped(path) => {
+                self.hovered.clear();
+                self.dropped.push(path);
+            }
+        }
+    }
+
+    /// True when `deliver` has something to say.
+    pub fn is_pending(&self) -> bool {
+        self.cancelled || !self.hovered.is_empty() || !self.dropped.is_empty()
+    }
+
+    /// Calls the app's hooks for what was queued, and empties the queue. Returns whether the
+    /// app took dropped files.
+    pub fn deliver<A: KathamoApp>(&mut self, app: &mut A, ctx: &mut AppContext) -> bool {
+        let mut taken = false;
+        if std::mem::take(&mut self.cancelled) {
+            app.handle_files_hover_cancelled(ctx);
+        }
+        let hovered = std::mem::take(&mut self.hovered);
+        if !hovered.is_empty() {
+            app.handle_files_hovered(hovered, ctx);
+        }
+        let dropped = std::mem::take(&mut self.dropped);
+        if !dropped.is_empty() {
+            taken = app.handle_files_dropped(dropped, ctx);
+        }
+        taken
+    }
+}
+
 /// Headless test runner executing frames without requiring an OS window.
 pub struct HeadlessAppRunner<A: KathamoApp> {
     pub app: A,
@@ -408,6 +485,17 @@ impl<A: KathamoApp> HeadlessAppRunner<A> {
         self.ctx.pointer.on_button_up(button);
         self.step_frame();
         handled
+    }
+
+    /// Deliver files dropped on the window, through the same queue the native runner uses.
+    pub fn drop_files(&mut self, paths: &[std::path::PathBuf]) -> bool {
+        let mut queue = FileDropQueue::default();
+        for path in paths {
+            queue.push(FileDropEvent::Dropped(path.clone()));
+        }
+        let taken = queue.deliver(&mut self.app, &mut self.ctx);
+        self.step_frame();
+        taken
     }
 
     /// Render actual UI pixels to an ARGB8 bitmap for deterministic visual inspection.
@@ -499,5 +587,66 @@ mod tests {
         runner.step_frame();
         assert_eq!(runner.app.pointer_clicks, 2);
         assert!(runner.ctx.pointer.primary_down);
+    }
+
+    #[derive(Default)]
+    struct DropApp {
+        dropped: Vec<Vec<std::path::PathBuf>>,
+        hovered: Vec<Vec<std::path::PathBuf>>,
+        cancels: u32,
+        last_pointer: Vec2,
+    }
+
+    impl KathamoApp for DropApp {
+        fn update(&mut self, _ctx: &mut AppContext) {}
+        fn handle_files_dropped(
+            &mut self,
+            paths: Vec<std::path::PathBuf>,
+            ctx: &mut AppContext,
+        ) -> bool {
+            self.last_pointer = ctx.pointer.position;
+            self.dropped.push(paths);
+            true
+        }
+        fn handle_files_hovered(&mut self, paths: Vec<std::path::PathBuf>, _ctx: &mut AppContext) {
+            self.hovered.push(paths);
+        }
+        fn handle_files_hover_cancelled(&mut self, _ctx: &mut AppContext) {
+            self.cancels += 1;
+        }
+    }
+
+    #[test]
+    fn headless_drop_reaches_the_app_hook_as_one_batch() {
+        let mut runner = HeadlessAppRunner::new(DropApp::default());
+        let files = [
+            std::path::PathBuf::from("a.png"),
+            std::path::PathBuf::from("b.png"),
+        ];
+        assert!(runner.drop_files(&files));
+        assert_eq!(runner.app.dropped, vec![files.to_vec()]);
+    }
+
+    #[test]
+    fn queue_batches_events_and_orders_hover_cancel_drop() {
+        let mut ctx = AppContext::new(100, 100, 1.0);
+        let mut app = DropApp::default();
+        let mut queue = FileDropQueue::default();
+        assert!(!queue.is_pending());
+        queue.push(FileDropEvent::Hovered("x.png".into()));
+        queue.push(FileDropEvent::Hovered("y.png".into()));
+        assert!(!queue.deliver(&mut app, &mut ctx));
+        assert_eq!(app.hovered.len(), 1);
+        assert_eq!(app.hovered[0].len(), 2);
+        queue.push(FileDropEvent::HoverCancelled);
+        queue.deliver(&mut app, &mut ctx);
+        assert_eq!(app.cancels, 1);
+        // A hover followed by a drop clears the hover and delivers only the drop.
+        queue.push(FileDropEvent::Hovered("z.png".into()));
+        queue.push(FileDropEvent::Dropped("z.png".into()));
+        assert!(queue.deliver(&mut app, &mut ctx));
+        assert_eq!(app.hovered.len(), 1);
+        assert_eq!(app.dropped, vec![vec![std::path::PathBuf::from("z.png")]]);
+        assert!(!queue.is_pending());
     }
 }

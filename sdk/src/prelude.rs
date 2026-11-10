@@ -56,7 +56,10 @@ pub use crate::components::{
 pub use crate::layout::{LayoutBuilder, LayoutDirection};
 
 // 10. Application Lifecycle & Context
-pub use crate::app::{AppContext, HeadlessAppRunner, ImageFrame, KathamoApp, UiWaker, WindowRequest};
+pub use crate::app::{
+    AppContext, FileDropEvent, FileDropQueue, HeadlessAppRunner, ImageFrame, KathamoApp, UiWaker,
+    WindowRequest,
+};
 pub use crate::native::{run_native, NativeAppRunner};
 #[cfg(target_os = "android")]
 pub use crate::native::{run_android, AndroidApp};

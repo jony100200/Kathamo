@@ -273,6 +273,9 @@ pub struct WorkspaceHost {
     pub active_workspace_idx: usize,
     pub dock_view: DockTreeView,
     pub focused_panel_id: Option<String>,
+    /// Panel that took a pointer press through the `*_with_context` input path; it gets the
+    /// moves and the release until the button goes up, wherever the pointer is.
+    pub captured_panel_id: Option<String>,
 }
 
 impl Default for WorkspaceHost {
@@ -293,6 +296,7 @@ impl WorkspaceHost {
             active_workspace_idx: 0,
             dock_view: DockTreeView::new(),
             focused_panel_id: None,
+            captured_panel_id: None,
         };
 
         // Initialize standard preset workspaces
@@ -322,6 +326,7 @@ impl WorkspaceHost {
             active_workspace_idx: 0,
             dock_view: DockTreeView::new(),
             focused_panel_id: None,
+            captured_panel_id: None,
         };
         host.add_preset_workspace(id, name, preset);
         host
@@ -335,6 +340,7 @@ impl WorkspaceHost {
             active_workspace_idx: 0,
             dock_view: DockTreeView::new(),
             focused_panel_id: None,
+            captured_panel_id: None,
         };
         host.populate_workspace_editors(&mut workspace);
         host.workspaces.push(workspace);
@@ -540,6 +546,169 @@ impl WorkspaceHost {
         bounds: Rect,
         ptr: &PointerState,
     ) -> bool {
+        self.mouse_down_with(pos, button, bounds, &mut |editor, rect| {
+            editor.handle_mouse_down(pos, button, rect, ptr)
+        })
+        .0
+    }
+
+    /// Like [`WorkspaceHost::handle_mouse_down`], but the panel gets `ctx` through
+    /// [`Editor::handle_mouse_down_with_context`]. A panel that handles the press captures the
+    /// pointer: [`WorkspaceHost::handle_mouse_move_with_context`] and
+    /// [`WorkspaceHost::handle_mouse_up_with_context`] then reach it until the button goes up.
+    pub fn handle_mouse_down_with_context(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        bounds: Rect,
+        ptr: &PointerState,
+        ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        self.captured_panel_id = None;
+        let (handled, panel) = self.mouse_down_with(pos, button, bounds, &mut |editor, rect| {
+            editor.handle_mouse_down_with_context(pos, button, rect, ptr, ctx)
+        });
+        if handled {
+            self.captured_panel_id = panel;
+        }
+        handled
+    }
+
+    /// Pointer move with `ctx`. While a panel holds the capture it gets every move; otherwise
+    /// the panel under the pointer gets it as a hover.
+    pub fn handle_mouse_move_with_context(
+        &mut self,
+        pos: Vec2,
+        delta: Vec2,
+        bounds: Rect,
+        ptr: &PointerState,
+        ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        if self.dock_view.active_splitter_drag.is_some() || self.dock_view.dragging_tab.is_some() {
+            self.dock_view
+                .handle_mouse_move(pos, delta, bounds, &mut ws.dock_tree, ptr);
+            return true;
+        }
+        let layout = ws.dock_tree.compute_layout(bounds);
+        let captured = self.captured_panel_id.clone();
+        for leaf in &layout.leaves {
+            let Some(panel) = leaf.tabs.get(leaf.active_tab) else {
+                continue;
+            };
+            let wanted = match &captured {
+                Some(id) => &panel.id == id,
+                None => leaf.content_rect.contains(pos),
+            };
+            if wanted {
+                if let Some(editor) = ws.editors.get_mut(&panel.id) {
+                    return editor.handle_mouse_move_with_context(
+                        pos,
+                        delta,
+                        leaf.content_rect,
+                        ptr,
+                        ctx,
+                    );
+                }
+            }
+        }
+        false
+    }
+
+    /// Pointer release with `ctx`: to the capturing panel, or else the panel under the pointer.
+    /// Ends the capture.
+    pub fn handle_mouse_up_with_context(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        bounds: Rect,
+        ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        let layout = ws.dock_tree.compute_layout(bounds);
+        let captured = self.captured_panel_id.take();
+        if self
+            .dock_view
+            .handle_mouse_up(pos, button, &layout, &mut ws.dock_tree)
+        {
+            return true;
+        }
+        for leaf in &layout.leaves {
+            let Some(panel) = leaf.tabs.get(leaf.active_tab) else {
+                continue;
+            };
+            let wanted = match &captured {
+                Some(id) => &panel.id == id,
+                None => leaf.content_rect.contains(pos),
+            };
+            if wanted {
+                if let Some(editor) = ws.editors.get_mut(&panel.id) {
+                    return editor.handle_mouse_up_with_context(
+                        pos,
+                        button,
+                        leaf.content_rect,
+                        ctx,
+                    );
+                }
+            }
+        }
+        false
+    }
+
+    /// Wheel with `ctx`, to the panel under the pointer.
+    pub fn handle_scroll_with_context(
+        &mut self,
+        delta: Vec2,
+        pos: Vec2,
+        bounds: Rect,
+        ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        let layout = ws.dock_tree.compute_layout(bounds);
+        for leaf in &layout.leaves {
+            if leaf.content_rect.contains(pos) {
+                if let Some(panel) = leaf.tabs.get(leaf.active_tab) {
+                    if let Some(editor) = ws.editors.get_mut(&panel.id) {
+                        return editor.handle_scroll_with_context(
+                            delta,
+                            pos,
+                            leaf.content_rect,
+                            ctx,
+                        );
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Key press with `ctx`, to the focused panel (the one last pressed or tabbed to). Escape
+    /// and pane traversal (Tab) go through [`WorkspaceHost::handle_key_down`] first.
+    pub fn handle_key_down_with_context(
+        &mut self,
+        key: Key,
+        modifiers: Modifiers,
+        ctx: &mut (dyn std::any::Any + 'static),
+    ) -> bool {
+        if key == Key::Escape || (key == Key::Tab && !modifiers.alt && !modifiers.command) {
+            return self.handle_key_down(key, modifiers);
+        }
+        let ws = &mut self.workspaces[self.active_workspace_idx];
+        self.focused_panel_id
+            .as_ref()
+            .and_then(|id| ws.editors.get_mut(id))
+            .is_some_and(|editor| editor.handle_key_down_with_context(key, modifiers, ctx))
+    }
+
+    /// Shared press path: focus, dock hit, then `deliver` to the panel under the pointer.
+    /// Returns whether it was handled and the id of the panel that got the press.
+    fn mouse_down_with(
+        &mut self,
+        pos: Vec2,
+        button: PointerButton,
+        bounds: Rect,
+        deliver: &mut dyn FnMut(&mut dyn Editor, Rect) -> bool,
+    ) -> (bool, Option<String>) {
         self.ensure_editors_instantiated();
         let ws = &mut self.workspaces[self.active_workspace_idx];
         let layout = ws.dock_tree.compute_layout(bounds);
@@ -569,7 +738,7 @@ impl WorkspaceHost {
             .dock_view
             .handle_mouse_down(pos, button, &layout, &mut ws.dock_tree)
         {
-            return true;
+            return (true, None);
         }
 
         // 2. Delegate to active editor in containing leaf
@@ -577,13 +746,14 @@ impl WorkspaceHost {
             if leaf.content_rect.contains(pos) {
                 if let Some(panel) = leaf.tabs.get(leaf.active_tab) {
                     if let Some(editor) = ws.editors.get_mut(&panel.id) {
-                        return editor.handle_mouse_down(pos, button, leaf.content_rect, ptr);
+                        let handled = deliver(editor.as_mut(), leaf.content_rect);
+                        return (handled, Some(panel.id.clone()));
                     }
                 }
             }
         }
 
-        false
+        (false, None)
     }
 
     pub fn handle_mouse_move(
@@ -1348,5 +1518,209 @@ mod tests {
         let probe = probe.lock().unwrap();
         assert_eq!(probe.plain_draws, 1);
         assert_eq!(probe.context_draws, 0);
+    }
+    /// Logs every input call it gets, with the panel rectangle it was given.
+    struct InputPanel {
+        id: &'static str,
+        log: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl Editor for InputPanel {
+        fn id(&self) -> &str {
+            self.id
+        }
+        fn title(&self) -> &str {
+            self.id
+        }
+        fn render(&mut self, _: &mut CommandBuffer, _: Rect, _: &PointerState, _: &ThemePalette) {}
+        fn handle_mouse_down_with_context(
+            &mut self,
+            pos: Vec2,
+            _button: PointerButton,
+            viewport: Rect,
+            _ptr: &PointerState,
+            ctx: &mut (dyn std::any::Any + 'static),
+        ) -> bool {
+            if let Some(app) = ctx.downcast_mut::<AppState>() {
+                app.value += 1;
+            }
+            let local = pos - viewport.min;
+            self.log
+                .lock()
+                .unwrap()
+                .push(format!("{} down {:.0},{:.0}", self.id, local.x, local.y));
+            true
+        }
+        fn handle_mouse_move_with_context(
+            &mut self,
+            pos: Vec2,
+            _delta: Vec2,
+            viewport: Rect,
+            _ptr: &PointerState,
+            _ctx: &mut (dyn std::any::Any + 'static),
+        ) -> bool {
+            let local = pos - viewport.min;
+            self.log
+                .lock()
+                .unwrap()
+                .push(format!("{} move {:.0},{:.0}", self.id, local.x, local.y));
+            true
+        }
+        fn handle_mouse_up_with_context(
+            &mut self,
+            _pos: Vec2,
+            _button: PointerButton,
+            _viewport: Rect,
+            _ctx: &mut (dyn std::any::Any + 'static),
+        ) -> bool {
+            self.log.lock().unwrap().push(format!("{} up", self.id));
+            true
+        }
+        fn handle_scroll_with_context(
+            &mut self,
+            delta: Vec2,
+            _pos: Vec2,
+            _viewport: Rect,
+            _ctx: &mut (dyn std::any::Any + 'static),
+        ) -> bool {
+            self.log
+                .lock()
+                .unwrap()
+                .push(format!("{} wheel {}", self.id, delta.y));
+            true
+        }
+        fn handle_key_down_with_context(
+            &mut self,
+            key: Key,
+            _modifiers: Modifiers,
+            _ctx: &mut (dyn std::any::Any + 'static),
+        ) -> bool {
+            self.log
+                .lock()
+                .unwrap()
+                .push(format!("{} key {:?}", self.id, key));
+            true
+        }
+    }
+
+    fn input_host(log: std::sync::Arc<std::sync::Mutex<Vec<String>>>) -> WorkspaceHost {
+        let mut editors = EditorRegistry::new();
+        for id in ["left", "right"] {
+            let log = log.clone();
+            editors.register_factory(id, id, "Test", move || {
+                Box::new(InputPanel {
+                    id,
+                    log: log.clone(),
+                })
+            });
+        }
+        let leaf = |id: &str| DockNode::Leaf {
+            id: id.into(),
+            tabs: vec![DockTabPanel::new(id, id).with_factory(id)],
+            active_tab: 0,
+        };
+        let root = DockNode::Split {
+            id: "s".into(),
+            axis: SplitAxis::Horizontal,
+            ratio: 0.5,
+            first: Box::new(leaf("left")),
+            second: Box::new(leaf("right")),
+        };
+        WorkspaceHost::from_workspace(
+            editors,
+            Workspace::new("input", "Input", DockTree::with_root(root)),
+        )
+    }
+
+    #[test]
+    fn panels_get_local_pointer_events_with_capture_wheel_and_keys() {
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut host = input_host(log.clone());
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let ptr = PointerState::default();
+        let mut app = AppState { value: 0 };
+        let layout = host.active_workspace().dock_tree.compute_layout(bounds);
+        let left = layout.leaves[0].content_rect;
+        let right = layout.leaves[1].content_rect;
+        let in_left = left.min + Vec2::new(30.0, 40.0);
+        let in_right = right.min + Vec2::new(5.0, 6.0);
+
+        // Hover reaches the panel under the pointer.
+        assert!(host.handle_mouse_move_with_context(in_right, Vec2::ZERO, bounds, &ptr, &mut app));
+        // A press in the left panel: local position and the app context.
+        assert!(host.handle_mouse_down_with_context(
+            in_left,
+            PointerButton::Primary,
+            bounds,
+            &ptr,
+            &mut app
+        ));
+        assert_eq!(app.value, 1);
+        assert_eq!(host.captured_panel_id.as_deref(), Some("left"));
+        // While captured, moves over the right panel still go to the left panel.
+        host.handle_mouse_move_with_context(in_right, Vec2::ZERO, bounds, &ptr, &mut app);
+        host.handle_mouse_up_with_context(in_right, PointerButton::Primary, bounds, &mut app);
+        assert_eq!(host.captured_panel_id, None);
+        // Released: a move over the right panel is a hover again; the wheel follows the pointer.
+        host.handle_mouse_move_with_context(in_right, Vec2::ZERO, bounds, &ptr, &mut app);
+        assert!(host.handle_scroll_with_context(Vec2::new(0.0, 2.0), in_left, bounds, &mut app));
+        // The pressed panel has key focus.
+        assert!(host.handle_key_down_with_context(Key::Enter, Modifiers::NONE, &mut app));
+
+        let log = log.lock().unwrap().clone();
+        let far = in_right - left.min;
+        assert_eq!(
+            log,
+            vec![
+                "right move 5,6".to_string(),
+                "left down 30,40".to_string(),
+                format!("left move {:.0},{:.0}", far.x, far.y),
+                "left up".to_string(),
+                "right move 5,6".to_string(),
+                "left wheel 2".to_string(),
+                "left key Enter".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn plain_input_hooks_are_the_defaults_of_the_context_ones() {
+        // A panel that only knows the plain hooks still gets context presses through them.
+        struct Plain(std::sync::Arc<std::sync::Mutex<u32>>);
+        impl Editor for Plain {
+            fn id(&self) -> &str {
+                "plain"
+            }
+            fn title(&self) -> &str {
+                "plain"
+            }
+            fn render(&mut self, _: &mut CommandBuffer, _: Rect, _: &PointerState, _: &ThemePalette) {}
+            fn handle_mouse_down(
+                &mut self,
+                _: Vec2,
+                _: PointerButton,
+                _: Rect,
+                _: &PointerState,
+            ) -> bool {
+                *self.0.lock().unwrap() += 1;
+                true
+            }
+        }
+        let hits = std::sync::Arc::new(std::sync::Mutex::new(0));
+        let mut editors = EditorRegistry::new();
+        let h = hits.clone();
+        editors.register_factory("plain", "plain", "Test", move || Box::new(Plain(h.clone())));
+        let tree = DockTree::new("main", DockTabPanel::new("plain", "plain"));
+        let mut host = WorkspaceHost::from_workspace(editors, Workspace::new("p", "P", tree));
+        let bounds = Rect::from_min_size(Vec2::ZERO, Vec2::new(800.0, 600.0));
+        let mut app = AppState { value: 0 };
+        assert!(host.handle_mouse_down_with_context(
+            Vec2::new(400.0, 300.0),
+            PointerButton::Primary,
+            bounds,
+            &PointerState::default(),
+            &mut app
+        ));
+        assert_eq!(*hits.lock().unwrap(), 1);
     }
 }

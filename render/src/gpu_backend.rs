@@ -127,10 +127,24 @@ pub struct GpuBackend {
     stats: RenderStats,
 }
 
-fn create_instance() -> wgpu::Instance {
+/// Every backend wgpu can use here: the fallback when the lean first choice finds no adapter.
+const ALL_BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY.union(wgpu::Backends::GL);
+
+/// The backends to try first. `WGPU_BACKEND` wins when set. On Windows the UI starts with
+/// DX12 alone: enumerating Vulkan and GL as well loads every GPU's Vulkan and OpenGL driver
+/// into the process (measured on a 2-GPU desktop: about 248 MB idle working set with all
+/// backends, about 160-180 MB with DX12 alone).
+fn first_backends() -> wgpu::Backends {
+    wgpu::util::backend_bits_from_env().unwrap_or(if cfg!(windows) {
+        wgpu::Backends::DX12
+    } else {
+        ALL_BACKENDS
+    })
+}
+
+fn create_instance(backends: wgpu::Backends) -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::util::backend_bits_from_env()
-            .unwrap_or(wgpu::Backends::PRIMARY | wgpu::Backends::GL),
+        backends,
         ..Default::default()
     })
 }
@@ -477,10 +491,37 @@ impl Default for GpuBackend {
 
 impl GpuBackend {
     fn init(window: Option<SharedWindow>, width: u32, height: u32) -> Result<Self, String> {
-        let instance = create_instance();
         let lost = Arc::new(AtomicBool::new(false));
-        let (dev, target) =
-            Self::create_device_and_target(&instance, window.as_ref(), &lost, width, height, true)?;
+        let first = first_backends();
+        let instance = create_instance(first);
+        let (instance, (dev, target)) = match Self::create_device_and_target(
+            &instance,
+            window.as_ref(),
+            &lost,
+            width,
+            height,
+            true,
+        ) {
+            Ok(made) => (instance, made),
+            // The lean choice found no adapter (no DX12 driver, a VM, a remote session):
+            // try every backend before giving up, unless the user pinned one.
+            Err(first_error)
+                if first != ALL_BACKENDS && wgpu::util::backend_bits_from_env().is_none() =>
+            {
+                let instance = create_instance(ALL_BACKENDS);
+                let made = Self::create_device_and_target(
+                    &instance,
+                    window.as_ref(),
+                    &lost,
+                    width,
+                    height,
+                    true,
+                )
+                .map_err(|e| format!("{first_error}; with every backend: {e}"))?;
+                (instance, made)
+            }
+            Err(error) => return Err(error),
+        };
         Ok(Self {
             instance,
             window,
